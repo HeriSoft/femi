@@ -1,3 +1,4 @@
+![a](https://github.com/user-attachments/assets/2942c807-b72b-42f5-b05c-d93ef54c314e)
 # Run and deploy your AI Studio app
 
 This contains everything you need to run your app locally.
