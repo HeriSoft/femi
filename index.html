@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>femi - AI Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class', // or 'media'
+        theme: {
+          extend: {
+            colors: {
+              primary: {
+                light: '#4A90E2', // A nice blue
+                DEFAULT: '#357ABD',
+                dark: '#2A6094',
+              },
+              secondary: {
+                light: '#f0f4f8', // Light gray for backgrounds
+                DEFAULT: '#E2E8F0',
+                dark: '#CBD5E1',
+              },
+              accent: {
+                light: '#50E3C2', // A teal/mint accent
+                DEFAULT: '#38D3B3',
+                dark: '#20C3A3',
+              },
+              neutral: {
+                light: '#FFFFFF',
+                DEFAULT: '#F7FAFC',
+                dark: '#1A202C', // Dark background
+                darker: '#2D3748', // Slightly lighter dark
+                darkest: '#121212', // Even darker for elements
+              }
+            }
+          }
+        }
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.1.0",
+    "react/": "https://esm.sh/react@^19.1.0/",
+    "react/jsx-runtime": "https://esm.sh/react@^19.1.0/jsx-runtime",
+    "react/jsx-dev-runtime": "https://esm.sh/react@^19.1.0/jsx-dev-runtime",
+    "react-dom/client": "https://esm.sh/react-dom@^19.1.0/client",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.0.1"
+  }
+}
+</script>
+    <!-- 
+      IMPORTANT: For Vite projects, manage your API keys using .env files.
+      Create a file named '.env.local' (or other .env variants like .env.development.local) 
+      in the root of your project.
+      
+      Add your API keys to this file, prefixed with VITE_. For example:
+      VITE_API_KEY=YOUR_GEMINI_API_KEY_HERE
+      VITE_OPENAI_API_KEY=YOUR_OPENAI_KEY_HERE
+      
+      These will be available in your code as `import.meta.env.VITE_API_KEY`.
+      Ensure '.env.local' (and similar files containing secrets) are added to your .gitignore.
+
+      The config.js file below is kept for historical reference or non-Vite setups,
+      but Vite's .env system is the recommended approach for this project.
+    -->
+    <script>
+      // Global error handler to catch unhandled exceptions
+      window.onerror = function(message, source, lineno, colno, error) {
+        console.log("Global error caught by window.onerror:");
+        console.log("  Message: ", message);
+        console.log("  Source: ", source);
+        console.log("  Line: ", lineno);
+        console.log("  Column: ", colno);
+        console.log("  Error object: ", error);
+        // Returning true from this handler prevents the firing of the default event handler (e.g., "Script error." in console).
+        // However, for debugging, it's often better to let the default handler run as well.
+        // return true; 
+      };
+      window.addEventListener('unhandledrejection', function(event) {
+        console.log("Global unhandled promise rejection caught:");
+        console.log("  Reason: ", event.reason);
+        console.log("  Promise: ", event.promise);
+      });
+    </script>
+    <script src="/config.js"></script> <!-- Updated path -->
+    <link rel="stylesheet" href="/index.css"> <!-- Updated path -->
+    <!-- Babel Standalone is removed. Vite will handle TSX transpilation. -->
+    
+</head>
+  <body class="bg-secondary-light dark:bg-neutral-dark text-neutral-darker dark:text-secondary-light">
+    <div id="root">Loading app... If you see this for more than a few seconds, please open the browser console (F12) for errors.</div>
+    <!-- Vite will process this script. Ensure index.tsx is your Vite entry point. -->
+    <script type="module" src="./index.tsx"></script>
+  </body>
+</html>
