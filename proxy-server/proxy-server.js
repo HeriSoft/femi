@@ -12,14 +12,26 @@ const app = express();
 const port = process.env.PORT || 3001;
 
 // CORS configuration
-const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS ? process.env.CORS_ALLOWED_ORIGINS.split(',') : [];
+const rawCORSOrigins = process.env.CORS_ALLOWED_ORIGINS;
+const allowedOrigins = rawCORSOrigins ? rawCORSOrigins.split(',').map(o => o.trim()) : [];
+console.log('[CORS Config] Raw CORS_ALLOWED_ORIGINS env var from process.env:', rawCORSOrigins);
+console.log('[CORS Config] Parsed allowedOrigins array:', allowedOrigins);
+
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+    // Log details for every CORS check
+    console.log(`[CORS Check] Request origin: '${origin}'. Allowed origins list: [${allowedOrigins.join(', ')}]`);
+
+    // Allow requests with no origin (like mobile apps or curl requests, or server-to-server)
+    if (!origin) {
+      console.log('[CORS Check] No origin provided with the request. Allowing.');
       return callback(null, true);
     }
+    if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+      console.log(`[CORS Check] Origin '${origin}' IS in the allowed list. Allowing.`);
+      return callback(null, true);
+    }
+    console.error(`[CORS Check] Origin '${origin}' IS NOT in the allowed list. Blocking due to CORS policy.`);
     return callback(new Error('Not allowed by CORS'));
   }
 }));
@@ -349,7 +361,7 @@ app.get('/', (req, res) => {
 
 app.listen(port, () => {
   console.log(`AI Chat Proxy Server listening on port ${port}`);
-  console.log(`Allowed CORS origins: ${process.env.CORS_ALLOWED_ORIGINS || '(Not Set, defaults to restrictive)'}`);
+  // The detailed CORS_ALLOWED_ORIGINS logging is now at the top with the config.
   console.log(`LOGIN_CODE_AUTH is ${process.env.LOGIN_CODE_AUTH ? 'SET' : 'NOT SET in proxy environment. Login will fail.'}`);
   console.log(`GEMINI_API_KEY is ${process.env.GEMINI_API_KEY ? 'SET' : 'NOT SET in proxy environment'}.`);
   console.log(`OPENAI_API_KEY is ${process.env.OPENAI_API_KEY ? 'SET' : 'NOT SET in proxy environment'}.`);
