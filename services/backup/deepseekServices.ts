@@ -1,36 +1,57 @@
 
 import { ModelSettings, ApiChatMessage, ApiStreamChunk, GeneralApiSendMessageParams } from '../types.ts';
 
-// GeneralApiSendMessageParams will no longer include apiKey
-interface ProxiedGeneralApiSendMessageParams {
-  modelIdentifier: string;
-  history: ApiChatMessage[]; 
-  modelSettings: ModelSettings;
-}
+const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions'; // Standard endpoint
 
 export async function* sendDeepseekMessageStream(
-  params: ProxiedGeneralApiSendMessageParams // Updated params type
+  params: GeneralApiSendMessageParams
 ): AsyncGenerator<ApiStreamChunk, void, undefined> {
-  const { modelIdentifier, history, modelSettings } = params;
+  const { apiKey, modelIdentifier, history, modelSettings } = params;
+
+  if (!apiKey) {
+    yield { error: "Deepseek API Key is not configured.", isFinished: true };
+    return;
+  }
+
+  // For Deepseek, ensure content is string (text-only for deepseek-chat)
+  const textOnlyHistory = history.map(msg => {
+    if (typeof msg.content !== 'string') {
+      // Attempt to extract text if content is an array (e.g. from OpenAI format)
+      const textPart = (msg.content as Array<any>).find(p => p.type === 'text');
+      return { ...msg, content: textPart ? textPart.text : "" };
+    }
+    return msg;
+  }).filter(msg => msg.content || msg.role === 'assistant'); // Ensure content exists or it's an empty assistant response
+
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${apiKey}`,
+  };
+
+  const body = {
+    model: modelIdentifier,
+    messages: textOnlyHistory,
+    temperature: modelSettings.temperature,
+    top_p: modelSettings.topP,
+    stream: true,
+  };
 
   try {
-    const response = await fetch('/api/deepseek/chat/stream', {
+    const response = await fetch(DEEPSEEK_API_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ modelIdentifier, history, modelSettings }),
+      headers: headers,
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      const errorDetail = errorData.error || `Error: ${response.status} ${response.statusText}`;
-      yield { error: `Deepseek Proxy Error: ${errorDetail}`, isFinished: true };
+      const errorDetail = errorData.error?.message || `Error: ${response.status} ${response.statusText}`;
+      yield { error: `Deepseek API Error: ${errorDetail}`, isFinished: true };
       return;
     }
 
     if (!response.body) {
-        yield { error: 'Deepseek Proxy Error: No response body received.', isFinished: true };
+        yield { error: 'Deepseek API Error: No response body received.', isFinished: true };
         return;
     }
 
@@ -53,7 +74,7 @@ export async function* sendDeepseekMessageStream(
 
         if (chunkLine.startsWith('data: ')) {
           const jsonStr = chunkLine.substring(6);
-           if (jsonStr === '[DONE]') { 
+           if (jsonStr === '[DONE]') { // Deepseek might also use [DONE]
             yield { isFinished: true };
             return;
           }
@@ -66,33 +87,33 @@ export async function* sendDeepseekMessageStream(
                yield { isFinished: true }; 
             }
           } catch (e) {
-            console.error('Error parsing Deepseek stream chunk from proxy:', e, jsonStr);
+            console.error('Error parsing Deepseek stream chunk:', e, jsonStr);
           }
         }
         boundary = buffer.indexOf('\n\n');
       }
     }
-    if (buffer.startsWith('data: ')) {
+     if (buffer.startsWith('data: ')) {
         const jsonStr = buffer.substring(6).trim();
-        if (jsonStr === '[DONE]') {
+         if (jsonStr === '[DONE]') {
             yield { isFinished: true };
             return;
-        }
-        if (jsonStr) { // Check if jsonStr is not empty before parsing
+          }
+        if (jsonStr) {
             try {
                 const parsed = JSON.parse(jsonStr);
                 if (parsed.choices && parsed.choices[0]?.delta?.content) {
                     yield { textDelta: parsed.choices[0].delta.content };
                 }
             } catch (e) {
-                 console.warn("Final part of Deepseek stream was not valid JSON, ignoring.", jsonStr, e);
+                // ignore
             }
         }
     }
 
   } catch (error: any) {
-    console.error('Deepseek Proxy Service Fetch Error:', error);
-    yield { error: `Fetch error to Deepseek proxy: ${error.message || 'Unknown fetch error'}`, isFinished: true };
+    console.error('Deepseek Service Fetch Error:', error);
+    yield { error: `Fetch error: ${error.message || 'Unknown fetch error'}`, isFinished: true };
   }
   yield { isFinished: true };
 }

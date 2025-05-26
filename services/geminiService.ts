@@ -1,205 +1,145 @@
 
-import { GoogleGenAI, Chat, GenerateContentResponse, Part as GenPart, Tool } from "@google/genai";
 import { ModelSettings, Part, GroundingSource, GeminiChatState, ImagenSettings } from '../types.ts';
+import type { Content, GenerateImagesResponse } from "@google/genai"; // Only for type if needed, not direct use
 
-interface GeminiStreamChunk {
+// Interface for the chunk structure expected from the proxy's Gemini stream
+interface GeminiProxyStreamChunk {
   textDelta?: string;
   groundingSources?: GroundingSource[];
-  newChatState?: GeminiChatState;
+  // newChatState is removed as chat state is not managed via proxy in this version
   error?: string;
 }
 
 interface SendMessageParams {
-  parts: Part[]; 
+  historyContents: Content[]; // Full conversation history including current prompt
   modelSettings: ModelSettings;
   enableGoogleSearch: boolean;
-  chatState: GeminiChatState | null;
-  modelName: string; 
-  apiKey: string; // API Key from Google AI Studio
+  modelName: string;
+  // apiKey parameter removed
 }
 
 interface GenerateImageParams {
   prompt: string;
   modelSettings: ImagenSettings;
   modelName: string; // e.g., 'imagen-3.0-generate-002'
-  apiKey: string; // API Key from Google AI Studio
+  // apiKey parameter removed
 }
 
 export async function* sendGeminiMessageStream(
   params: SendMessageParams
-): AsyncGenerator<GeminiStreamChunk, void, undefined> {
-  const { parts: appParts, modelSettings, enableGoogleSearch, chatState: currentChatState, modelName, apiKey } = params;
-
-  if (!apiKey) {
-    yield { error: "Gemini API Key (API_KEY) is not configured in config.js." };
-    return;
-  }
+): AsyncGenerator<GeminiProxyStreamChunk, void, undefined> {
+  const { historyContents, modelSettings, enableGoogleSearch, modelName } = params;
 
   try {
-    const ai = new GoogleGenAI({ apiKey });
+    const response = await fetch('/api/gemini/chat/stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        modelName,
+        historyContents,
+        modelSettings,
+        enableGoogleSearch,
+      }),
+    });
 
-    let chat: Chat;
-    let newChatStateForReturn: GeminiChatState | undefined = undefined;
-
-    const tools: Tool[] = enableGoogleSearch ? [{googleSearch: {}}] : [];
-    
-    const currentConfigForChat = {
-        systemInstruction: modelSettings.systemInstruction,
-        temperature: modelSettings.temperature,
-        topK: modelSettings.topK,
-        topP: modelSettings.topP,
-        tools: tools.length > 0 ? tools : undefined,
-    };
-
-    if (currentChatState?.chat &&
-        currentChatState.currentModel === modelName &&
-        currentChatState.currentSystemInstruction === modelSettings.systemInstruction &&
-        currentChatState.currentTemperature === modelSettings.temperature &&
-        currentChatState.currentTopK === modelSettings.topK &&
-        currentChatState.currentTopP === modelSettings.topP
-       ) {
-      chat = currentChatState.chat;
-    } else {
-      chat = ai.chats.create({
-        model: modelName, 
-        config: currentConfigForChat
-      });
-
-      newChatStateForReturn = {
-        chat: chat,
-        currentModel: modelName,
-        currentSystemInstruction: modelSettings.systemInstruction,
-        currentTemperature: modelSettings.temperature,
-        currentTopK: modelSettings.topK,
-        currentTopP: modelSettings.topP,
-      };
-      yield { newChatState: newChatStateForReturn };
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: `HTTP error! status: ${response.status}` }));
+      yield { error: errorData.error || `Gemini proxy request failed: ${response.statusText}` };
+      return;
     }
 
-    const sdkParts: GenPart[] = appParts.map(part => {
-      if (part.text) return { text: part.text };
-      if (part.inlineData) return { inlineData: { mimeType: part.inlineData.mimeType, data: part.inlineData.data }};
-      return null; 
-    }).filter(p => p !== null) as GenPart[];
+    if (!response.body) {
+      yield { error: "Proxy response for Gemini stream has no body." };
+      return;
+    }
 
-    const streamResult = await chat.sendMessageStream({ message: sdkParts });
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
 
-    for await (const chunk of streamResult) { 
-      const textContent = chunk.text; 
-      const groundingSources: GroundingSource[] = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
       
-      if (chunk.candidates?.[0]?.groundingMetadata?.groundingChunks) {
-        chunk.candidates[0].groundingMetadata.groundingChunks.forEach(gc => {
-          if (gc.web?.uri) { 
-            groundingSources.push({ 
-              uri: gc.web.uri, 
-              title: gc.web.title || gc.web.uri 
-            });
+      let newlineIndex;
+      while ((newlineIndex = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.substring(0, newlineIndex);
+        buffer = buffer.substring(newlineIndex + 1);
+        if (line.trim()) {
+          try {
+            const chunk = JSON.parse(line) as GeminiProxyStreamChunk;
+            yield chunk;
+          } catch (e) {
+            console.error("Failed to parse Gemini stream chunk from proxy:", e, line);
+            yield { error: "Malformed chunk from proxy." };
           }
-        });
-      }
-
-      const chunkYield: GeminiStreamChunk = {};
-      if (textContent) chunkYield.textDelta = textContent; 
-      if (groundingSources.length > 0) chunkYield.groundingSources = groundingSources;
-
-      if (Object.keys(chunkYield).length > 0) {
-        yield chunkYield;
+        }
       }
     }
+     // Process any remaining buffer content if stream ends without a newline
+    if (buffer.trim()) {
+        try {
+            const chunk = JSON.parse(buffer) as GeminiProxyStreamChunk;
+            yield chunk;
+        } catch (e) {
+            console.error("Failed to parse final Gemini stream chunk from proxy:", e, buffer);
+            yield { error: "Malformed final chunk from proxy." };
+        }
+    }
+
   } catch (error: any) {
-    console.error("Gemini API Error (AI Studio Key):", error);
-    let errorMessage = "An unexpected error occurred with the Gemini API.";
-    if (error.message) {
-        errorMessage = error.message;
-    } else if (error.toString) {
-        errorMessage = error.toString();
-    }
-    if (error.message && error.message.includes("API key not valid")) {
-        errorMessage = "Gemini API key not valid. Please check the API_KEY in config.js and ensure it's active in Google AI Studio. Original: " + error.message;
-    }
-    yield { error: errorMessage };
+    console.error("Error calling Gemini proxy service:", error);
+    yield { error: `Network or unexpected error calling Gemini proxy: ${error.message}` };
   }
 }
 
 export async function generateImageWithImagen(
   params: GenerateImageParams
-): Promise<{ imageBases64?: string[]; error?: string }> {
-  const { prompt, modelSettings, modelName, apiKey } = params;
-
-  if (!apiKey) {
-    return { error: "Gemini API Key (API_KEY) for Imagen is not configured in config.js." };
-  }
+): Promise<{ imageBases64?: string[]; error?: string, rawResponse?: GenerateImagesResponse }> {
+  const { prompt, modelSettings, modelName } = params;
 
   try {
-    const ai = new GoogleGenAI({ apiKey });
-    
-    const config: any = { 
-        numberOfImages: Math.max(1, Math.min(4, modelSettings.numberOfImages || 1)),
-        outputMimeType: modelSettings.outputMimeType || 'image/jpeg',
-    };
-    if (modelSettings.aspectRatio) {
-        config.aspectRatio = modelSettings.aspectRatio;
-    }
-
-    const response = await ai.models.generateImages({
-      model: modelName, 
-      prompt: prompt,
-      config: config,
+    const response = await fetch('/api/gemini/image/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt, modelSettings, modelName }),
     });
 
-    // Log the full API response for debugging purposes by the user
-    console.log("Imagen API Full Response:", JSON.stringify(response, null, 2));
+    const data: GenerateImagesResponse & { error?: string } = await response.json();
 
-    if (response.generatedImages && response.generatedImages.length > 0) {
-      const imageBases64 = response.generatedImages.map(img => img.image.imageBytes);
-      return { imageBases64: imageBases64 };
+    if (!response.ok || data.error) {
+      return { error: data.error || `Imagen proxy request failed: ${response.statusText}` };
+    }
+    
+    // The proxy forwards the Imagen SDK response directly.
+    // We need to extract imageBytes from the 'image' property of each generatedImage.
+    if (data.generatedImages && data.generatedImages.length > 0) {
+      const imageBases64 = data.generatedImages.map(img => img.image.imageBytes);
+      return { imageBases64, rawResponse: data };
     } else {
-      // Construct a more detailed error message
-      let errorReason = "Unknown reason.";
-      if (response && typeof response === 'object') {
-        const anyResponse = response as any; // Cast to any to check for potential fields
-        
-        if (anyResponse.error && typeof anyResponse.error === 'object' && anyResponse.error.message) {
-          errorReason = `API Error: ${anyResponse.error.message}`;
-        } else if (anyResponse.error && typeof anyResponse.error === 'string') {
-          errorReason = `API Error: ${anyResponse.error}`;
-        }
-        // Check for a structure similar to Gemini's promptFeedback for safety blocks
-        // This is speculative for Imagen but follows Gemini patterns.
-        else if (anyResponse.promptFeedback && anyResponse.promptFeedback.blockReason) {
-          errorReason = `Prompt blocked due to: ${anyResponse.promptFeedback.blockReason}.`;
-          if (anyResponse.promptFeedback.safetyRatings) {
-            errorReason += ` Safety ratings: ${JSON.stringify(anyResponse.promptFeedback.safetyRatings)}`;
-          }
-        }
-        else if (anyResponse.generatedImages && anyResponse.generatedImages.length === 0) {
-            errorReason = "API returned an empty list of images. This might be due to safety filters, prompt restrictions, or other API-side issues.";
-        }
-        // Fallback to a generic message including part of the response for diagnosis
-        else {
-            const responsePreview = JSON.stringify(response).substring(0, 300); // Show a preview
-            errorReason = `No images returned. API response (preview): ${responsePreview}`;
-        }
-      }
-      
-      const detailedError = `Image generation failed: ${errorReason}`;
-      // Log the detailed error and full response to console for developer/user debugging
-      console.error(detailedError, "Full API Response object for context:", response);
-      return { error: detailedError };
+       // Check for detailed error in the raw response if no images.
+       // Based on the original Imagen service, specific error feedback might be in other parts of the response.
+       // The proxy server's error handling or the structure of `data` from proxy might include details.
+       let errorReason = "API returned no images. This could be due to safety filters or prompt issues. Check console for details from proxy.";
+       if (data.error) { // if proxy added specific error message
+           errorReason = data.error;
+       }
+       // It seems `promptFeedback` isn't directly on GenerateImagesResponse anymore,
+       // so direct client-side interpretation of detailed block reasons from the raw response is complex.
+       // The proxy error message should be the primary source of error info.
+       console.error("Imagen generation via proxy problem:", errorReason, "Full response from proxy:", data);
+       return { error: errorReason, rawResponse: data };
     }
 
   } catch (error: any) {
-    console.error("Imagen API Error (AI Studio Key) - Exception caught:", error);
-    let errorMessage = "An unexpected error occurred with the Imagen API.";
-     if (error.message) {
-        errorMessage = error.message;
-    }  else if (error.toString) {
-        errorMessage = error.toString();
-    }
-     if (error.message && (error.message.includes("API key not valid") || error.message.includes("permission denied") || error.message.includes("Forbidden"))) {
-        errorMessage = "Imagen API key not valid or permission denied. Please check the API_KEY in config.js and ensure it's active and correctly configured in Google AI Studio for image generation. Original error: " + error.message;
-    }
-    return { error: errorMessage };
+    console.error("Error calling Imagen proxy service:", error);
+    return { error: `Network or unexpected error calling Imagen proxy: ${error.message}` };
   }
 }
