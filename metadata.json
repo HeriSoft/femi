@@ -1,6 +1,6 @@
 {
   "name": "femi - Multimodel AI Chat",
   "description": "A web application for chatting with multiple AI models like Gemini, with options for image upload, web search, and file uploads. Includes light/dark theme settings.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["microphone"],
   "prompt": ""
 }
