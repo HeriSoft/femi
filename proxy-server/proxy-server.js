@@ -13,7 +13,8 @@ const port = process.env.PORT || 3001;
 
 // CORS configuration
 const rawCORSOrigins = process.env.CORS_ALLOWED_ORIGINS;
-const allowedOrigins = rawCORSOrigins ? rawCORSOrigins.split(',').map(o => o.trim()) : [];
+// Ensure rawCORSOrigins is treated as a string before splitting, even if it's undefined.
+const allowedOrigins = rawCORSOrigins ? String(rawCORSOrigins).split(',').map(o => o.trim()) : [];
 console.log('[CORS Config] Raw CORS_ALLOWED_ORIGINS env var from process.env:', rawCORSOrigins);
 console.log('[CORS Config] Parsed allowedOrigins array:', allowedOrigins);
 
@@ -32,7 +33,7 @@ app.use(cors({
       return callback(null, true);
     }
     console.error(`[CORS Check] Origin '${origin}' IS NOT in the allowed list. Blocking due to CORS policy.`);
-    return callback(new Error('Not allowed by CORS'));
+    return callback(new Error('Not allowed by CORS')); // This is line 23 from the error stack
   }
 }));
 
@@ -62,7 +63,7 @@ app.post('/api/auth/verify-code', (req, res) => {
 
 // --- GEMINI API PROXY ---
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-let ai;
+let ai; // GoogleGenAI instance
 if (GEMINI_API_KEY) {
   ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
   console.log("Gemini AI SDK initialized with API Key.")
@@ -359,6 +360,7 @@ app.get('/', (req, res) => {
   res.send('AI Chat Proxy Server is running.');
 });
 
+// Final server startup logs
 app.listen(port, () => {
   console.log(`AI Chat Proxy Server listening on port ${port}`);
   // The detailed CORS_ALLOWED_ORIGINS logging is now at the top with the config.
