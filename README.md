@@ -32,7 +32,7 @@
 
 ```bash
 git clone https://github.com/HeriSoft/femi.git
-cd femi-multimodel-ai-chat
+cd femi
 ```
 
 **2. Setup Backend Proxy:**
