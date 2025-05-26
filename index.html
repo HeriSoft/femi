@@ -47,24 +47,16 @@
     "react/jsx-dev-runtime": "https://esm.sh/react@^19.1.0/jsx-dev-runtime",
     "react-dom/client": "https://esm.sh/react-dom@^19.1.0/client",
     "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.0.1"
+    "@google/genai": "https://esm.sh/@google/genai@^1.0.1",
+    "highlight.js": "https://esm.sh/highlight.js@11.9.0"
   }
 }
 </script>
-    <!-- 
-      IMPORTANT: For Vite projects, manage your API keys using .env files.
-      Create a file named '.env.local' (or other .env variants like .env.development.local) 
-      in the root of your project.
-      
-      Add your API keys to this file, prefixed with VITE_. For example:
-      VITE_API_KEY=YOUR_GEMINI_API_KEY_HERE
-      VITE_OPENAI_API_KEY=YOUR_OPENAI_KEY_HERE
-      
-      These will be available in your code as `import.meta.env.VITE_API_KEY`.
-      Ensure '.env.local' (and similar files containing secrets) are added to your .gitignore.
-
-      The config.js file below is kept for historical reference or non-Vite setups,
-      but Vite's .env system is the recommended approach for this project.
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <!-- If you prefer a light theme for code blocks, you could use:
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-light.min.css">
+    Or a more neutral one:
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css">
     -->
     <script>
       // Global error handler to catch unhandled exceptions
@@ -75,9 +67,6 @@
         console.log("  Line: ", lineno);
         console.log("  Column: ", colno);
         console.log("  Error object: ", error);
-        // Returning true from this handler prevents the firing of the default event handler (e.g., "Script error." in console).
-        // However, for debugging, it's often better to let the default handler run as well.
-        // return true; 
       };
       window.addEventListener('unhandledrejection', function(event) {
         console.log("Global unhandled promise rejection caught:");
@@ -85,14 +74,12 @@
         console.log("  Promise: ", event.promise);
       });
     </script>
-    <script src="/config.js"></script> <!-- Updated path -->
-    <link rel="stylesheet" href="/index.css"> <!-- Updated path -->
-    <!-- Babel Standalone is removed. Vite will handle TSX transpilation. -->
+    <script src="/config.js"></script>
+    <link rel="stylesheet" href="/index.css">
     
 </head>
   <body class="bg-secondary-light dark:bg-neutral-dark text-neutral-darker dark:text-secondary-light">
     <div id="root">Loading app... If you see this for more than a few seconds, please open the browser console (F12) for errors.</div>
-    <!-- Vite will process this script. Ensure index.tsx is your Vite entry point. -->
     <script type="module" src="./index.tsx"></script>
   </body>
 </html>

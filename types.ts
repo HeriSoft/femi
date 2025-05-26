@@ -1,12 +1,14 @@
+
 import { Chat } from '@google/genai'; // Updated import
 
 export enum Model {
   GEMINI = 'Gemini (gemini-2.5-flash-preview-05-20)', // Updated model identifier
   DEEPSEEK = 'Deepseek (deepseek-chat)', 
-  GPT4O = 'ChatGPT (gpt-4o)', 
+  GPT4O = 'ChatGPT (gpt-4o)', // Changed display name
   CLAUDE = 'Claude (Mock)',
   GEMINI_ADVANCED = 'Gemini Advanced (gemini-1.5-pro-latest)',
   IMAGEN3 = 'Imagen3 (imagen-3.0-generate-002)',
+  OPENAI_TTS = 'OpenAI (TTS)', // New TTS Model
 }
 
 export interface ChatMessage {
@@ -21,6 +23,10 @@ export interface ChatMessage {
   fileName?: string; // For user messages with files
   groundingSources?: GroundingSource[];
   isImageQuery?: boolean; // To flag user messages that are image generation prompts
+  isRegenerating?: boolean; // Flag for AI messages that are being regenerated
+  // Stores the ID of the user message that led to this AI response, crucial for regeneration
+  promptedByMessageId?: string; 
+  audioUrl?: string; // For AI messages with synthesized audio
 }
 
 export interface GroundingSource {
@@ -41,8 +47,16 @@ export interface ImagenSettings {
   aspectRatio?: '1:1' | '16:9' | '9:16' | '4:3' | '3:4' | string; // Allow common presets or custom strings
 }
 
+export type OpenAiTtsVoice = 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
+
+export interface OpenAITtsSettings {
+  voice: OpenAiTtsVoice;
+  speed: number; // 0.25 to 4.0
+  modelIdentifier: 'tts-1' | 'tts-1-hd'; // Model for TTS
+}
+
 export type AllModelSettings = {
-  [key in Model]?: ModelSettings & Partial<ImagenSettings>; // Allow ImagenSettings to be mixed in
+  [key in Model]?: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings>; // Allow ImagenSettings and OpenAITtsSettings
 };
 
 export interface ThemeContextType {
@@ -53,7 +67,7 @@ export interface ThemeContextType {
 export interface Part {
   text?: string;
   inlineData?: {
-    mimeType: string;
+    mimeType:string;
     data: string;
   };
 }
@@ -65,6 +79,7 @@ export interface GeminiChatState {
   currentTemperature?: number;
   currentTopK?: number;
   currentTopP?: number;
+  currentEnableWebSearch?: boolean; // Added to track web search state for chat re-initialization
 }
 
 export interface ApiKeyStatus {
@@ -74,17 +89,20 @@ export interface ApiKeyStatus {
   isMock: boolean;
   isGeminiPlatform: boolean; // True if the model runs on Google's Gemini platform (AI Studio API Key)
   isImageGeneration?: boolean; // Flag for image generation models
-  // Vertex specific flags removed
-  // isVertex?: boolean; 
-  // vertexProjectEnvVar?: string; 
-  // vertexLocationEnvVar?: string; 
+  isTextToSpeech?: boolean; // Flag for TTS models
+}
+
+export interface Persona {
+  id: string;
+  name: string;
+  instruction: string;
 }
 
 export interface SettingsPanelProps {
   selectedModel: Model;
   onModelChange: (model: Model) => void;
-  modelSettings: ModelSettings & Partial<ImagenSettings>; // Include ImagenSettings
-  onModelSettingsChange: (settings: Partial<ModelSettings & Partial<ImagenSettings>>) => void;
+  modelSettings: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings>; // Include Imagen & TTS Settings
+  onModelSettingsChange: (settings: Partial<ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings>>) => void;
   onImageUpload: (file: File | null) => void;
   imagePreview: string | null; // For user uploaded image preview
   onFileUpload: (file: File | null) => void;
@@ -93,6 +111,11 @@ export interface SettingsPanelProps {
   onWebSearchToggle: (enabled: boolean) => void;
   disabled?: boolean;
   apiKeyStatuses: Record<Model, ApiKeyStatus>;
+  personas: Persona[];
+  activePersonaId: string | null;
+  onPersonaChange: (personaId: string | null) => void;
+  onPersonaSave: (persona: Persona) => void;
+  onPersonaDelete: (personaId: string) => void;
 }
 
 export const getActualModelIdentifier = (modelEnumString: string): string => {
@@ -128,7 +151,9 @@ export interface ChatSession {
   timestamp: number;
   model: Model; // The primary model used for this session
   messages: ChatMessage[];
-  modelSettingsSnapshot: ModelSettings & Partial<ImagenSettings>; // Snapshot of settings for this session
+  modelSettingsSnapshot: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings>; // Snapshot of settings for this session
+  isPinned?: boolean; // For pinning important chats
+  activePersonaIdSnapshot?: string | null; // Snapshot of active persona
 }
 
 export interface HistoryPanelProps {
@@ -140,4 +165,25 @@ export interface HistoryPanelProps {
   onSaveCurrentChat: () => void;
   onStartNewChat: () => void;
   isLoading: boolean; // To disable actions while chat is processing
+  onTogglePinSession: (sessionId: string) => void;
+}
+
+// Notification System Types
+export type NotificationType = 'success' | 'error' | 'info';
+
+export interface NotificationMessage {
+  id: string;
+  message: string;
+  type: NotificationType;
+  timestamp: number;
+  read: boolean;
+  details?: string; // For optional extended error details
+}
+
+export interface NotificationContextType {
+  notifications: NotificationMessage[];
+  unreadCount: number;
+  addNotification: (message: string, type: NotificationType, details?: string) => void;
+  markAllAsRead: () => void;
+  clearAllNotifications: () => void;
 }

@@ -1,3 +1,4 @@
+
 import { Model, AllModelSettings, ModelSettings, ImagenSettings } from './types.ts'; // Update to .ts
 
 export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
@@ -9,7 +10,7 @@ export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
 
 export const DEFAULT_IMAGEN_SETTINGS: ImagenSettings = {
   numberOfImages: 1,
-  outputMimeType: 'image/png',
+  outputMimeType: 'image/jpeg',
   aspectRatio: '1:1', // Default aspect ratio
 };
 
@@ -28,3 +29,6 @@ export const ALL_MODEL_DEFAULT_SETTINGS: AllModelSettings = {
  
 export const LOCAL_STORAGE_SETTINGS_KEY = 'femiAiChatSettings';
 export const LOCAL_STORAGE_HISTORY_KEY = 'femiAiChatHistory';
+export const LOCAL_STORAGE_PERSONAS_KEY = 'femiAiChatPersonas';
+export const LOCAL_STORAGE_NOTIFICATIONS_KEY = 'femiAiNotifications';
+export const MAX_NOTIFICATIONS = 50; // Max notifications to store
