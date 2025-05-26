@@ -1,10 +1,8 @@
-
 // Fix: Remove triple-slash directive for 'vite/client' as its types are not found and import.meta.env is manually typed.
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 // Update to .ts/.tsx extensions
-import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings } from '../types.ts';
-import type { Content } from '@google/genai'; // For constructing Gemini history
+import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, GeminiChatState, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings } from '../types.ts';
 import { ALL_MODEL_DEFAULT_SETTINGS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY } from '../constants.ts';
 import MessageBubble from './MessageBubble.tsx';
 import SettingsPanel from './SettingsPanel.tsx';
@@ -224,7 +222,7 @@ const ChatPage: React.FC = () => {
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>('settings');
 
   const chatEndRef = useRef<HTMLDivElement>(null);
-  // geminiChatState is removed as proxy calls are stateless for Gemini chat.
+  const [geminiChatState, setGeminiChatState] = useState<GeminiChatState | null>(null);
 
   const isImagenModelSelected = selectedModel === Model.IMAGEN3;
   const isTextToSpeechModelSelected = selectedModel === Model.OPENAI_TTS;
@@ -270,22 +268,18 @@ const ChatPage: React.FC = () => {
 
 
   const apiKeyStatuses = React.useMemo((): Record<Model, ApiKeyStatus> => {
-    // This now reflects if the PROXY SERVER is expected to have the keys.
-    // The actual check for key presence happens on the proxy.
-    // Client-side `window.process.env` from `config.js` is mostly for `LOGIN_CODE_AUTH` now.
-    // We assume if the user is running the app, they've configured the proxy's .env.
-    // So, we can simplify this to always report true for live models, or make it more nuanced.
-    // For now, let's assume if it's not mock, the user *should* have configured the proxy.
-    const isProxyExpectedToHaveKey = true; // Placeholder for a more complex check if needed
+    const env = (window as any).process?.env || {};
+    const geminiApiKeySet = !!env.API_KEY;
+    const openaiApiKeySet = !!env.VITE_OPENAI_API_KEY;
 
     return {
-      [Model.GEMINI]: {isSet: isProxyExpectedToHaveKey, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Gemini Flash', isMock: false, isGeminiPlatform: true},
-      [Model.GEMINI_ADVANCED]: {isSet: isProxyExpectedToHaveKey, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Gemini Advanced', isMock: false, isGeminiPlatform: true},
-      [Model.GPT4O]: {isSet: isProxyExpectedToHaveKey, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'ChatGPT', isMock: false, isGeminiPlatform: false},
-      [Model.DEEPSEEK]: { isSet: isProxyExpectedToHaveKey, envVarName: 'DEEPSEEK_API_KEY (on proxy)', modelName: 'Deepseek', isMock: false, isGeminiPlatform: false},
-      [Model.CLAUDE]: { isSet: true, envVarName: 'N/A (Mock)', modelName: 'Claude', isMock: true, isGeminiPlatform: false}, // Mock models don't need proxy keys
-      [Model.IMAGEN3]: {isSet: isProxyExpectedToHaveKey, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Imagen3 Image Gen', isMock: false, isGeminiPlatform: true, isImageGeneration: true},
-      [Model.OPENAI_TTS]: {isSet: isProxyExpectedToHaveKey, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'OpenAI TTS', isMock: false, isGeminiPlatform: false, isTextToSpeech: true }
+      [Model.GEMINI]: {isSet: geminiApiKeySet, envVarName: 'API_KEY', modelName: 'Gemini Flash (AI Studio)', isMock: false, isGeminiPlatform: true},
+      [Model.GEMINI_ADVANCED]: {isSet: geminiApiKeySet, envVarName: 'API_KEY', modelName: 'Gemini Advanced (AI Studio)', isMock: false, isGeminiPlatform: true},
+      [Model.GPT4O]: {isSet: openaiApiKeySet, envVarName: 'VITE_OPENAI_API_KEY', modelName: 'ChatGPT', isMock: false, isGeminiPlatform: false},
+      [Model.DEEPSEEK]: { isSet: !!env.VITE_DEEPSEEK_API_KEY, envVarName: 'VITE_DEEPSEEK_API_KEY', modelName: 'Deepseek', isMock: false, isGeminiPlatform: false},
+      [Model.CLAUDE]: { isSet: !!env.VITE_CLAUDE_API_KEY, envVarName: 'VITE_CLAUDE_API_KEY', modelName: 'Claude', isMock: true, isGeminiPlatform: false},
+      [Model.IMAGEN3]: {isSet: geminiApiKeySet, envVarName: 'API_KEY', modelName: 'Imagen3 Image Gen (AI Studio)', isMock: false, isGeminiPlatform: true, isImageGeneration: true},
+      [Model.OPENAI_TTS]: {isSet: openaiApiKeySet, envVarName: 'VITE_OPENAI_API_KEY', modelName: 'OpenAI TTS', isMock: false, isGeminiPlatform: false, isTextToSpeech: true }
     };
   }, []);
 
@@ -326,8 +320,12 @@ const ChatPage: React.FC = () => {
   
   useEffect(() => {
     const currentModelStatus = apiKeyStatuses[selectedModel];
-    // No need to manage geminiChatState as it's removed.
-    if ((!currentModelStatus?.isGeminiPlatform || currentModelStatus?.isImageGeneration || currentModelStatus?.isTextToSpeech) && isWebSearchEnabled) {
+    const isCurrentModelOnGeminiPlatform = currentModelStatus?.isGeminiPlatform;
+
+    if (!isCurrentModelOnGeminiPlatform || currentModelStatus?.isMock || currentModelStatus?.isImageGeneration || currentModelStatus?.isTextToSpeech) {
+      setGeminiChatState(null); 
+    }
+    if ((!isCurrentModelOnGeminiPlatform || currentModelStatus?.isImageGeneration || currentModelStatus?.isTextToSpeech) && isWebSearchEnabled) {
         setIsWebSearchEnabled(false);
     }
     
@@ -464,7 +462,7 @@ const ChatPage: React.FC = () => {
 
   const handlePersonaChange = (personaId: string | null) => {
     setActivePersonaId(personaId);
-    // No geminiChatState to reset
+    setGeminiChatState(null); 
   };
 
   const handlePersonaSave = (personaToSave: Persona) => {
@@ -563,7 +561,7 @@ const ChatPage: React.FC = () => {
 
       setActiveSessionId(sessionId);
       setCurrentChatName(sessionToLoad.name);
-      // geminiChatState removed
+      setGeminiChatState(null); 
       setUploadedImage(null);
       setImagePreview(null);
       setUploadedTextFileContent(null);
@@ -582,7 +580,7 @@ const ChatPage: React.FC = () => {
     setMessages([]);
     setActiveSessionId(null);
     setCurrentChatName("New Chat");
-    // geminiChatState removed
+    setGeminiChatState(null);
     setUploadedImage(null);
     setImagePreview(null);
     setUploadedTextFileContent(null);
@@ -745,17 +743,28 @@ const ChatPage: React.FC = () => {
     } else {
         setMessages((prev) => [...prev, aiMessagePlaceholder]);
     }
+
+    const geminiParts: Part[] = [];
+    if (constructedMessageText.trim() && !isImagenModelSelected && !isTextToSpeechModelSelected) {
+        geminiParts.push({ text: constructedMessageText.trim() });
+    }
+    if (currentUploadedImage && currentImagePreview && !isImagenModelSelected && !isTextToSpeechModelSelected) {
+        const base64Image = currentImagePreview.split(',')[1];
+        geminiParts.push({ inlineData: { mimeType: currentUploadedImage.type as 'image/jpeg' | 'image/png', data: base64Image } });
+    }
     
     try {
       const currentModelSpecificSettings = modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings;
       const currentModelStatus = apiKeyStatuses[selectedModel];
       const actualModelIdentifier = getActualModelIdentifier(selectedModel);
-      // env variable is no longer read from client for API keys
+      const env = (window as any).process?.env || {};
 
       if (currentModelStatus?.isTextToSpeech && !currentModelStatus.isMock) {
-        // API key is handled by proxy
+        const ttsApiKey = env[currentModelStatus.envVarName] as string | undefined;
+        if (!ttsApiKey) throw new Error (`${currentModelStatus.modelName} API Key (${currentModelStatus.envVarName}) is not configured.`);
+
         const ttsResult = await generateOpenAITTS({
-            // apiKey parameter removed
+            apiKey: ttsApiKey,
             modelIdentifier: currentModelSpecificSettings.modelIdentifier || 'tts-1',
             textInput: originalUserPromptForAi,
             voice: currentModelSpecificSettings.voice || 'alloy',
@@ -792,11 +801,13 @@ const ChatPage: React.FC = () => {
         }
 
       } else if (currentModelStatus?.isGeminiPlatform && !currentModelStatus.isMock) { 
-        // API key is handled by proxy
+        const geminiApiKey = env.API_KEY as string | undefined;
+        if (!geminiApiKey) throw new Error(`Gemini API Key (API_KEY) is not configured in config.js for ${currentModelStatus.modelName}.`);
+
         if (isImagenModelSelected) { 
             const imagenSettings = currentModelSpecificSettings as ImagenSettings;
             const result = await generateImageWithImagen({
-              prompt: originalUserPromptForAi, modelSettings: imagenSettings, modelName: actualModelIdentifier, // apiKey removed
+              prompt: originalUserPromptForAi, modelSettings: imagenSettings, modelName: actualModelIdentifier, apiKey: geminiApiKey,
             });
 
             if (result.error) throw new Error(result.error);
@@ -811,42 +822,31 @@ const ChatPage: React.FC = () => {
                   } : msg
                 )
               );
-            } else { throw new Error("Image generation failed to return any images. Check proxy logs and original API response for details."); }
+            } else { throw new Error("Image generation failed to return any images."); }
         } else { 
-            // Construct Gemini history for stateless proxy call
-            const geminiHistory: Content[] = [];
-            messages.filter(m => m.id !== aiMessageId && m.id !== newUserMessage.id).forEach(msg => {
-                const parts: Part[] = [];
-                if (msg.text) parts.push({ text: msg.text });
-                // Note: Gemini's Content[] format takes base64 data directly in parts.
-                // If imagePreview is already base64 and msg.imageMimeType exists, it could be added.
-                // For simplicity, this example assumes history for Gemini is text-only for now.
-                // If images need to be in history, ChatMessage and this logic need adjustment.
-                geminiHistory.push({ role: msg.sender === 'user' ? 'user' : 'model', parts });
-            });
-
-            // Add current user message to history
-            const currentUserParts: Part[] = [];
-            if (constructedMessageText.trim()) currentUserParts.push({ text: constructedMessageText.trim() });
-            if (currentUploadedImage && currentImagePreview && !isImagenModelSelected && !isTextToSpeechModelSelected) {
-                const base64Image = currentImagePreview.split(',')[1];
-                currentUserParts.push({ inlineData: { mimeType: currentUploadedImage.type as 'image/jpeg' | 'image/png', data: base64Image } });
+            let chatStateToUse = geminiChatState;
+            if (chatStateToUse &&
+                (chatStateToUse.currentModel !== actualModelIdentifier ||
+                chatStateToUse.currentSystemInstruction !== currentModelSpecificSettings.systemInstruction || 
+                chatStateToUse.currentTemperature !== currentModelSpecificSettings.temperature ||
+                chatStateToUse.currentTopK !== currentModelSpecificSettings.topK ||
+                chatStateToUse.currentTopP !== currentModelSpecificSettings.topP ||
+                chatStateToUse.currentEnableWebSearch !== isWebSearchEnabled) 
+                ) {
+                chatStateToUse = null; setGeminiChatState(null);
             }
-            geminiHistory.push({ role: 'user', parts: currentUserParts });
-
 
             const stream = sendGeminiMessageStream({
-              historyContents: geminiHistory, 
-              modelSettings: currentModelSpecificSettings as ModelSettings, 
-              enableGoogleSearch: isWebSearchEnabled,
-              modelName: actualModelIdentifier, 
-              // apiKey and chatState removed
+              parts: geminiParts, modelSettings: currentModelSpecificSettings as ModelSettings, enableGoogleSearch: isWebSearchEnabled,
+              chatState: chatStateToUse, modelName: actualModelIdentifier, apiKey: geminiApiKey,
             });
 
             let currentText = ''; let currentGroundingSources: GroundingSource[] | undefined = undefined;
+            let newChatSessionState : GeminiChatState | undefined = undefined;
 
             for await (const chunk of stream) {
               if (chunk.error) throw new Error(chunk.error); 
+              if (chunk.newChatState && !newChatSessionState) { newChatSessionState = chunk.newChatState; setGeminiChatState(newChatSessionState); }
               if (chunk.textDelta) currentText += chunk.textDelta;
               if (chunk.groundingSources && chunk.groundingSources.length > 0) currentGroundingSources = chunk.groundingSources;
               
@@ -858,7 +858,9 @@ const ChatPage: React.FC = () => {
             }
         }
       } else if (selectedModel === Model.GPT4O && !currentModelStatus.isMock) {
-        // API key handled by proxy
+        const apiKey = env[currentModelStatus.envVarName] as string | undefined;
+        if (!apiKey) throw new Error(`${currentModelStatus.modelName} API Key (${currentModelStatus.envVarName}) is not configured.`);
+        
         const history: ApiChatMessage[] = [{ role: 'system', content: currentModelSpecificSettings.systemInstruction }];
         messages.filter(m => m.id !== aiMessageId && m.id !== newUserMessage.id).forEach(msg => { 
             if (msg.sender === 'user') {
@@ -877,12 +879,7 @@ const ChatPage: React.FC = () => {
         if(currentUserContent.length > 0) history.push({ role: 'user', content: currentUserContent });
         else if (originalUserPromptForAi === "" && !currentUploadedImage) history.push({ role: 'user', content: " " }); 
 
-        const stream = sendOpenAIMessageStream({ 
-            /* apiKey removed */ 
-            modelIdentifier: actualModelIdentifier, 
-            history, 
-            modelSettings: currentModelSpecificSettings as ModelSettings 
-        });
+        const stream = sendOpenAIMessageStream({ apiKey, modelIdentifier: actualModelIdentifier, history, modelSettings: currentModelSpecificSettings as ModelSettings });
         let currentText = '';
         for await (const chunk of stream) {
           if (chunk.error) throw new Error(chunk.error);
@@ -892,7 +889,9 @@ const ChatPage: React.FC = () => {
         }
 
       } else if (selectedModel === Model.DEEPSEEK && !currentModelStatus.isMock) {
-        // API key handled by proxy
+        const apiKey = env[currentModelStatus.envVarName] as string | undefined;
+        if (!apiKey) throw new Error(`${currentModelStatus.modelName} API Key (${currentModelStatus.envVarName}) is not configured.`);
+
         const history: ApiChatMessage[] = [{ role: 'system', content: currentModelSpecificSettings.systemInstruction }];
          messages.filter(m => m.id !== aiMessageId && m.id !== newUserMessage.id).forEach(msg => {
             if (msg.sender === 'user') history.push({ role: 'user', content: msg.text }); 
@@ -900,12 +899,7 @@ const ChatPage: React.FC = () => {
         });
         history.push({ role: 'user', content: constructedMessageText.trim() || " " });
 
-        const stream = sendDeepseekMessageStream({ 
-            /* apiKey removed */ 
-            modelIdentifier: actualModelIdentifier, 
-            history, 
-            modelSettings: currentModelSpecificSettings as ModelSettings 
-        });
+        const stream = sendDeepseekMessageStream({ apiKey, modelIdentifier: actualModelIdentifier, history, modelSettings: currentModelSpecificSettings as ModelSettings });
         let currentText = '';
         for await (const chunk of stream) {
           if (chunk.error) throw new Error(chunk.error);
@@ -915,13 +909,7 @@ const ChatPage: React.FC = () => {
         }
       
       } else if (currentModelStatus?.isMock) { 
-        // For mock, prepare Gemini-like parts for simplicity, though mock service might not use all of it
-        const mockParts: Part[] = [];
-        if (constructedMessageText.trim()) mockParts.push({ text: constructedMessageText.trim() });
-        if (currentUploadedImage && currentImagePreview) {
-            mockParts.push({ inlineData: { mimeType: currentUploadedImage.type as 'image/jpeg' | 'image/png', data: currentImagePreview.split(',')[1] } });
-        }
-        const stream = sendMockMessageStream(mockParts, selectedModel, currentModelSpecificSettings as ModelSettings); 
+        const stream = sendMockMessageStream(geminiParts, selectedModel, currentModelSpecificSettings as ModelSettings); 
         let currentText = '';
         for await (const chunk of stream) {
           currentText += chunk;
@@ -930,7 +918,7 @@ const ChatPage: React.FC = () => {
       } else { throw new Error(`API integration for ${selectedModel} is not implemented or API key/Vertex config is missing and it's not a mock model.`); }
     } catch (e: any) {
       console.error("Error sending message:", e);
-      const errorMessage = e.message || 'Failed to get response from AI (via proxy).';
+      const errorMessage = e.message || 'Failed to get response from AI.';
       setError(errorMessage); 
       addNotification(`API Error: ${errorMessage}`, "error", e.stack); 
       setMessages((prev) => prev.filter(msg => msg.id !== aiMessageId)); 
@@ -983,30 +971,10 @@ const ChatPage: React.FC = () => {
       setError(null);
       
       const regenInputText = userMessageForRegen.text;
-      // For regeneration, image/file data needs to be from the original user message.
-      // The current `uploadedImage`, `imagePreview` might be stale if user changed them after sending original.
-      // This requires ChatMessage to potentially store original file/image data if full fidelity regen is needed,
-      // or we assume regeneration uses the text and any *currently* selected image/file (simpler but might differ).
-      // For now, let's use what's available on userMessageForRegen if possible, else current state.
-
-      let regenImagePreview: string | null = userMessageForRegen.imagePreview || null;
-      let regenUploadedImageFile: File | null = null; // We don't store original File object, so this is tricky.
-                                                    // Proxy might need to handle image by URL if we passed it.
-                                                    // For simplicity, we might only be able to regen with text + current image if any.
-      // This part needs more thought for robust image/file regeneration via proxy.
-      // For now, if userMessageForRegen.imagePreview exists, we'll use that.
-      // The File object itself is lost, so the proxy would need image data.
-      // Let's assume if imagePreview exists on userMessageForRegen, the internalSendMessage needs to handle it.
-      // This implies internalSendMessage might need to fetch that imagePreview if it's a URL, or have base64 data.
-      
-      // Current implementation sends base64 of currentUploadedImage. If regenerating a message with an old image,
-      // this is not ideal. A true regeneration would re-use the *exact* inputs.
-      // Let's proceed with current image/file, as that's what the previous structure implicitly did.
-      const currentRegenImageFile = uploadedImage; // The one currently in state
-      const currentRegenImagePreview = imagePreview; // The one currently in state
-      const currentRegenUploadedTextContent = uploadedTextFileContent; // Current one
-      const currentRegenUploadedTextFileName = uploadedTextFileName; // Current one
-
+      let regenImagePreview: string | null = userMessageForRegen.imagePreview || imagePreview;
+      let regenUploadedImage: File | null = uploadedImage; 
+      let regenUploadedTextContent: string | null = uploadedTextFileContent; 
+      let regenUploadedTextFileName: string | null = userMessageForRegen.fileName || uploadedTextFileName; 
 
       setMessages(prev => prev.map(msg => {
           if (msg.id === aiMessageIdToRegenerate) {
@@ -1026,11 +994,11 @@ const ChatPage: React.FC = () => {
       }));
       
       await internalSendMessage(
-          regenInputText, // Text from original user message
-          currentRegenImageFile, // Current File object
-          currentRegenImagePreview, // Current preview string
-          currentRegenUploadedTextContent,
-          currentRegenUploadedTextFileName,
+          regenInputText,
+          regenUploadedImage, 
+          regenImagePreview,  
+          regenUploadedTextContent, 
+          regenUploadedTextFileName, 
           aiMessageIdToRegenerate 
       );
   };
@@ -1139,7 +1107,7 @@ const ChatPage: React.FC = () => {
         {activeSidebarTab === 'settings' && (
             <SettingsPanel
                 selectedModel={selectedModel}
-                onModelChange={(model) => { setSelectedModel(model); /* geminiChatState removed */ clearSearch();}} 
+                onModelChange={(model) => { setSelectedModel(model); setGeminiChatState(null); clearSearch();}} 
                 modelSettings={modelSettings} 
                 onModelSettingsChange={handleModelSettingsChange}
                 onImageUpload={handleImageUpload}
@@ -1277,7 +1245,7 @@ const ChatPage: React.FC = () => {
 
         <div className="flex-grow overflow-y-auto mb-4 pr-2 space-y-4">
           {messages.map((msg) => (
-            <div key={msg.id} ref={(el: HTMLDivElement | null) => { if(el) messageRefs.current[msg.id] = el; }}>
+            <div key={msg.id} ref={(el: HTMLDivElement | null) => { messageRefs.current[msg.id] = el; }}>
                 <MessageBubble 
                     message={msg}
                     onImageClick={msg.sender === 'ai' && msg.imagePreviews && msg.imagePreviews.length > 0 ? handleOpenImageModal : undefined}

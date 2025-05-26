@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { ChatSession, HistoryPanelProps, Model } from '../types.ts';
-import { ArchiveBoxIcon, DocumentPlusIcon, PencilSquareIcon, TrashIcon, FolderOpenIcon, ClockIcon } from './Icons.tsx';
+import { ArchiveBoxIcon, DocumentPlusIcon, PencilSquareIcon, TrashIcon, FolderOpenIcon, ClockIcon, StarIcon } from './Icons.tsx';
 
 const HistoryPanel: React.FC<HistoryPanelProps> = ({
   savedSessions,
@@ -12,6 +12,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
   onSaveCurrentChat,
   onStartNewChat,
   isLoading,
+  onTogglePinSession,
 }) => {
   const [sessionToRename, setSessionToRename] = useState<string | null>(null);
   const [newSessionName, setNewSessionName] = useState('');
@@ -36,6 +37,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
   };
   
   const getModelShortName = (modelEnumString: string): string => {
+      if (!modelEnumString) return "AI";
       if (modelEnumString.startsWith(Model.GEMINI.substring(0,6))) return "Gemini";
       if (modelEnumString.startsWith(Model.GPT4O.substring(0,3))) return "GPT";
       if (modelEnumString.startsWith(Model.DEEPSEEK.substring(0,4))) return "Deepseek";
@@ -44,6 +46,12 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
       const match = modelEnumString.match(/^([^\s(]+)/);
       return match ? match[1] : "AI";
   };
+
+  const sortedSessions = [...savedSessions].sort((a, b) => {
+    if (a.isPinned && !b.isPinned) return -1;
+    if (!a.isPinned && b.isPinned) return 1;
+    return b.timestamp - a.timestamp;
+  });
 
   return (
     <div className="space-y-4 p-1 flex flex-col h-full">
@@ -68,22 +76,32 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
         </button>
       </div>
 
-      {savedSessions.length === 0 && (
+      {sortedSessions.length === 0 && (
         <p className="text-sm text-neutral-500 dark:text-neutral-400 text-center py-4">No saved chats yet.</p>
       )}
 
       <div className="flex-grow overflow-y-auto space-y-2 pr-1">
-        {savedSessions.sort((a,b) => b.timestamp - a.timestamp).map((session) => (
+        {sortedSessions.map((session) => (
           <div
             key={session.id}
-            className={`p-3 rounded-md border ${
+            className={`p-3 rounded-md border relative ${
               session.id === activeSessionId
                 ? 'bg-primary-light/20 border-primary dark:bg-primary-dark/30 dark:border-primary-light'
                 : 'bg-neutral-light dark:bg-neutral-darker border-secondary dark:border-neutral-darkest hover:bg-secondary/30 dark:hover:bg-neutral-dark/30'
-            }`}
+            } ${session.isPinned ? 'border-l-4 border-l-accent dark:border-l-accent-light' : ''}`}
           >
+            <button
+                onClick={() => onTogglePinSession(session.id)}
+                disabled={isLoading}
+                className={`absolute top-2 right-2 p-1 rounded-full hover:bg-gray-300 dark:hover:bg-neutral-500 
+                            ${session.isPinned ? 'text-accent dark:text-accent-light' : 'text-gray-400 dark:text-neutral-400'}`}
+                title={session.isPinned ? "Unpin Chat" : "Pin Chat"}
+                aria-label={session.isPinned ? "Unpin chat session" : "Pin chat session"}
+            >
+                <StarIcon className="w-4 h-4" solid={session.isPinned} />
+            </button>
             {sessionToRename === session.id ? (
-              <div className="space-y-2">
+              <div className="space-y-2 mt-1">
                 <input
                   type="text"
                   value={newSessionName}

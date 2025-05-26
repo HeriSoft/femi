@@ -41,7 +41,6 @@ const Header: React.FC<HeaderProps> = ({
   const [loginCodeInput, setLoginCodeInput] = useState('');
   const loginModalRef = useRef<HTMLDivElement>(null);
   const loginButtonRef = useRef<HTMLButtonElement>(null);
-  const [isLoginLoading, setIsLoginLoading] = useState(false);
 
 
   useEffect(() => {
@@ -73,36 +72,24 @@ const Header: React.FC<HeaderProps> = ({
     setLoginCodeInput('');
   };
 
-  const handleLoginSubmit = async () => {
-    if (!loginCodeInput.trim()) {
-      addNotification("Please enter a login code.", "error");
+  const handleLoginSubmit = () => {
+    const configuredLoginCode = (window as any).process?.env?.LOGIN_CODE_AUTH;
+
+    if (!configuredLoginCode) {
+      addNotification("Login code is not configured in the application settings (config.js).", "error");
+      setIsLoginModalOpen(false);
       return;
     }
-    setIsLoginLoading(true);
-    try {
-      const response = await fetch('/api/auth/verify-code', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ code: loginCodeInput }),
+
+    if (loginCodeInput === configuredLoginCode) {
+      onLogin({ // Call prop function
+        name: "Authenticated User",
       });
-
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        onLogin({ name: "Authenticated User" });
-        addNotification("Login successful!", "success");
-        setIsLoginModalOpen(false);
-      } else {
-        addNotification(data.message || "Invalid login code or server error.", "error");
-        setLoginCodeInput(''); // Clear input on failure
-      }
-    } catch (error) {
-      console.error("Login API call failed:", error);
-      addNotification("Login request failed. Please check your connection or contact support.", "error");
-    } finally {
-      setIsLoginLoading(false);
+      addNotification("Login successful!", "success");
+      setIsLoginModalOpen(false);
+    } else {
+      addNotification("Invalid login code.", "error");
+      setLoginCodeInput('');
     }
   };
 
@@ -263,26 +250,23 @@ const Header: React.FC<HeaderProps> = ({
               type="password"
               value={loginCodeInput}
               onChange={(e) => setLoginCodeInput(e.target.value)}
-              onKeyPress={(e) => { if (e.key === 'Enter' && !isLoginLoading) handleLoginSubmit(); }}
+              onKeyPress={(e) => { if (e.key === 'Enter') handleLoginSubmit(); }}
               placeholder="Login Code"
               className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none mb-4"
               autoFocus
-              disabled={isLoginLoading}
             />
             <div className="flex justify-end space-x-2">
               <button
                 onClick={() => setIsLoginModalOpen(false)}
-                disabled={isLoginLoading}
-                className="px-4 py-2 text-sm font-medium text-neutral-darker dark:text-secondary-light bg-secondary dark:bg-neutral-darkest hover:bg-secondary-dark dark:hover:bg-neutral-dark rounded-md transition-colors disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-neutral-darker dark:text-secondary-light bg-secondary dark:bg-neutral-darkest hover:bg-secondary-dark dark:hover:bg-neutral-dark rounded-md transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleLoginSubmit}
-                disabled={isLoginLoading}
-                className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary-dark dark:bg-primary-light dark:text-neutral-darker dark:hover:bg-primary rounded-md transition-colors disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary-dark dark:bg-primary-light dark:text-neutral-darker dark:hover:bg-primary rounded-md transition-colors"
               >
-                {isLoginLoading ? 'Verifying...' : 'Submit'}
+                Submit
               </button>
             </div>
           </div>
