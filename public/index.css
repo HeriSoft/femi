@@ -29,8 +29,79 @@ body {
 
 /* Dark theme scrollbars */
 html.dark ::-webkit-scrollbar-thumb {
-  background-color: #2D3748; /* neutral.darker from Tailwind config */
+  background-color: #4A5568; /* A bit lighter than neutral.darker for better contrast */
 }
 html.dark ::-webkit-scrollbar-track {
-  background-color: #1A202C; /* neutral.dark from Tailwind config */
+  background-color: #2D3748; /* neutral.darker from Tailwind config */
 }
+
+/* Specific styles for highlight.js code blocks */
+.hljs {
+  display: block;
+  overflow-x: auto;
+  padding: 0.75em; /* Tailwind's p-3 equivalent */
+  color: #abb2bf; /* Default color for atom-one-dark */
+  background: #282c34; /* Default background for atom-one-dark */
+  border-radius: 0.375rem; /* Tailwind's rounded-md */
+}
+
+html.dark .hljs {
+   color: #abb2bf; /* atom-one-dark text */
+   background: #1A202C; /* neutral-dark, slightly lighter than pure black for depth */
+}
+
+/* For light theme, if you use a dark hljs theme, you might want to adjust */
+/* Or, if using a light hljs theme like atom-one-light with light app theme: */
+/*
+html:not(.dark) .hljs {
+  color: #383a42; // atom-one-light text
+  background: #fafafa; // atom-one-light background
+}
+*/
+
+/* Scrollbar styling specifically for code blocks within the .hljs container */
+.hljs::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+html:not(.dark) .hljs::-webkit-scrollbar-thumb {
+  background-color: #A0AEC0; /* A mid-gray, works with light or dark hljs themes */
+  border-radius: 3px;
+}
+html:not(.dark) .hljs::-webkit-scrollbar-track {
+  background-color: #E2E8F0; /* secondary.DEFAULT */
+}
+
+html.dark .hljs::-webkit-scrollbar-thumb {
+  background-color: #4A5568; /* neutral-600, good for dark themes */
+  border-radius: 3px;
+}
+html.dark .hljs::-webkit-scrollbar-track {
+  background-color: #2D3748; /* neutral.darker */
+}
+
+/* Notification Badge */
+.notification-badge {
+  position: absolute;
+  top: 2px;      /* Initial offset from the parent's padding box top edge */
+  right: 2px;     /* Initial offset from the parent's padding box right edge */
+  width: 18px;    /* Fixed width for a consistent circle */
+  height: 18px;   /* Fixed height for a consistent circle */
+  background-color: red;
+  color: white;
+  border-radius: 50%; /* Makes it a circle */
+  font-size: 0.65rem; /* Smaller font for better fit */
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;   /* Ensure text is centered */
+  border: 1.5px solid white; /* White border for better visual separation */
+  box-sizing: border-box; /* Border included in width/height */
+  pointer-events: none; 
+  transform: translate(40%, -40%); /* Shifts the badge relative to its own size to overlap the corner */
+}
+
+/* Dark theme adjustments for notification badge if needed */
+/* html.dark .notification-badge { ... } */
