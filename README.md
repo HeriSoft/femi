@@ -37,18 +37,19 @@ cd femi-multimodel-ai-chat
 
 **2. Setup Backend Proxy:**
 
-Go to proxy-server directory: cd proxy-server
-Copy .env.example to .env: cp .env.example .env
-Edit proxy-server/.env with your API keys and a LOGIN_CODE_AUTH.
-Install dependencies: npm install
-Start proxy (in its own terminal): npm run dev (usually on http://localhost:3001)
+1. Go to proxy-server directory: cd proxy-server
+2. Copy .env.example to .env: cp .env.example .env
+3. Edit proxy-server/.env with your API keys and a LOGIN_CODE_AUTH.
+4. Install dependencies: npm install
+5. Start proxy (in its own terminal): npm run dev (usually on http://localhost:3001)
 
 **3. Setup Frontend:**
 
-Go back to the project root: cd ..
-Install dependencies: npm install
-Start frontend (in a new terminal): npm run dev (usually on http://localhost:5173)
-(Ensure vite.config.js in root has /api proxy to http://localhost:3001)
+1. Go back to the project root: cd ..
+2. Install dependencies: npm install
+3. Start frontend (in a new terminal): npm run dev (usually on http://localhost:5173)
+   
+   (Ensure vite.config.js in root has /api proxy to http://localhost:3001)
 
 **4. Access:**
 
@@ -68,12 +69,17 @@ CORS_ALLOWED_ORIGINS: For local dev, http://localhost:5173. For deployment, your
 **🌐 Deployment (Vercel Example)**
 
 Push your code (including vercel.json) to GitHub.
+
 Import project into Vercel.
+
 In Vercel project settings, add the Environment Variables listed above.
+
 CORS_ALLOWED_ORIGINS must be your Vercel frontend URL(s).
+
 Vercel will build and deploy using vercel.json (frontend as static, backend proxy as serverless function). Redeploy if you change Environment Variables.
 ______________________________________________
 **🛡️ API Key Security**
 
 API keys are only used by the backend proxy and are read from its environment variables. They are never exposed to the frontend. Ensure proxy-server/.env is in your .gitignore.
+
 Remember to replace your-username/femi-multimodel-ai-chat with your actual GitHub repository path.
