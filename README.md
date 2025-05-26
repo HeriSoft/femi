@@ -31,7 +31,7 @@
 **1. Clone Repository:**
 
 ```bash
-git clone https://github.com/your-username/femi-multimodel-ai-chat.git
+git clone https://github.com/your-username/femi.git
 cd femi-multimodel-ai-chat
 ```
 
