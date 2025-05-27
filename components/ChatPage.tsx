@@ -1,3 +1,4 @@
+
 // Fix: Remove triple-slash directive for 'vite/client' as its types are not found and import.meta.env is manually typed.
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
@@ -15,8 +16,8 @@ import { sendOpenAIMessageStream } from '../services/openaiService.ts';
 import { sendDeepseekMessageStream } from '../services/deepseekService.ts';
 import { sendMockMessageStream } from '../services/mockApiService.ts';
 import { generateOpenAITTS } from "../services/openaiTTSService"; // Changed this line
-// Added MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon
-import { PaperAirplaneIcon, CogIcon, XMarkIcon, PhotoIcon as PromptIcon, Bars3Icon, ChatBubbleLeftRightIcon, ClockIcon as HistoryIcon, MicrophoneIcon, StopCircleIcon, SpeakerWaveIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon } from './Icons.tsx';
+// Added MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon
+import { PaperAirplaneIcon, CogIcon, XMarkIcon, PhotoIcon as PromptIcon, Bars3Icon, ChatBubbleLeftRightIcon, ClockIcon as HistoryIcon, MicrophoneIcon, StopCircleIcon, SpeakerWaveIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon } from './Icons.tsx';
 
 // Helper to deep merge settings, useful for loading from localStorage
 const mergeSettings = (target: AllModelSettings, source: Partial<AllModelSettings>): AllModelSettings => {
@@ -277,6 +278,13 @@ const ChatPage: React.FC = () => {
   const [isSearchActive, setIsSearchActive] = useState(false);
   const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
+  // GPT-4.1 Access Modal State
+  const [isGpt41AccessModalOpen, setIsGpt41AccessModalOpen] = useState(false);
+  const [gpt41AccessCodeInput, setGpt41AccessCodeInput] = useState('');
+  const [isGpt41Unlocked, setIsGpt41Unlocked] = useState(false);
+  const gpt41ModalInteractionFlagRef = useRef(false); // Tracks if modal has been shown for current GPT4O selection
+  const previousModelBeforeGpt41ModalRef = useRef<Model | null>(null);
+
 
   const apiKeyStatuses = React.useMemo((): Record<Model, ApiKeyStatus> => {
     const isProxyExpectedToHaveKey = true; 
@@ -284,8 +292,8 @@ const ChatPage: React.FC = () => {
     return {
       [Model.GEMINI]: {isSet: isProxyExpectedToHaveKey, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Gemini Flash', isMock: false, isGeminiPlatform: true},
       [Model.GEMINI_ADVANCED]: {isSet: isProxyExpectedToHaveKey, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Gemini Advanced', isMock: false, isGeminiPlatform: true},
-      [Model.GPT4O]: {isSet: isProxyExpectedToHaveKey, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'ChatGPT (gpt-4o)', isMock: false, isGeminiPlatform: false},
-      [Model.GPT4O_MINI]: {isSet: isProxyExpectedToHaveKey, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'ChatGPT (gpt-4o-mini)', isMock: false, isGeminiPlatform: false},
+      [Model.GPT4O]: {isSet: isProxyExpectedToHaveKey, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'ChatGPT (gpt-4.1)', isMock: false, isGeminiPlatform: false},
+      [Model.GPT4O_MINI]: {isSet: isProxyExpectedToHaveKey, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'ChatGPT (gpt-4.1-mini)', isMock: false, isGeminiPlatform: false}, // Updated
       [Model.DEEPSEEK]: { isSet: isProxyExpectedToHaveKey, envVarName: 'DEEPSEEK_API_KEY (on proxy)', modelName: 'Deepseek', isMock: false, isGeminiPlatform: false},
       [Model.CLAUDE]: { isSet: true, envVarName: 'N/A (Mock)', modelName: 'Claude', isMock: true, isGeminiPlatform: false}, 
       [Model.IMAGEN3]: {isSet: isProxyExpectedToHaveKey, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Imagen3 Image Gen', isMock: false, isGeminiPlatform: true, isImageGeneration: true},
@@ -329,6 +337,7 @@ const ChatPage: React.FC = () => {
     }
   }, [messages, isSearchActive, isRealTimeTranslationMode]);
   
+  // Effect for model selection changes, including GPT-4.1 access modal
   useEffect(() => {
     const currentModelStatus = apiKeyStatuses[selectedModel];
     if ((!currentModelStatus?.isGeminiPlatform || currentModelStatus?.isImageGeneration || currentModelStatus?.isTextToSpeech || currentModelStatus?.isRealTimeTranslation) && isWebSearchEnabled) {
@@ -347,17 +356,14 @@ const ChatPage: React.FC = () => {
     }
     if (isRealTimeTranslationMode) {
       setInput(''); // Clear chat input when entering translation mode
-      // If message audio is playing, stop it
       if (audioPlayerRef.current && currentPlayingMessageId) {
           audioPlayerRef.current.pause();
           setCurrentPlayingMessageId(null);
       }
     } else {
-      // If exiting real-time translation mode, stop any active STT for it
-      if (isListening && recognitionRef.current) {
-          recognitionRef.current.stop(); // This will trigger onend, setting isListening to false
+      if (isListening && recognitionRef.current && selectedModel !== Model.GPT4O && !isGpt41AccessModalOpen) { // only stop if not opening GPT4.1 modal
+          recognitionRef.current.stop(); 
       }
-      // Clear live translation displays and stop its audio
       setLiveTranscriptionDisplay("");
       setLiveTranslationDisplay("");
       liveTranscriptionRef.current = "";
@@ -370,13 +376,26 @@ const ChatPage: React.FC = () => {
       }
     }
 
-    // If model changes, and message audio was playing, stop it
     if (currentPlayingMessageId && audioPlayerRef.current) {
         audioPlayerRef.current.pause(); 
         setCurrentPlayingMessageId(null);  
     }
 
-  }, [selectedModel, apiKeyStatuses, isWebSearchEnabled, isImagenModelSelected, isTextToSpeechModelSelected, isRealTimeTranslationMode]);
+    // GPT-4.1 Access Modal Logic
+    if (selectedModel === Model.GPT4O) {
+      if (!isGpt41Unlocked && !gpt41ModalInteractionFlagRef.current) {
+        previousModelBeforeGpt41ModalRef.current = selectedModel; // Store current selection context
+        setIsGpt41AccessModalOpen(true);
+        gpt41ModalInteractionFlagRef.current = true; // Mark that we've attempted to show the modal for this selection
+      }
+    } else {
+      // If navigating away from GPT4O, reset the interaction flag so it can pop up again if re-selected
+      gpt41ModalInteractionFlagRef.current = false;
+      if (isGpt41AccessModalOpen) setIsGpt41AccessModalOpen(false); // Close modal if open and model changed
+    }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedModel]); // Dependencies intentionally simplified for this specific logic
 
 
   const translateLiveSegment = useCallback(async (text: string, targetLangCode: string) => {
@@ -669,7 +688,7 @@ const ChatPage: React.FC = () => {
           return;
       }
       setMessages([...sessionToLoad.messages]);
-      setSelectedModel(sessionToLoad.model);
+      setSelectedModel(sessionToLoad.model); // This might trigger the GPT-4.1 modal
       setActivePersonaId(sessionToLoad.activePersonaIdSnapshot || null);
       
       setAllSettings(prevAllSettings => ({
@@ -705,13 +724,19 @@ const ChatPage: React.FC = () => {
     setUploadedTextFileContent(null);
     setUploadedTextFileName(null);
     setIsWebSearchEnabled(false);
-    // Reset settings for current model, but don't change selectedModel unless it's RTTM
-    if (selectedModel !== Model.REAL_TIME_TRANSLATION) {
+    // Reset settings for current model, but don't change selectedModel unless it's RTTM or GPT4O access modal is involved
+    if (selectedModel !== Model.REAL_TIME_TRANSLATION && !(selectedModel === Model.GPT4O && !isGpt41Unlocked)) {
         setAllSettings(prev => ({
             ...prev,
             [selectedModel]: { ...(ALL_MODEL_DEFAULT_SETTINGS[selectedModel] || ALL_MODEL_DEFAULT_SETTINGS[Model.GEMINI]!) }
         }));
+    } else if (selectedModel === Model.GPT4O && isGpt41Unlocked) { // If unlocked, reset its settings
+         setAllSettings(prev => ({
+            ...prev,
+            [selectedModel]: { ...(ALL_MODEL_DEFAULT_SETTINGS[selectedModel] || ALL_MODEL_DEFAULT_SETTINGS[Model.GEMINI]!) }
+        }));
     }
+
     setActivePersonaId(null); 
     setError(null);
     setIsSidebarOpen(false); 
@@ -728,7 +753,7 @@ const ChatPage: React.FC = () => {
             setIsSpeakingLiveTranslation(false);
         }
     }
-  }, [selectedModel, addNotification, isRealTimeTranslationMode, isSpeakingLiveTranslation]);
+  }, [selectedModel, addNotification, isRealTimeTranslationMode, isSpeakingLiveTranslation, isGpt41Unlocked]);
 
   const handleDeleteSession = useCallback((sessionId: string) => {
     const sessionToDelete = savedSessions.find(s => s.id === sessionId);
@@ -1332,7 +1357,11 @@ const ChatPage: React.FC = () => {
         {activeSidebarTab === 'settings' && (
             <SettingsPanel
                 selectedModel={selectedModel}
-                onModelChange={(model) => { setSelectedModel(model); clearSearch();}} 
+                onModelChange={(model) => { 
+                    if (model !== Model.GPT4O) gpt41ModalInteractionFlagRef.current = false; // Reset flag if navigating away from GPT4O
+                    setSelectedModel(model); 
+                    clearSearch();
+                }} 
                 modelSettings={modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings} 
                 onModelSettingsChange={handleModelSettingsChange}
                 onImageUpload={handleImageUpload}
@@ -1341,7 +1370,7 @@ const ChatPage: React.FC = () => {
                 uploadedTextFileName={uploadedTextFileName}
                 isWebSearchEnabled={isWebSearchEnabled}
                 onWebSearchToggle={setIsWebSearchEnabled}
-                disabled={isLoading && !isRealTimeTranslationMode}
+                disabled={(isLoading && !isRealTimeTranslationMode) || isGpt41AccessModalOpen}
                 apiKeyStatuses={apiKeyStatuses}
                 personas={personas}
                 activePersonaId={activePersonaId}
@@ -1359,7 +1388,7 @@ const ChatPage: React.FC = () => {
                 onRenameSession={handleRenameSession}
                 onSaveCurrentChat={handleSaveCurrentChat}
                 onStartNewChat={handleStartNewChat}
-                isLoading={isLoading && !isRealTimeTranslationMode}
+                isLoading={(isLoading && !isRealTimeTranslationMode) || isGpt41AccessModalOpen}
                 onTogglePinSession={handleTogglePinSession}
             />
         )}
@@ -1399,6 +1428,29 @@ const ChatPage: React.FC = () => {
     }
     return '';
   }, [isRealTimeTranslationMode, modelSettings]);
+
+
+  const handleGpt41AccessModalClose = (switchToMini: boolean, notificationMessage?: string) => {
+    setIsGpt41AccessModalOpen(false);
+    setGpt41AccessCodeInput('');
+    if (switchToMini) {
+        setSelectedModel(Model.GPT4O_MINI);
+        if (notificationMessage) addNotification(notificationMessage, "info");
+    }
+    // gpt41ModalInteractionFlagRef.current is already true or will be handled by model change effect
+  };
+
+  const handleGpt41CodeSubmit = () => {
+    if (gpt41AccessCodeInput === 'bin') {
+        setIsGpt41Unlocked(true);
+        addNotification("Access to gpt-4.1 granted for this session!", "success");
+        handleGpt41AccessModalClose(false);
+    } else {
+        addNotification("Incorrect secret code. Switching to gpt-4.1-mini.", "error");
+        handleGpt41AccessModalClose(true);
+    }
+  };
+
 
   return (
     <div className="flex h-full">
@@ -1563,7 +1615,7 @@ const ChatPage: React.FC = () => {
               {(!isImagenModelSelected && !isTextToSpeechModelSelected) && (
                 <button
                   onClick={handleToggleListen}
-                  disabled={isLoading || !isSpeechRecognitionSupported || isImagenModelSelected || isTextToSpeechModelSelected}
+                  disabled={isLoading || !isSpeechRecognitionSupported || isImagenModelSelected || isTextToSpeechModelSelected || isGpt41AccessModalOpen}
                   className={`mr-2 p-3 rounded-lg transition-colors self-stretch flex items-center justify-center ${
                     isListening 
                       ? 'bg-red-500 hover:bg-red-600 text-white' 
@@ -1582,12 +1634,12 @@ const ChatPage: React.FC = () => {
                 placeholder={currentPromptPlaceholder()}
                 className="flex-grow p-3 border border-secondary dark:border-neutral-darkest rounded-lg focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:border-transparent outline-none resize-none bg-neutral-light dark:bg-neutral-darker text-neutral-darker dark:text-secondary-light"
                 rows={calculateTextareaRows()}
-                disabled={isLoading || isListening}
+                disabled={isLoading || isListening || isGpt41AccessModalOpen}
                 aria-label="Chat input"
               />
               <button
                 onClick={handleSendMessage}
-                disabled={isLoading || isListening || (!input.trim() && (!isImagenModelSelected && !isTextToSpeechModelSelected && !uploadedImage && !uploadedTextFileName))}
+                disabled={isLoading || isListening || isGpt41AccessModalOpen || (!input.trim() && (!isImagenModelSelected && !isTextToSpeechModelSelected && !uploadedImage && !uploadedTextFileName))}
                 className="ml-2 p-3 bg-primary hover:bg-primary-dark dark:bg-primary-light dark:hover:bg-primary text-white rounded-lg disabled:opacity-50 transition-colors self-stretch flex items-center justify-center" 
                 aria-label={sendButtonLabel()} >
                 {sendButtonIcon()}
@@ -1598,6 +1650,61 @@ const ChatPage: React.FC = () => {
       </div>
       {isImageModalOpen && modalImage && (
         <ImageModal isOpen={isImageModalOpen} onClose={() => setIsImageModalOpen(false)} imageBase64={modalImage} prompt={modalPrompt} mimeType={modalMimeType} />
+      )}
+
+      {/* GPT-4.1 Access Modal */}
+      {isGpt41AccessModalOpen && (
+        <div 
+            className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 transition-opacity duration-300"
+            onClick={() => handleGpt41AccessModalClose(true, "gpt-4.1 requires a code to use. Switched to gpt-4.1-mini.")}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="gpt41-access-modal-title"
+        >
+            <div 
+                className="bg-neutral-light dark:bg-neutral-darker rounded-lg shadow-xl p-6 w-full max-w-md transform transition-all duration-300 scale-100 opacity-100"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="flex justify-between items-center mb-4">
+                    <h3 id="gpt41-access-modal-title" className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
+                        <KeyIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light"/> Access gpt-4.1 Model
+                    </h3>
+                    <button
+                        onClick={() => handleGpt41AccessModalClose(true, "gpt-4.1 requires a code to use. Switched to gpt-4.1-mini.")}
+                        className="p-1 rounded-full hover:bg-secondary dark:hover:bg-neutral-dark"
+                        aria-label="Close"
+                    >
+                        <XMarkIcon className="w-5 h-5 text-neutral-darker dark:text-secondary-light" />
+                    </button>
+                </div>
+                <p className="text-sm text-neutral-600 dark:text-neutral-300 mb-4">
+                    This is a new test model, will soon debut. If you have a secret code, enter below to use.
+                </p>
+                <input
+                    type="password"
+                    value={gpt41AccessCodeInput}
+                    onChange={(e) => setGpt41AccessCodeInput(e.target.value)}
+                    onKeyPress={(e) => { if (e.key === 'Enter') handleGpt41CodeSubmit(); }}
+                    placeholder="Secret Code"
+                    className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none mb-4"
+                    autoFocus
+                />
+                <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2">
+                    <button
+                        onClick={() => handleGpt41AccessModalClose(true, "Switched to gpt-4.1-mini.")}
+                        className="px-4 py-2 text-sm font-medium text-neutral-darker dark:text-secondary-light bg-secondary dark:bg-neutral-darkest hover:bg-secondary-dark dark:hover:bg-neutral-dark rounded-md transition-colors w-full sm:w-auto"
+                    >
+                        Use gpt-4.1-mini instead
+                    </button>
+                    <button
+                        onClick={handleGpt41CodeSubmit}
+                        className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary-dark dark:bg-primary-light dark:text-neutral-darker dark:hover:bg-primary rounded-md transition-colors w-full sm:w-auto"
+                    >
+                        Submit Code
+                    </button>
+                </div>
+            </div>
+        </div>
       )}
     </div>
   );
