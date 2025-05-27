@@ -815,24 +815,90 @@ const ChatPage: React.FC = () => {
         } else { 
             // Construct Gemini history for stateless proxy call
             const geminiHistory: Content[] = [];
-            messages.filter(m => m.id !== aiMessageId && m.id !== newUserMessage.id).forEach(msg => {
-                const parts: Part[] = [];
-                if (msg.text) parts.push({ text: msg.text });
-                // Note: Gemini's Content[] format takes base64 data directly in parts.
-                // If imagePreview is already base64 and msg.imageMimeType exists, it could be added.
-                // For simplicity, this example assumes history for Gemini is text-only for now.
-                // If images need to be in history, ChatMessage and this logic need adjustment.
-                geminiHistory.push({ role: msg.sender === 'user' ? 'user' : 'model', parts });
+            messages
+              .filter(m => m.id !== aiMessageId && m.id !== newUserMessage.id) // Exclude current pending AI and new user message
+              .forEach(msg => {
+                const messageParts: Part[] = [];
+                if (msg.text && msg.text.trim()) {
+                  messageParts.push({ text: msg.text.trim() });
+                }
+
+                if (msg.sender === 'user' && msg.imagePreview) {
+                  try {
+                    const [header, base64Data] = msg.imagePreview.split(',');
+                    if (base64Data) {
+                      const mimeTypeMatch = header.match(/data:(image\/[a-zA-Z0-9-.+]+);base64/);
+                      if (mimeTypeMatch && mimeTypeMatch[1]) {
+                        messageParts.push({
+                          inlineData: {
+                            mimeType: mimeTypeMatch[1], // More general MIME type
+                            data: base64Data
+                          }
+                        });
+                      } else {
+                        console.warn("Could not determine mimeType from user imagePreview in history for Gemini:", msg.imagePreview);
+                      }
+                    }
+                  } catch (e) {
+                    console.error("Error processing user imagePreview in history for Gemini:", e);
+                  }
+                }
+
+                if (msg.sender === 'ai' && msg.imagePreviews && msg.imagePreviews.length > 0) {
+                  msg.imagePreviews.forEach(imgPrev => {
+                    try {
+                      const [header, base64Data] = imgPrev.split(',');
+                      if (base64Data) {
+                        const mimeType = msg.imageMimeType || (header.includes('/png') ? 'image/png' : (header.includes('/jpeg') ? 'image/jpeg' : 'image/jpeg')); // Basic inference
+                        messageParts.push({
+                          inlineData: {
+                            mimeType: mimeType as 'image/jpeg' | 'image/png', // Still keep it tight for Gemini if possible
+                            data: base64Data
+                          }
+                        });
+                      }
+                    } catch (e) {
+                      console.error("Error processing AI imagePreview in history for Gemini:", e);
+                    }
+                  });
+                }
+                
+                if (messageParts.length > 0) {
+                  geminiHistory.push({ role: msg.sender === 'user' ? 'user' : 'model', parts: messageParts });
+                } else {
+                   console.warn(`Skipping historical message (ID: ${msg.id}, Sender: ${msg.sender}) for Gemini history as it has no parts.`);
+                }
             });
 
-            // Add current user message to history
             const currentUserParts: Part[] = [];
-            if (constructedMessageText.trim()) currentUserParts.push({ text: constructedMessageText.trim() });
-            if (currentUploadedImage && currentImagePreview && !isImagenModelSelected && !isTextToSpeechModelSelected) {
-                const base64Image = currentImagePreview.split(',')[1];
-                currentUserParts.push({ inlineData: { mimeType: currentUploadedImage.type as 'image/jpeg' | 'image/png', data: base64Image } });
+            if (constructedMessageText.trim()) {
+                currentUserParts.push({ text: constructedMessageText.trim() });
             }
-            geminiHistory.push({ role: 'user', parts: currentUserParts });
+            if (currentUploadedImage && currentImagePreview && !isImagenModelSelected && !isTextToSpeechModelSelected) {
+                try {
+                    const base64Image = currentImagePreview.split(',')[1];
+                    if (base64Image) {
+                         currentUserParts.push({
+                            inlineData: {
+                                mimeType: currentUploadedImage.type, // Use file's original MIME type
+                                data: base64Image
+                            }
+                        });
+                    }
+                } catch(e) {
+                    console.error("Error processing current user uploaded image for Gemini:", e);
+                }
+            }
+            
+            if (currentUserParts.length > 0) {
+                geminiHistory.push({ role: 'user', parts: currentUserParts });
+            } else if (geminiHistory.length === 0 && !isRegenerationOfAiMsgId) {
+                // This case means the user sent a truly empty message (should be caught by handleSendMessage)
+                // or it's a regeneration of an AI message that was the first in chat.
+                // If geminiHistory is empty and current user parts are empty, it means no content at all.
+                console.error("Attempting to send an empty message to Gemini. Aborting.");
+                throw new Error("Cannot send an empty message to the AI.");
+            }
 
 
             const stream = sendGeminiMessageStream({
