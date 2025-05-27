@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
     LanguageLearningModalProps, 
@@ -358,32 +357,39 @@ Example (if ${langName} is English and previous questions were about colors):
     setActivityState({ ...INITIAL_ACTIVITY_STATE, isLoadingContent: true, userAnswer: '' });
     const langName = LANGUAGE_OPTIONS.find(l => l.code === selectedLanguage)?.name || 'the selected language';
 
-    let previousContentContext = "The new sentence MUST be different. ";
+    let previousContentContext = "The new sentence and its units MUST be different from previous ones. ";
     if (previousScrambledSentences.length > 0) {
-        previousContentContext += `DO NOT REPEAT these exact sentences or sentences with the same core concept:\n${previousScrambledSentences.map((s) => `- "${s.substring(0, 100)}${s.length > 100 ? '...' : ''}"`).join('\n')}`;
+        previousContentContext += `DO NOT REPEAT these exact sentences or sentences with the same core meaning/structure:\n${previousScrambledSentences.map((s) => `- "${s.substring(0, 100)}${s.length > 100 ? '...' : ''}"`).join('\n')}`;
     }
 
-    const prompt = `Generate a NEW and DISTINCT simple beginner-level sentence (5-8 words long) in ${langName}.
+    const prompt = `Generate a NEW and DISTINCT simple beginner-level sentence in ${langName}.
 The sentence must be grammatically correct and natural for a beginner.
 ${previousContentContext}
-Return the response as a single, valid JSON object with an "originalSentence" key.
-Example (if ${langName} is English): {"originalSentence": "My favorite color is blue."}`;
+Return the response as a single, valid JSON object with two keys:
+1.  "originalSentence": The full, correct sentence as a string.
+2.  "sentenceUnits": An array of strings, where each string is a distinct word or meaningful segment from the original sentence. The order of units in this array should match the original sentence. These units will be scrambled by the client. Ensure there are at least 2 units and preferably 3-7 units.
+Example for English: {"originalSentence": "My favorite color is blue.", "sentenceUnits": ["My", "favorite", "color", "is", "blue."]}
+Example for Japanese: {"originalSentence": "これはペンです。", "sentenceUnits": ["これは", "ペンです。"]}
+Another Japanese example: {"originalSentence": "私の名前は田中です。", "sentenceUnits": ["私の名前は", "田中です。"]}`;
 
     try {
         const modelIdentifier = getActualModelIdentifier(Model.GPT4O_MINI);
         const history: ApiChatMessage[] = [
-            { role: 'system', content: 'You are an AI assistant specialized in creating language learning sentences as JSON. Ensure sentences are grammatically correct and natural for beginners. You MUST AVOID REPEATING content if told to do so in the prompt.' },
+            { role: 'system', content: 'You are an AI assistant specialized in creating language learning sentences as JSON. Ensure sentences are grammatically correct and natural for beginners. You MUST AVOID REPEATING content if told to do so in the prompt. For Japanese, Korean, and Chinese, ensure sentenceUnits are meaningful segments.' },
             { role: 'user', content: prompt }
         ];
-        const stream = sendOpenAIMessageStream({ modelIdentifier, history, modelSettings: { temperature: 0.6, topK: 50, topP: 0.95, systemInstruction: "Generate sentences as JSON." }});
+        const stream = sendOpenAIMessageStream({ modelIdentifier, history, modelSettings: { temperature: 0.65, topK: 50, topP: 0.95, systemInstruction: "Generate sentences and their units as JSON." }});
         const parsedContent = await parseAIJsonResponse(stream, "sentence scramble exercise");
 
-        if (!parsedContent.originalSentence || typeof parsedContent.originalSentence !== 'string' || parsedContent.originalSentence.trim().split(' ').length < 2) {
-            throw new Error("AI response is missing 'originalSentence', it's not a string, or it's too short.");
+        if (!parsedContent.originalSentence || typeof parsedContent.originalSentence !== 'string' || parsedContent.originalSentence.trim() === '' ||
+            !parsedContent.sentenceUnits || !Array.isArray(parsedContent.sentenceUnits) || parsedContent.sentenceUnits.length < 2 ||
+            !parsedContent.sentenceUnits.every((u: any) => typeof u === 'string' && u.trim() !== '')) {
+            console.error("Invalid content from AI for sentence scramble:", parsedContent);
+            throw new Error("AI response for sentence scramble is missing or has invalid 'originalSentence' or 'sentenceUnits'. Sentence units must be an array of at least 2 non-empty strings.");
         }
 
         const original = parsedContent.originalSentence.trim();
-        let words = original.split(' ').map((w, i) => ({ word: w, id: i }));
+        let words = parsedContent.sentenceUnits.map((unit: string, i: number) => ({ word: unit, id: i }));
         
         let scrambledWordsWithObjects;
         let attempts = 0;
@@ -391,13 +397,12 @@ Example (if ${langName} is English): {"originalSentence": "My favorite color is 
         do {
             scrambledWordsWithObjects = [...words].sort(() => Math.random() - 0.5);
             attempts++;
-        } while (scrambledWordsWithObjects.map(item => item.word).join(' ') === original && attempts < maxAttempts);
+        } while (scrambledWordsWithObjects.map(item => item.word).join('') === words.map(item => item.word).join('') && attempts < maxAttempts && words.length > 1);
         
-        if (attempts >= maxAttempts && scrambledWordsWithObjects.map(item => item.word).join(' ') === original && words.length > 1) {
-             // Force a different scramble if it's still the same and has more than one word
+        // If still the same after multiple attempts (and more than one word), force a different scramble
+        if (scrambledWordsWithObjects.map(item => item.word).join('') === words.map(item => item.word).join('') && words.length > 1) {
             [scrambledWordsWithObjects[0], scrambledWordsWithObjects[1]] = [scrambledWordsWithObjects[1], scrambledWordsWithObjects[0]];
         }
-
 
         setActivityState(prev => ({
             ...prev,
@@ -407,7 +412,7 @@ Example (if ${langName} is English): {"originalSentence": "My favorite color is 
                 activityType: 'sentence-scramble',
                 language: selectedLanguage,
                 originalSentence: original,
-                scrambledWords: scrambledWordsWithObjects,
+                scrambledWords: scrambledWordsWithObjects, // These are the objects {word, id} for buttons
             },
             userAnswer: '', 
             userSelectedWordIds: [], 
@@ -506,9 +511,25 @@ Respond with a single, valid JSON object: {"is_match": boolean, "feedback": "bri
 
   const handleScrambledWordClick = (wordItem: { word: string, id: number }) => {
     if (activityState.isAnswerSubmitted || activityState.userSelectedWordIds?.includes(wordItem.id)) return;
+    
+    // Determine if a space is needed based on the language
+    let needsSpace = false;
+    if (selectedLanguage === 'en' || selectedLanguage === 'vi') { // Add other space-delimited languages if necessary
+        needsSpace = true;
+    }
+
     setActivityState(prev => {
         const currentAnswer = prev.userAnswer as string;
-        const newAnswer = currentAnswer ? `${currentAnswer} ${wordItem.word}` : wordItem.word;
+        let newAnswer;
+        if (currentAnswer && needsSpace) {
+            newAnswer = `${currentAnswer} ${wordItem.word}`;
+        } else if (currentAnswer && !needsSpace) {
+            newAnswer = `${currentAnswer}${wordItem.word}`;
+        }
+        else {
+            newAnswer = wordItem.word;
+        }
+        
         return {
             ...prev,
             userAnswer: newAnswer,
@@ -529,12 +550,24 @@ Respond with a single, valid JSON object: {"is_match": boolean, "feedback": "bri
 
   const handleSubmitSentenceScramble = () => {
     if (!activityState.content?.originalSentence || !selectedLanguage || typeof activityState.userAnswer !== 'string') return;
-    const userAnswerString = activityState.userAnswer.trim();
+    
+    const userAnswerString = (activityState.userAnswer as string).trim();
     const originalSentenceNormalized = activityState.content.originalSentence.trim();
     
-    const normalize = (str: string) => str.toLowerCase().replace(/[.,!?;:"“”]/g, '').replace(/\s+/g, ' ').trim();
+    // Normalization function - more aggressive for languages like Japanese.
+    const normalize = (str: string, lang: LanguageOption) => {
+        let normalized = str.toLowerCase();
+        // Remove common punctuation. For Japanese, also remove full-width spaces if any.
+        normalized = normalized.replace(/[.,!?;:"“”・。、！？]/g, ''); 
+        if (lang === 'ja' || lang === 'zh' || lang === 'ko') {
+            normalized = normalized.replace(/\s+/g, ''); // Remove all spaces for CJK languages
+        } else {
+            normalized = normalized.replace(/\s+/g, ' ').trim(); // Normalize spaces for others
+        }
+        return normalized;
+    };
     
-    const isCorrect = normalize(userAnswerString) === normalize(originalSentenceNormalized);
+    const isCorrect = normalize(userAnswerString, selectedLanguage) === normalize(originalSentenceNormalized, selectedLanguage);
 
     setActivityState(prev => ({ ...prev, isAnswerSubmitted: true, isAnswerCorrect: isCorrect }));
     const expPoints = 25;
