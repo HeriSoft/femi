@@ -11,6 +11,7 @@ export enum Model {
   GEMINI_ADVANCED = 'Gemini Advanced (gemini-1.5-pro-latest)',
   IMAGEN3 = 'Imagen3 (imagen-3.0-generate-002)',
   OPENAI_TTS = 'OpenAI (TTS)', // New TTS Model
+  REAL_TIME_TRANSLATION = 'Real-Time Translation (Gemini)', // New Real-Time Translation Model
 }
 
 export interface ChatMessage {
@@ -57,8 +58,12 @@ export interface OpenAITtsSettings {
   modelIdentifier: 'tts-1' | 'tts-1-hd'; // Model for TTS
 }
 
+export interface RealTimeTranslationSettings {
+  targetLanguage: string; // language code e.g. 'vi', 'en'
+}
+
 export type AllModelSettings = {
-  [key in Model]?: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings>; // Allow ImagenSettings and OpenAITtsSettings
+  [key in Model]?: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings>;
 };
 
 export interface ThemeContextType {
@@ -92,6 +97,7 @@ export interface ApiKeyStatus {
   isGeminiPlatform: boolean; // True if the model runs on Google's Gemini platform (AI Studio API Key)
   isImageGeneration?: boolean; // Flag for image generation models
   isTextToSpeech?: boolean; // Flag for TTS models
+  isRealTimeTranslation?: boolean; // Flag for real-time translation model
 }
 
 export interface Persona {
@@ -103,8 +109,8 @@ export interface Persona {
 export interface SettingsPanelProps {
   selectedModel: Model;
   onModelChange: (model: Model) => void;
-  modelSettings: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings>; // Include Imagen & TTS Settings
-  onModelSettingsChange: (settings: Partial<ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings>>) => void;
+  modelSettings: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings>; 
+  onModelSettingsChange: (settings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings>) => void;
   onImageUpload: (file: File | null) => void;
   imagePreview: string | null; // For user uploaded image preview
   onFileUpload: (file: File | null) => void;
@@ -153,7 +159,7 @@ export interface ChatSession {
   timestamp: number;
   model: Model; // The primary model used for this session
   messages: ChatMessage[];
-  modelSettingsSnapshot: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings>; // Snapshot of settings for this session
+  modelSettingsSnapshot: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings>; 
   isPinned?: boolean; // For pinning important chats
   activePersonaIdSnapshot?: string | null; // Snapshot of active persona
 }
@@ -191,13 +197,21 @@ export interface NotificationContextType {
 }
 
 // Language Learning Feature Types
-export type LanguageOption = 'en' | 'ja' | 'ko' | 'zh' | 'vi';
+export type LanguageOption = 'en' | 'ja' | 'ko' | 'zh' | 'vi'; // Kept for language learning feature itself
+export type TranslationLanguageCode = 'en' | 'vi' | 'ko' | 'ja' | 'zh' | 'th' | 'ru' | 'it'; // For Real-Time Translation
 
-export interface LanguageOptionConfig {
+export interface LanguageOptionConfig { // Used by Language Learning feature
   code: LanguageOption;
   name: string;
   flag?: string; // e.g., emoji flag or URL to small image
 }
+
+export interface TranslationLanguageOptionConfig { // For Real-Time Translation target languages
+  code: TranslationLanguageCode;
+  name: string;
+  flag?: string;
+}
+
 
 export type LanguageLearningActivityType = 'listening' | 'speaking' | 'vocabulary' | 'quiz' | 'sentence-scramble';
 
@@ -217,7 +231,7 @@ export interface UserLanguageProfile {
 
 export interface UserGlobalProfile {
   languageProfiles: Partial<Record<LanguageOption, UserLanguageProfile>>; // Use Partial for initially unselected languages
-  // other global settings/achievements if any
+  favoriteLanguage?: LanguageOption; // User's preferred language for translations
 }
 
 export interface VocabularyItem {
@@ -264,6 +278,8 @@ export interface LearningActivityState {
     isAnswerCorrect: boolean | null;
     audioUrl?: string; // For listening exercise audio
     isAudioPlaying?: boolean; // For listening exercise audio playback status
+    translatedUserSpeech?: string; // For speaking practice translation
+    isLoadingTranslation?: boolean; // For speaking practice translation loading state
 }
 
 

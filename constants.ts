@@ -1,4 +1,5 @@
-import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption } from './types.ts'; // Update to .ts
+
+import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings } from './types.ts'; // Update to .ts
 
 export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
   temperature: 0.7,
@@ -13,6 +14,17 @@ export const DEFAULT_IMAGEN_SETTINGS: ImagenSettings = {
   aspectRatio: '1:1', // Default aspect ratio
 };
 
+export const DEFAULT_OPENAI_TTS_SETTINGS: OpenAITtsSettings = {
+    voice: 'alloy',
+    speed: 1.0,
+    modelIdentifier: 'tts-1',
+};
+
+export const DEFAULT_REAL_TIME_TRANSLATION_SETTINGS: RealTimeTranslationSettings = {
+  targetLanguage: 'en', // Default to English
+};
+
+
 export const ALL_MODEL_DEFAULT_SETTINGS: AllModelSettings = {
   [Model.GEMINI]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: 'You are a helpful and creative AI assistant powered by Gemini Flash.' },
   [Model.GEMINI_ADVANCED]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: 'You are Gemini Advanced, a powerful multimodal AI by Google.' },
@@ -21,9 +33,19 @@ export const ALL_MODEL_DEFAULT_SETTINGS: AllModelSettings = {
   [Model.DEEPSEEK]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: 'You are Deepseek Coder, an AI specialized in coding and chat, powered by the deepseek-chat model.' },
   [Model.CLAUDE]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: 'You are Claude, a helpful AI assistant by Anthropic.' },
   [Model.IMAGEN3]: { 
-    ...DEFAULT_MODEL_SETTINGS, // Inherit base settings, though most won't apply
-    ...DEFAULT_IMAGEN_SETTINGS, // Apply Imagen specific defaults
-    systemInstruction: 'Image generation prompt.', // Placeholder, not really used as a "system instruction" by Imagen
+    ...DEFAULT_MODEL_SETTINGS, 
+    ...DEFAULT_IMAGEN_SETTINGS, 
+    systemInstruction: 'Image generation prompt.', 
+  },
+  [Model.OPENAI_TTS]: {
+    ...DEFAULT_MODEL_SETTINGS, // Basic settings, mostly unused
+    ...DEFAULT_OPENAI_TTS_SETTINGS,
+    systemInstruction: 'Text to speech synthesis.', // Placeholder
+  },
+  [Model.REAL_TIME_TRANSLATION]: {
+    ...DEFAULT_MODEL_SETTINGS, // Basic settings, mostly unused
+    ...DEFAULT_REAL_TIME_TRANSLATION_SETTINGS,
+    systemInstruction: 'Translate the given text accurately.', // Placeholder system instruction
   },
 };
  
@@ -43,6 +65,18 @@ export const LANGUAGE_OPTIONS: LanguageOptionConfig[] = [
   { code: 'zh', name: 'Chinese (Mandarin)', flag: '🇨🇳' },
   { code: 'vi', name: 'Vietnamese', flag: '🇻🇳' },
 ];
+
+export const TRANSLATION_TARGET_LANGUAGES: TranslationLanguageOptionConfig[] = [
+  { code: 'en', name: 'English', flag: '🇺🇸' },
+  { code: 'vi', name: 'Vietnamese', flag: '🇻🇳' },
+  { code: 'ko', name: 'Korean', flag: '🇰🇷' },
+  { code: 'ja', name: 'Japanese', flag: '🇯🇵' },
+  { code: 'zh', name: 'Chinese (Mandarin)', flag: '🇨🇳' },
+  { code: 'th', name: 'Thai', flag: '🇹🇭' },
+  { code: 'ru', name: 'Russian', flag: '🇷🇺' },
+  { code: 'it', name: 'Italian', flag: '🇮🇹' },
+];
+
 
 export const DEFAULT_USER_LANGUAGE_PROFILE: UserLanguageProfile = {
   exp: 0,
