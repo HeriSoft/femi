@@ -6,7 +6,10 @@ import type { Content, GenerateImagesResponse } from "@google/genai"; // Only fo
 interface GeminiProxyStreamChunk {
   textDelta?: string;
   groundingSources?: GroundingSource[];
-  // newChatState is removed as chat state is not managed via proxy in this version
+  imagePart?: { // New field for image data from multimodal chat models
+    mimeType: string;
+    data: string; // base64 encoded
+  };
   error?: string;
 }
 

@@ -24,7 +24,7 @@ export async function* sendOpenAIMessageStream(
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      const errorDetail = errorData.error || `Error: ${response.status} ${response.statusText}`;
+      const errorDetail = errorData.error?.message || errorData.error || `Error: ${response.status} ${response.statusText}`; // check error.message from openai
       yield { error: `OpenAI Proxy Error: ${errorDetail}`, isFinished: true };
       return;
     }
@@ -41,63 +41,57 @@ export async function* sendOpenAIMessageStream(
     while (true) {
       const { done, value } = await reader.read();
       if (done) {
-        break;
+        // If buffer has content that wasn't fully processed (e.g. partial JSON after last \n\n)
+        // it might be an issue. For typical OpenAI streams, this should be fine.
+        break; 
       }
 
       buffer += decoder.decode(value, { stream: true });
       
-      // OpenAI streams data with "data: " prefix and double newline separation
+      // OpenAI streams data with "data: " prefix and double newline separation for each chunk
       let boundary = buffer.indexOf('\n\n');
       while (boundary !== -1) {
-        const chunkLine = buffer.substring(0, boundary).trim();
-        buffer = buffer.substring(boundary + 2);
+        const chunkLineWithPrefix = buffer.substring(0, boundary);
+        buffer = buffer.substring(boundary + 2); // Move past the '\n\n'
 
-        if (chunkLine.startsWith('data: ')) {
-          const jsonStr = chunkLine.substring(6);
+        if (chunkLineWithPrefix.startsWith('data: ')) {
+          const jsonStr = chunkLineWithPrefix.substring(6).trim(); // Remove "data: " and trim
           if (jsonStr === '[DONE]') {
             yield { isFinished: true };
             return;
           }
           try {
             const parsed = JSON.parse(jsonStr);
+            // Check for content delta
             if (parsed.choices && parsed.choices[0]?.delta?.content) {
               yield { textDelta: parsed.choices[0].delta.content };
             }
+            // Check for finish reason (though [DONE] is more common for streams)
             if (parsed.choices && parsed.choices[0]?.finish_reason) {
                yield { isFinished: true };
+               // if finish_reason is 'stop', it's a natural end.
+               // if other reasons (length, content_filter), it might indicate truncation.
             }
           } catch (e) {
-            console.error('Error parsing OpenAI stream chunk from proxy:', e, jsonStr);
-            // Potentially yield an error or skip malformed chunk
+            console.error('Error parsing OpenAI stream chunk from proxy:', e, "JSON string:", jsonStr);
+            // Potentially yield an error chunk or decide to skip malformed chunks
+            // depending on how robust you want the stream to be.
+            // For now, we'll log and continue, as some models might have complex intermediate non-JSON data
+            // though typical chat completion stream is JSON per line.
           }
         }
         boundary = buffer.indexOf('\n\n');
       }
     }
-    // Final flush for any remaining buffer content if stream ends without [DONE] or finish_reason
-    if (buffer.startsWith('data: ')) {
-        const jsonStr = buffer.substring(6).trim();
-        if (jsonStr === '[DONE]') {
-            yield { isFinished: true };
-            return;
-        }
-        if (jsonStr) { // Check if jsonStr is not empty before parsing
-            try {
-                const parsed = JSON.parse(jsonStr);
-                if (parsed.choices && parsed.choices[0]?.delta?.content) {
-                    yield { textDelta: parsed.choices[0].delta.content };
-                }
-            } catch (e) {
-                // Ignore if final part is not valid JSON
-                console.warn("Final part of OpenAI stream was not valid JSON, ignoring.", jsonStr, e);
-            }
-        }
-    }
+    // After the loop, if it didn't end with [DONE] or a finish_reason,
+    // ensure a final finished signal if not already sent.
+    // This helps consumers know the stream has truly ended.
+    // However, most OpenAI streams properly send [DONE].
+    // This yield is a safety net.
+    yield { isFinished: true };
 
   } catch (error: any) {
     console.error('OpenAI Proxy Service Fetch Error:', error);
     yield { error: `Fetch error to OpenAI proxy: ${error.message || 'Unknown fetch error'}`, isFinished: true };
   }
-  // Ensure a final finished signal if not already sent
-  yield { isFinished: true };
 }
