@@ -199,7 +199,7 @@ export interface LanguageOptionConfig {
   flag?: string; // e.g., emoji flag or URL to small image
 }
 
-export type LanguageLearningActivityType = 'listening' | 'speaking' | 'vocabulary' | 'quiz';
+export type LanguageLearningActivityType = 'listening' | 'speaking' | 'vocabulary' | 'quiz' | 'sentence-scramble';
 
 export interface Badge {
   id: string;
@@ -245,6 +245,10 @@ export interface LearningContent {
   // For Vocabulary
   vocabularySet?: VocabularyItem[]; // Array of vocabulary words
   
+  // For Sentence Scramble
+  originalSentence?: string;
+  scrambledWords?: { word: string, id: number }[]; // id is the original index of the word
+
   aiPromptForGeneration?: string; 
   aiPromptForEvaluation?: string; 
 }
@@ -254,7 +258,8 @@ export interface LearningActivityState {
     isLoadingContent: boolean;
     content: LearningContent | null;
     error: string | null;
-    userAnswer: string | number | null; // For MCQ index, or transcribed text for speaking
+    userAnswer: string | number | null | string[]; // Can be string for sentence scramble sentence
+    userSelectedWordIds?: number[]; // For sentence scramble, to track which scrambled words were used
     isAnswerSubmitted: boolean;
     isAnswerCorrect: boolean | null;
     audioUrl?: string; // For listening exercise audio
