@@ -3,7 +3,7 @@
 import React, { useContext, useState, useRef, useEffect } from 'react';
 import { ThemeContext } from '../App.tsx';
 import { ThemeContextType, UserGlobalProfile } from '../types.ts'; // Removed LanguageLearningModalProps
-import { SunIcon, MoonIcon, BellIcon, UserCircleIcon, KeyIcon, XMarkIcon, AcademicCapIcon } from './Icons.tsx'; 
+import { SunIcon, MoonIcon, BellIcon, UserCircleIcon, KeyIcon, XMarkIcon, AcademicCapIcon, PuzzlePieceIcon } from './Icons.tsx'; 
 import { useNotification } from '../contexts/NotificationContext.tsx';
 import NotificationPanel from './NotificationPanel.tsx';
 // LanguageLearningModal import removed as it's now handled by App.tsx
@@ -19,7 +19,8 @@ interface HeaderProps {
   onLogout: () => void;
   openLoginModalInitially?: boolean;
   onLoginModalOpened?: () => void; 
-  onToggleLanguageLearningModal: () => void; // New prop
+  onToggleLanguageLearningModal: () => void; 
+  onToggleGamesModal: () => void; // New prop for games modal
   // userProfile, onUpdateUserProfile, onAddExp props removed as modal is in App.tsx
 }
 
@@ -30,6 +31,7 @@ const Header: React.FC<HeaderProps> = ({
   openLoginModalInitially,
   onLoginModalOpened,
   onToggleLanguageLearningModal,
+  onToggleGamesModal, 
 }) => {
   const themeContext = useContext(ThemeContext);
   const { unreadCount, markAllAsRead, addNotification } = useNotification();
@@ -165,12 +167,22 @@ const Header: React.FC<HeaderProps> = ({
         </h1>
         <div className="flex items-center space-x-3">
           <button
-            onClick={onToggleLanguageLearningModal} // Use the new prop
+            onClick={onToggleLanguageLearningModal} 
             disabled={!currentUser} 
             className="p-2 rounded-full hover:bg-secondary dark:hover:bg-neutral-darkest text-neutral-darker dark:text-secondary-light transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Open language learning module"
+            title="Language Learning Hub"
           >
             <AcademicCapIcon className="w-6 h-6" />
+          </button>
+           <button
+            onClick={onToggleGamesModal}
+            disabled={!currentUser}
+            className="p-2 rounded-full hover:bg-secondary dark:hover:bg-neutral-darkest text-neutral-darker dark:text-secondary-light transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Open mini games arcade"
+            title="Mini Games Arcade"
+          >
+            <PuzzlePieceIcon className="w-6 h-6" />
           </button>
           <div className="relative">
             <button
