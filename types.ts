@@ -1,4 +1,5 @@
 
+
 import { Chat } from '@google/genai'; // Updated import
 
 export enum Model {
@@ -267,4 +268,25 @@ export interface LanguageLearningModalProps {
   userProfile: UserGlobalProfile | null;
   onUpdateProfile: (updatedProfile: UserGlobalProfile) => void;
   onAddExp: (language: LanguageOption, expPoints: number) => void;
+}
+
+// Mini Games Arcade Types
+// DosGameConfig removed as DOS games are removed.
+
+export type WebGameType = 'tic-tac-toe' | 'sliding-puzzle' | 'snake' | 'flappy-bird' | null;
+
+export interface GamesModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  // onPlayDosGame removed
+  onPlayWebGame: (gameType: WebGameType, gameTitle: string) => void; 
+}
+
+// DosGamePlayerModalProps removed as DOS games are removed.
+
+export interface WebGamePlayerModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  gameType: WebGameType;
+  gameTitle: string;
 }

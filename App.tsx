@@ -1,10 +1,13 @@
 
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { ThemeContextType, Model, UserGlobalProfile, LanguageOption, UserLanguageProfile } from './types.ts'; // Added Model for potential future use if needed here
+import { ThemeContextType, Model, UserGlobalProfile, LanguageOption, UserLanguageProfile, WebGameType } from './types.ts'; // Removed DosGameConfig
 import ChatPage from './components/ChatPage.tsx';
-import Header, { MockUser } from './components/Header.tsx'; // Import MockUser type
-import LanguageLearningModal from './components/LanguageLearningModal.tsx'; // Import LanguageLearningModal
+import Header, { MockUser } from './components/Header.tsx'; 
+import LanguageLearningModal from './components/LanguageLearningModal.tsx'; 
+import GamesModal from './components/GamesModal.tsx'; 
+// DosGamePlayerModal import removed
+import WebGamePlayerModal from './components/WebGamePlayerModal.tsx'; 
 import { NotificationProvider, useNotification } from './contexts/NotificationContext.tsx';
 import { KeyIcon } from './components/Icons.tsx';
 import { LOCAL_STORAGE_USER_PROFILE_KEY, DEFAULT_USER_LANGUAGE_PROFILE, EXP_MILESTONES_CONFIG, BADGES_CATALOG } from './constants.ts';
@@ -25,6 +28,11 @@ const App: React.FC = () => {
   const [isLoginModalInitiallyOpen, setIsLoginModalInitiallyOpen] = useState(false);
   const [isAppReady, setIsAppReady] = useState(false); 
   const [isLanguageLearningModalOpen, setIsLanguageLearningModalOpen] = useState(false);
+  const [isGamesModalOpen, setIsGamesModalOpen] = useState(false); 
+  // activeDosGameConfig state removed
+  const [isWebGamePlayerModalOpen, setIsWebGamePlayerModalOpen] = useState(false);
+  const [activeWebGameType, setActiveWebGameType] = useState<WebGameType>(null);
+  const [activeWebGameTitle, setActiveWebGameTitle] = useState<string>('');
 
 
   useEffect(() => {
@@ -61,7 +69,11 @@ const App: React.FC = () => {
       setUserProfile({ languageProfiles: {} }); 
       setIsAppReady(true); 
       setIsLoginModalInitiallyOpen(true); 
-      setIsLanguageLearningModalOpen(false); // Close language modal on logout
+      setIsLanguageLearningModalOpen(false); 
+      setIsGamesModalOpen(false); 
+      // setActiveDosGameConfig(null); // Close DOS game on logout - removed
+      setIsWebGamePlayerModalOpen(false); // Close Web game on logout
+      setActiveWebGameType(null);
     }
   }, [currentUser]);
 
@@ -139,6 +151,30 @@ const App: React.FC = () => {
         }
     };
 
+    const handleToggleGamesModal = () => { 
+        if (currentUser) {
+            setIsGamesModalOpen(prev => !prev);
+        }
+    };
+
+    // handlePlayDosGame removed
+    // handleCloseDosGame removed
+
+    const handlePlayWebGame = (gameType: WebGameType, gameTitle: string) => {
+      if (gameType) {
+        setActiveWebGameType(gameType);
+        setActiveWebGameTitle(gameTitle);
+        setIsWebGamePlayerModalOpen(true);
+        setIsGamesModalOpen(false); // Close the main games list modal
+      }
+    };
+
+    const handleCloseWebGamePlayerModal = () => {
+      setIsWebGamePlayerModalOpen(false);
+      setActiveWebGameType(null);
+      setActiveWebGameTitle('');
+    };
+
 
     if (currentUser && !isAppReady) {
       return (
@@ -163,7 +199,8 @@ const App: React.FC = () => {
           onLogout={handleLogout}
           openLoginModalInitially={isLoginModalInitiallyOpen && !currentUser} 
           onLoginModalOpened={() => setIsLoginModalInitiallyOpen(false)}
-          onToggleLanguageLearningModal={handleToggleLanguageLearningModal} // Pass toggle function
+          onToggleLanguageLearningModal={handleToggleLanguageLearningModal}
+          onToggleGamesModal={handleToggleGamesModal} 
         />
         <main className="flex-grow overflow-hidden">
           {currentUser ? ( 
@@ -181,13 +218,28 @@ const App: React.FC = () => {
           )}
         </main>
         {currentUser && ( 
-          <LanguageLearningModal
-            isOpen={isLanguageLearningModalOpen}
-            onClose={() => setIsLanguageLearningModalOpen(false)}
-            userProfile={userProfile}
-            onUpdateProfile={handleUpdateUserProfile}
-            onAddExp={handleAddExpWithNotification}
-          />
+          <>
+            <LanguageLearningModal
+              isOpen={isLanguageLearningModalOpen}
+              onClose={() => setIsLanguageLearningModalOpen(false)}
+              userProfile={userProfile}
+              onUpdateProfile={handleUpdateUserProfile}
+              onAddExp={handleAddExpWithNotification}
+            />
+            <GamesModal
+              isOpen={isGamesModalOpen}
+              onClose={() => setIsGamesModalOpen(false)}
+              // onPlayDosGame removed
+              onPlayWebGame={handlePlayWebGame}
+            />
+            {/* DosGamePlayerModal rendering removed */}
+            <WebGamePlayerModal
+                isOpen={isWebGamePlayerModalOpen}
+                onClose={handleCloseWebGamePlayerModal}
+                gameType={activeWebGameType}
+                gameTitle={activeWebGameTitle}
+            />
+          </>
         )}
       </div>
     );
