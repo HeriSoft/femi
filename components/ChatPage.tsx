@@ -1,9 +1,8 @@
-
 // Fix: Remove triple-slash directive for 'vite/client' as its types are not found and import.meta.env is manually typed.
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 // Update to .ts/.tsx extensions
-import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings } from '../types.ts';
+import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice } from '../types.ts';
 import type { Content } from '@google/genai'; // For constructing Gemini history
 import { ALL_MODEL_DEFAULT_SETTINGS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY, TRANSLATION_TARGET_LANGUAGES } from '../constants.ts';
 import MessageBubble from './MessageBubble.tsx';
@@ -262,11 +261,13 @@ const ChatPage: React.FC = () => {
   const liveTranslationAccumulatorRef = useRef<string>("");
   const [liveTranslationDisplay, setLiveTranslationDisplay] = useState<string>("");
   const currentTranslationStreamControllerRef = useRef<AbortController | null>(null);
+  const [isSpeakingLiveTranslation, setIsSpeakingLiveTranslation] = useState(false);
+  const [liveTranslationAudioUrl, setLiveTranslationAudioUrl] = useState<string | null>(null);
 
 
   // Audio playback state
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
-  const [currentPlayingAudio, setCurrentPlayingAudio] = useState<string | null>(null); // Stores ID of message whose audio is playing
+  const [currentPlayingMessageId, setCurrentPlayingMessageId] = useState<string | null>(null);
   
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -346,22 +347,33 @@ const ChatPage: React.FC = () => {
     }
     if (isRealTimeTranslationMode) {
       setInput(''); // Clear chat input when entering translation mode
+      // If message audio is playing, stop it
+      if (audioPlayerRef.current && currentPlayingMessageId) {
+          audioPlayerRef.current.pause();
+          setCurrentPlayingMessageId(null);
+      }
     } else {
       // If exiting real-time translation mode, stop any active STT for it
       if (isListening && recognitionRef.current) {
           recognitionRef.current.stop(); // This will trigger onend, setting isListening to false
       }
-      // Clear live translation displays
+      // Clear live translation displays and stop its audio
       setLiveTranscriptionDisplay("");
       setLiveTranslationDisplay("");
       liveTranscriptionRef.current = "";
       liveTranslationAccumulatorRef.current = "";
       currentTranslationStreamControllerRef.current?.abort();
+      if (audioPlayerRef.current && isSpeakingLiveTranslation) {
+          audioPlayerRef.current.pause();
+          setIsSpeakingLiveTranslation(false);
+          setLiveTranslationAudioUrl(null);
+      }
     }
 
-    if (currentPlayingAudio && audioPlayerRef.current) {
+    // If model changes, and message audio was playing, stop it
+    if (currentPlayingMessageId && audioPlayerRef.current) {
         audioPlayerRef.current.pause(); 
-        setCurrentPlayingAudio(null);  
+        setCurrentPlayingMessageId(null);  
     }
 
   }, [selectedModel, apiKeyStatuses, isWebSearchEnabled, isImagenModelSelected, isTextToSpeechModelSelected, isRealTimeTranslationMode]);
@@ -516,6 +528,11 @@ const ChatPage: React.FC = () => {
           setLiveTranscriptionDisplay("");
           setLiveTranslationDisplay("");
           currentTranslationStreamControllerRef.current?.abort();
+          if (audioPlayerRef.current && isSpeakingLiveTranslation) {
+            audioPlayerRef.current.pause();
+            setIsSpeakingLiveTranslation(false);
+            setLiveTranslationAudioUrl(null);
+          }
       } else {
           inputBeforeSpeechRef.current = input; 
           currentRecognizedTextSegmentRef.current = "";
@@ -706,8 +723,12 @@ const ChatPage: React.FC = () => {
         setLiveTranslationDisplay("");
         liveTranscriptionRef.current = "";
         liveTranslationAccumulatorRef.current = "";
+        if (audioPlayerRef.current && isSpeakingLiveTranslation) {
+            audioPlayerRef.current.pause();
+            setIsSpeakingLiveTranslation(false);
+        }
     }
-  }, [selectedModel, addNotification, isRealTimeTranslationMode]);
+  }, [selectedModel, addNotification, isRealTimeTranslationMode, isSpeakingLiveTranslation]);
 
   const handleDeleteSession = useCallback((sessionId: string) => {
     const sessionToDelete = savedSessions.find(s => s.id === sessionId);
@@ -756,54 +777,120 @@ const ChatPage: React.FC = () => {
     if (!audioPlayerRef.current) return;
     const player = audioPlayerRef.current;
 
-    if (currentPlayingAudio === messageId) { 
+    // Stop live translation audio if it's playing
+    if (isSpeakingLiveTranslation) {
+        player.pause();
+        setIsSpeakingLiveTranslation(false);
+        setLiveTranslationAudioUrl(null);
+    }
+
+    if (currentPlayingMessageId === messageId) { 
       if (player.paused) {
         player.play().catch(e => {
           if ((e as DOMException).name === 'AbortError') {
-            console.log('Audio play() request was aborted (e.g., by user action or new audio source). This is usually normal.');
+            console.log('Audio play() request was aborted.');
           } else {
             console.error("Error resuming audio:", e);
             addNotification("Error resuming audio.", "error", (e as Error).message);
           }
-          setCurrentPlayingAudio(null); 
+          setCurrentPlayingMessageId(null); 
         });
       } else {
         player.pause(); 
+        // onpause listener will set currentPlayingMessageId to null
       }
     } else { 
-      if (player.currentSrc && !player.paused) { 
+      if (!player.paused) { // If playing something else (another message)
           player.pause(); 
       }
-
       player.src = audioUrl;
-      setCurrentPlayingAudio(messageId); 
+      setCurrentPlayingMessageId(messageId); 
       
       player.play().catch(e => {
         if ((e as DOMException).name === 'AbortError') {
-           console.log('Audio play() request was aborted (e.g., by user action or new audio source). This is usually normal.');
+           console.log('Audio play() request was aborted.');
         } else {
           console.error("Error playing new audio:", e);
           addNotification("Error playing new audio.", "error", (e as Error).message);
         }
-        if (currentPlayingAudio === messageId) { 
-          setCurrentPlayingAudio(null);
+        if (currentPlayingMessageId === messageId) { 
+          setCurrentPlayingMessageId(null);
         }
       });
     }
-  }, [currentPlayingAudio, addNotification]);
+  }, [currentPlayingMessageId, addNotification, isSpeakingLiveTranslation]);
+
+  const handleSpeakLiveTranslation = useCallback(async () => {
+    if (!audioPlayerRef.current || !liveTranslationDisplay.trim() || isListening) return;
+    const player = audioPlayerRef.current;
+
+    if (currentPlayingMessageId) { // If message audio is playing, stop it
+        player.pause();
+        setCurrentPlayingMessageId(null);
+    }
+    if (isSpeakingLiveTranslation) { // If already speaking live translation
+        player.pause(); // This will trigger onpause, setting isSpeakingLiveTranslation to false
+        return;
+    }
+    
+    setIsSpeakingLiveTranslation(true);
+    setLiveTranslationAudioUrl(null); // Clear previous URL if any
+
+    const openAiTtsModelSettings = allSettings[Model.OPENAI_TTS] as OpenAITtsSettings | undefined;
+    const ttsParams = {
+        modelIdentifier: openAiTtsModelSettings?.modelIdentifier || 'tts-1',
+        textInput: liveTranslationDisplay.replace(/\[.*?\]:\s*/g, '').trim(), // Remove "[Language]: " prefixes
+        voice: 'nova' as OpenAiTtsVoice, // Explicitly female voice
+        speed: openAiTtsModelSettings?.speed || 1.0,
+    };
+
+    try {
+        const ttsResult = await generateOpenAITTS(ttsParams);
+        if (ttsResult.error || !ttsResult.audioBlob) {
+            throw new Error(ttsResult.error || "TTS generation failed to return audio.");
+        }
+        const audioBlobUrl = URL.createObjectURL(ttsResult.audioBlob);
+        setLiveTranslationAudioUrl(audioBlobUrl);
+        player.src = audioBlobUrl;
+        player.play().catch(e => {
+            console.error("Error playing live translation audio:", e);
+            addNotification("Error playing translation audio.", "error", (e as Error).message);
+            setIsSpeakingLiveTranslation(false);
+            setLiveTranslationAudioUrl(null);
+            if (audioBlobUrl) URL.revokeObjectURL(audioBlobUrl);
+        });
+    } catch (error: any) {
+        console.error("Error generating live translation TTS:", error);
+        addNotification(`TTS Error: ${error.message}`, "error");
+        setIsSpeakingLiveTranslation(false);
+    }
+  }, [liveTranslationDisplay, addNotification, allSettings, isListening, currentPlayingMessageId, isSpeakingLiveTranslation]);
+
 
   useEffect(() => {
     const player = audioPlayerRef.current;
     if (player) {
-        const handleAudioEndOrPause = () => setCurrentPlayingAudio(null);
+        const handleAudioEndOrPause = () => {
+            if (currentPlayingMessageId) setCurrentPlayingMessageId(null);
+            if (isSpeakingLiveTranslation) {
+                setIsSpeakingLiveTranslation(false);
+                if (liveTranslationAudioUrl) {
+                    URL.revokeObjectURL(liveTranslationAudioUrl);
+                    setLiveTranslationAudioUrl(null);
+                }
+            }
+        };
         player.addEventListener('ended', handleAudioEndOrPause);
         player.addEventListener('pause', handleAudioEndOrPause); 
         return () => {
             player.removeEventListener('ended', handleAudioEndOrPause);
             player.removeEventListener('pause', handleAudioEndOrPause);
+            if (liveTranslationAudioUrl) { // Clean up blob URL on component unmount if player didn't end
+                URL.revokeObjectURL(liveTranslationAudioUrl);
+            }
         };
     }
-  }, []);
+  }, [currentPlayingMessageId, isSpeakingLiveTranslation, liveTranslationAudioUrl]);
 
 
   const internalSendMessage = async (
@@ -871,29 +958,16 @@ const ChatPage: React.FC = () => {
 
         if (ttsResult.error) throw new Error(ttsResult.error);
         if (ttsResult.audioBlob) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const base64AudioUrl = reader.result as string;
-                setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? {
-                    ...msg,
-                    text: `Audio generated for: "${originalUserPromptForAi}"`,
-                    audioUrl: base64AudioUrl,
-                    isRegenerating: false
-                } : msg));
-                 if (audioPlayerRef.current && base64AudioUrl) { 
-                    handlePlayAudio(base64AudioUrl, aiMessageId);
-                }
-            };
-            reader.onerror = (error) => {
-                console.error("FileReader error converting blob to Base64:", error);
-                addNotification("Error processing audio for playback.", "error", (error as any)?.message);
-                setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? {
-                    ...msg,
-                    text: `Error processing audio for: "${originalUserPromptForAi}". Playback might fail.`,
-                    isRegenerating: false
-                } : msg));
-            };
-            reader.readAsDataURL(ttsResult.audioBlob);
+            const audioBlobUrl = URL.createObjectURL(ttsResult.audioBlob);
+            setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? {
+                ...msg,
+                text: `Audio generated for: "${originalUserPromptForAi}"`,
+                audioUrl: audioBlobUrl,
+                isRegenerating: false
+            } : msg));
+             if (audioPlayerRef.current && audioBlobUrl) { 
+                handlePlayAudio(audioBlobUrl, aiMessageId);
+            }
         } else {
             throw new Error("TTS generation failed to return audio.");
         }
@@ -1399,7 +1473,18 @@ const ChatPage: React.FC = () => {
                     <p className="whitespace-pre-wrap text-sm text-neutral-700 dark:text-neutral-200">{liveTranscriptionDisplay || "Waiting for speech..."}</p>
                 </div>
                 <div className="bg-neutral-light dark:bg-neutral-darker p-3 rounded-lg shadow-sm overflow-y-auto border border-secondary dark:border-neutral-darkest">
-                    <h3 className="font-semibold text-neutral-darker dark:text-secondary-light mb-2 sticky top-0 bg-neutral-light dark:bg-neutral-darker py-1">Translation ({targetTranslationLangName})</h3>
+                    <div className="flex justify-between items-center sticky top-0 bg-neutral-light dark:bg-neutral-darker py-1 mb-2">
+                        <h3 className="font-semibold text-neutral-darker dark:text-secondary-light">Translation ({targetTranslationLangName})</h3>
+                        <button
+                            onClick={handleSpeakLiveTranslation}
+                            disabled={!liveTranslationDisplay.trim() || isSpeakingLiveTranslation || isListening}
+                            className="p-1.5 rounded-full text-primary dark:text-primary-light hover:bg-secondary/70 dark:hover:bg-neutral-dark disabled:opacity-50 disabled:cursor-not-allowed"
+                            aria-label={isSpeakingLiveTranslation ? "Stop speaking translation" : "Speak translation"}
+                            title={isSpeakingLiveTranslation ? "Stop speaking translation" : "Speak translation"}
+                        >
+                            {isSpeakingLiveTranslation ? <StopCircleIcon className="w-5 h-5" /> : <SpeakerWaveIcon className="w-5 h-5" />}
+                        </button>
+                    </div>
                     <p className="whitespace-pre-wrap text-sm text-neutral-700 dark:text-neutral-200">{liveTranslationDisplay || "Translation will appear here..."}</p>
                 </div>
             </div>
@@ -1413,7 +1498,7 @@ const ChatPage: React.FC = () => {
                       onRegenerate={msg.sender === 'ai' && msg.promptedByMessageId && !msg.isRegenerating ? handleRegenerateResponse : undefined}
                       isLoading={isLoading}
                       onPlayAudio={msg.audioUrl ? () => handlePlayAudio(msg.audioUrl!, msg.id) : undefined}
-                      isAudioPlaying={currentPlayingAudio === msg.id}
+                      isAudioPlaying={currentPlayingMessageId === msg.id}
                       searchQuery={isSearchActive ? searchQuery : ''}
                       isCurrentSearchResult={isSearchActive && searchResults[currentSearchResultIndex]?.messageId === msg.id}
                   />
@@ -1460,7 +1545,7 @@ const ChatPage: React.FC = () => {
             <div className="w-full flex justify-center">
                 <button
                   onClick={handleToggleListen}
-                  disabled={!isSpeechRecognitionSupported}
+                  disabled={!isSpeechRecognitionSupported || isSpeakingLiveTranslation}
                   className={`p-3 rounded-lg transition-colors self-stretch flex items-center justify-center text-xl ${
                     isListening 
                       ? 'bg-red-500 hover:bg-red-600 text-white' 
