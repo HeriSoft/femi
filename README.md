@@ -13,6 +13,7 @@
 *   Secure API key management using a backend proxy.
 *   Language learning (English, Japanese, Korean, Chinese, Vietnamese)
 *   Mini entertainment games
+*   Voice translation in real-time (Coming Soon)
 
 ## 🛠️ Tech Stack
 
