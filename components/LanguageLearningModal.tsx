@@ -25,6 +25,7 @@ const INITIAL_ACTIVITY_STATE: LearningActivityState = {
     content: null,
     error: null,
     userAnswer: null,
+    userSelectedWordIds: [],
     isAnswerSubmitted: false,
     isAnswerCorrect: null,
     audioUrl: undefined,
@@ -53,6 +54,7 @@ const LanguageLearningModal: React.FC<LanguageLearningModalProps> = ({
   const [previousQuizQuestions, setPreviousQuizQuestions] = useState<string[]>([]);
   const [previousListeningScripts, setPreviousListeningScripts] = useState<string[]>([]);
   const [previousSpeakingPhrases, setPreviousSpeakingPhrases] = useState<string[]>([]);
+  const [previousScrambledSentences, setPreviousScrambledSentences] = useState<string[]>([]);
 
 
   useEffect(() => {
@@ -71,6 +73,7 @@ const LanguageLearningModal: React.FC<LanguageLearningModalProps> = ({
         setPreviousQuizQuestions([]); 
         setPreviousListeningScripts([]);
         setPreviousSpeakingPhrases([]);
+        setPreviousScrambledSentences([]);
         if (audioPlayerRef.current) {
             audioPlayerRef.current.pause();
             audioPlayerRef.current.src = '';
@@ -146,6 +149,7 @@ const LanguageLearningModal: React.FC<LanguageLearningModalProps> = ({
     setPreviousQuizQuestions([]);
     setPreviousListeningScripts([]);
     setPreviousSpeakingPhrases([]);
+    setPreviousScrambledSentences([]);
     if (userProfile && !userProfile.languageProfiles[langCode]) {
       const updatedProfile = {
         ...userProfile,
@@ -264,8 +268,6 @@ Return the response as a single, valid JSON object with a "phraseToSpeak" key.`;
     setActiveActivityType('vocabulary');
     setActivityState({ ...INITIAL_ACTIVITY_STATE, isLoadingContent: true });
     const langName = LANGUAGE_OPTIONS.find(l => l.code === selectedLanguage)?.name || 'the selected language';
-    // For vocabulary, asking for "unique" words in the set is the primary way to avoid repetition.
-    // Sending previous sets to AI is complex and prompt-heavy.
     const prompt = `Generate a set of 5 unique beginner-level vocabulary words in ${langName}.
 Ensure these words are distinct and suitable for a beginner.
 For each word, provide:
@@ -347,6 +349,75 @@ Example (if ${langName} is English and previous questions were about colors):
     } catch (error: any) {
         addNotification(error.message || "Failed to fetch quiz question.", 'error');
         setActivityState(prev => ({ ...prev, isLoadingContent: false, error: error.message || "Failed to load quiz." }));
+    }
+  };
+
+  const fetchSentenceScrambleExercise = async () => {
+    if (!selectedLanguage) return;
+    setActiveActivityType('sentence-scramble');
+    setActivityState({ ...INITIAL_ACTIVITY_STATE, isLoadingContent: true, userAnswer: '' });
+    const langName = LANGUAGE_OPTIONS.find(l => l.code === selectedLanguage)?.name || 'the selected language';
+
+    let previousContentContext = "The new sentence MUST be different. ";
+    if (previousScrambledSentences.length > 0) {
+        previousContentContext += `DO NOT REPEAT these exact sentences or sentences with the same core concept:\n${previousScrambledSentences.map((s) => `- "${s.substring(0, 100)}${s.length > 100 ? '...' : ''}"`).join('\n')}`;
+    }
+
+    const prompt = `Generate a NEW and DISTINCT simple beginner-level sentence (5-8 words long) in ${langName}.
+The sentence must be grammatically correct and natural for a beginner.
+${previousContentContext}
+Return the response as a single, valid JSON object with an "originalSentence" key.
+Example (if ${langName} is English): {"originalSentence": "My favorite color is blue."}`;
+
+    try {
+        const modelIdentifier = getActualModelIdentifier(Model.GPT4O_MINI);
+        const history: ApiChatMessage[] = [
+            { role: 'system', content: 'You are an AI assistant specialized in creating language learning sentences as JSON. Ensure sentences are grammatically correct and natural for beginners. You MUST AVOID REPEATING content if told to do so in the prompt.' },
+            { role: 'user', content: prompt }
+        ];
+        const stream = sendOpenAIMessageStream({ modelIdentifier, history, modelSettings: { temperature: 0.6, topK: 50, topP: 0.95, systemInstruction: "Generate sentences as JSON." }});
+        const parsedContent = await parseAIJsonResponse(stream, "sentence scramble exercise");
+
+        if (!parsedContent.originalSentence || typeof parsedContent.originalSentence !== 'string' || parsedContent.originalSentence.trim().split(' ').length < 2) {
+            throw new Error("AI response is missing 'originalSentence', it's not a string, or it's too short.");
+        }
+
+        const original = parsedContent.originalSentence.trim();
+        let words = original.split(' ').map((w, i) => ({ word: w, id: i }));
+        
+        let scrambledWordsWithObjects;
+        let attempts = 0;
+        const maxAttempts = 10; 
+        do {
+            scrambledWordsWithObjects = [...words].sort(() => Math.random() - 0.5);
+            attempts++;
+        } while (scrambledWordsWithObjects.map(item => item.word).join(' ') === original && attempts < maxAttempts);
+        
+        if (attempts >= maxAttempts && scrambledWordsWithObjects.map(item => item.word).join(' ') === original && words.length > 1) {
+             // Force a different scramble if it's still the same and has more than one word
+            [scrambledWordsWithObjects[0], scrambledWordsWithObjects[1]] = [scrambledWordsWithObjects[1], scrambledWordsWithObjects[0]];
+        }
+
+
+        setActivityState(prev => ({
+            ...prev,
+            isLoadingContent: false,
+            content: {
+                id: `scramble-${Date.now()}`,
+                activityType: 'sentence-scramble',
+                language: selectedLanguage,
+                originalSentence: original,
+                scrambledWords: scrambledWordsWithObjects,
+            },
+            userAnswer: '', 
+            userSelectedWordIds: [], 
+            error: null
+        }));
+        setPreviousScrambledSentences(prev => [original, ...prev].slice(0, MAX_PREVIOUS_ITEMS_TO_AVOID));
+
+    } catch (error: any) {
+        addNotification(error.message || "Failed to fetch sentence scramble exercise.", 'error');
+        setActivityState(prev => ({ ...prev, isLoadingContent: false, error: error.message || "Failed to load exercise." }));
     }
   };
 
@@ -433,21 +504,57 @@ Respond with a single, valid JSON object: {"is_match": boolean, "feedback": "bri
     }
   };
 
+  const handleScrambledWordClick = (wordItem: { word: string, id: number }) => {
+    if (activityState.isAnswerSubmitted || activityState.userSelectedWordIds?.includes(wordItem.id)) return;
+    setActivityState(prev => {
+        const currentAnswer = prev.userAnswer as string;
+        const newAnswer = currentAnswer ? `${currentAnswer} ${wordItem.word}` : wordItem.word;
+        return {
+            ...prev,
+            userAnswer: newAnswer,
+            userSelectedWordIds: [...(prev.userSelectedWordIds || []), wordItem.id]
+        };
+    });
+  };
+
+  const handleClearSentenceAttempt = () => {
+    setActivityState(prev => ({
+        ...prev,
+        userAnswer: '',
+        userSelectedWordIds: [],
+        isAnswerSubmitted: false,
+        isAnswerCorrect: null,
+    }));
+  };
+
+  const handleSubmitSentenceScramble = () => {
+    if (!activityState.content?.originalSentence || !selectedLanguage || typeof activityState.userAnswer !== 'string') return;
+    const userAnswerString = activityState.userAnswer.trim();
+    const originalSentenceNormalized = activityState.content.originalSentence.trim();
+    
+    const normalize = (str: string) => str.toLowerCase().replace(/[.,!?;:"“”]/g, '').replace(/\s+/g, ' ').trim();
+    
+    const isCorrect = normalize(userAnswerString) === normalize(originalSentenceNormalized);
+
+    setActivityState(prev => ({ ...prev, isAnswerSubmitted: true, isAnswerCorrect: isCorrect }));
+    const expPoints = 25;
+    if (isCorrect) {
+        onAddExp(selectedLanguage, expPoints);
+        addNotification(`Excellent! +${expPoints} EXP`, 'success');
+    } else {
+        addNotification("Not quite right. Check the order or words.", 'error');
+    }
+  };
+
+
   const handleActivitySelect = (type: LanguageLearningActivityType) => {
-    if (type === 'quiz') {
-        setPreviousQuizQuestions([]); 
-    }
-     if (type === 'listening') {
-        setPreviousListeningScripts([]);
-    }
-    if (type === 'speaking') {
-        setPreviousSpeakingPhrases([]);
-    }
+    setActivityState(INITIAL_ACTIVITY_STATE); // Reset state before fetching new
     switch (type) {
         case 'listening': fetchListeningExercise(); break;
         case 'speaking': fetchSpeakingExercise(); break;
         case 'vocabulary': fetchVocabularySet(); break;
         case 'quiz': fetchQuizQuestion(); break;
+        case 'sentence-scramble': fetchSentenceScrambleExercise(); break;
         default: setActiveActivityType(null); setActivityState(INITIAL_ACTIVITY_STATE);
     }
   };
@@ -455,9 +562,6 @@ Respond with a single, valid JSON object: {"is_match": boolean, "feedback": "bri
   const resetActivity = () => {
     setActiveActivityType(null);
     setActivityState(INITIAL_ACTIVITY_STATE);
-    setPreviousQuizQuestions([]); 
-    setPreviousListeningScripts([]);
-    setPreviousSpeakingPhrases([]);
     if (audioPlayerRef.current) {
         audioPlayerRef.current.pause();
         audioPlayerRef.current.src = '';
@@ -539,6 +643,7 @@ Respond with a single, valid JSON object: {"is_match": boolean, "feedback": "bri
                         { type: 'speaking', label: '🗣️ Speaking Practice', desc: 'Improve pronunciation.' },
                         { type: 'vocabulary', label: '📖 Vocabulary Builder', desc: 'Expand your word bank.' },
                         { type: 'quiz', label: '✍️ Quizzes & Challenges', desc: 'Test your knowledge.' },
+                        { type: 'sentence-scramble', label: '🧩 Sentence Scramble', desc: 'Reorder words correctly.' },
                     ] as { type: LanguageLearningActivityType; label: string; desc: string }[]).map(act => (
                         <button key={act.type} onClick={() => handleActivitySelect(act.type)} className="p-4 bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors text-left">
                             <h4 className="font-semibold text-md">{act.label}</h4>
@@ -553,12 +658,12 @@ Respond with a single, valid JSON object: {"is_match": boolean, "feedback": "bri
           {activeActivityType && selectedLanguage && (
             <div className="p-4 border border-primary/50 dark:border-primary-light/50 rounded-lg">
               <h3 className="text-xl font-semibold text-primary dark:text-primary-light mb-4 capitalize">
-                {activeActivityType.replace('_', ' ')} Practice in {LANGUAGE_OPTIONS.find(l=>l.code === selectedLanguage)?.name}
+                {activeActivityType.replace('-', ' ')} Practice in {LANGUAGE_OPTIONS.find(l=>l.code === selectedLanguage)?.name}
               </h3>
               {activityState.isLoadingContent && <p className="text-neutral-600 dark:text-neutral-300 animate-pulse">Loading exercise...</p>}
-              {activityState.error && !activityState.isLoadingContent && <p className="text-red-500 dark:text-red-400">Error: {activityState.error}</p>}
+              {activityState.error && !activityState.isLoadingContent && activeActivityType !== 'speaking' && <p className="text-red-500 dark:text-red-400">Error: {activityState.error}</p>} {/* Error for speaking is handled inside its block */}
               
-              {!activityState.isLoadingContent && !activityState.error && activityState.content && (
+              {!activityState.isLoadingContent && !activityState.error && activityState.content && activeActivityType !== 'sentence-scramble' && (
                 <div className="space-y-4">
                   {activeActivityType === 'listening' && activityState.content.script && (
                     <>
@@ -611,6 +716,7 @@ Respond with a single, valid JSON object: {"is_match": boolean, "feedback": "bri
                           {activityState.error} 
                         </div>
                       )}
+                       {activityState.isLoadingContent && activeActivityType === 'speaking' && <p className="text-neutral-600 dark:text-neutral-300 animate-pulse">Evaluating your speech...</p>}
                       <button onClick={activityState.isAnswerSubmitted ? fetchSpeakingExercise : handleSubmitSpeakingAnswer} disabled={transcribedText === null || activityState.isLoadingContent || isRecording}
                         className="mt-4 px-5 py-2 bg-primary hover:bg-primary-dark text-white rounded-md transition-colors disabled:opacity-50">
                         {activityState.isAnswerSubmitted ? 'Next Phrase' : 'Submit Recording'}
@@ -660,6 +766,67 @@ Respond with a single, valid JSON object: {"is_match": boolean, "feedback": "bri
                   </button>
                 </div>
               )}
+
+              {/* Sentence Scramble Activity UI */}
+              {!activityState.isLoadingContent && activityState.content && activeActivityType === 'sentence-scramble' && (
+                <div className="space-y-4">
+                    <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-2">
+                        Click the words in the correct order to form a sentence.
+                    </p>
+                    
+                    <div aria-live="polite" className="min-h-[60px] p-3 mb-4 border-2 border-dashed border-secondary dark:border-neutral-darkest rounded-md bg-white dark:bg-neutral-dark text-neutral-800 dark:text-neutral-100 flex items-center">
+                        {(activityState.userAnswer as string) || <span className="italic text-neutral-400 dark:text-neutral-500">Your sentence will appear here...</span>}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 mb-4 min-h-[40px]" aria-label="Scrambled words selection area">
+                        {activityState.content.scrambledWords?.map((wordItem) => (
+                            <button
+                                key={`${wordItem.word}-${wordItem.id}`}
+                                onClick={() => handleScrambledWordClick(wordItem)}
+                                disabled={activityState.isAnswerSubmitted || activityState.userSelectedWordIds?.includes(wordItem.id)}
+                                className={`px-3 py-1.5 border rounded-md text-sm font-medium transition-colors
+                                            ${activityState.userSelectedWordIds?.includes(wordItem.id)
+                                                ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed line-through'
+                                                : 'bg-secondary dark:bg-neutral-darkest text-primary dark:text-primary-light hover:bg-secondary-dark dark:hover:bg-neutral-dark'
+                                            }
+                                            disabled:opacity-50 disabled:cursor-not-allowed`}
+                                aria-pressed={activityState.userSelectedWordIds?.includes(wordItem.id)}
+                            >
+                                {wordItem.word}
+                            </button>
+                        ))}
+                    </div>
+
+                    {activityState.isAnswerSubmitted && (
+                        <div className={`mt-3 p-3 rounded-md text-sm ${activityState.isAnswerCorrect ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'}`}>
+                            {activityState.isAnswerCorrect ? <CheckCircleIcon className="inline w-5 h-5 mr-1 align-text-bottom" /> : <XCircleIcon className="inline w-5 h-5 mr-1 align-text-bottom" />}
+                            {activityState.isAnswerCorrect ? 'Correct!' : `Incorrect. The correct sentence was: "${activityState.content.originalSentence}"`}
+                        </div>
+                    )}
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                        <button 
+                            onClick={activityState.isAnswerSubmitted ? fetchSentenceScrambleExercise : handleSubmitSentenceScramble}
+                            disabled={!(activityState.userAnswer as string) && !activityState.isAnswerSubmitted}
+                            className="px-5 py-2 bg-primary hover:bg-primary-dark text-white rounded-md transition-colors disabled:opacity-50">
+                            {activityState.isAnswerSubmitted ? 'Next Sentence' : 'Submit Sentence'}
+                        </button>
+                        {!activityState.isAnswerSubmitted && (
+                            <button 
+                                onClick={handleClearSentenceAttempt}
+                                disabled={!(activityState.userAnswer as string) || activityState.isLoadingContent}
+                                className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-md transition-colors disabled:opacity-50">
+                                Clear Attempt
+                            </button>
+                        )}
+                    </div>
+                     <button onClick={resetActivity} className="mt-4 ml-2 px-4 py-2 bg-secondary dark:bg-neutral-darkest hover:bg-secondary-dark dark:hover:bg-neutral-dark text-neutral-darker dark:text-secondary-light rounded-md text-sm">
+                        Back to Activities Menu
+                    </button>
+                </div>
+              )}
+
+
             </div>
           )}
           {!selectedLanguage && !activeActivityType && (
