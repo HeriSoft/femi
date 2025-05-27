@@ -190,7 +190,7 @@ export interface NotificationContextType {
 }
 
 // Language Learning Feature Types
-export type LanguageOption = 'en' | 'ja' | 'ko';
+export type LanguageOption = 'en' | 'ja' | 'ko' | 'zh' | 'vi';
 
 export interface LanguageOptionConfig {
   code: LanguageOption;

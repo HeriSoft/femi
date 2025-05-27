@@ -40,6 +40,8 @@ export const LANGUAGE_OPTIONS: LanguageOptionConfig[] = [
   { code: 'en', name: 'English', flag: '🇺🇸' },
   { code: 'ja', name: 'Japanese', flag: '🇯🇵' },
   { code: 'ko', name: 'Korean', flag: '🇰🇷' },
+  { code: 'zh', name: 'Chinese (Mandarin)', flag: '🇨🇳' },
+  { code: 'vi', name: 'Vietnamese', flag: '🇻🇳' },
 ];
 
 export const DEFAULT_USER_LANGUAGE_PROFILE: UserLanguageProfile = {
