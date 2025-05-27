@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
-import { Model, ModelSettings, SettingsPanelProps as LocalSettingsPanelProps, ApiKeyStatus, getActualModelIdentifier, ImagenSettings, Persona, OpenAITtsSettings, OpenAiTtsVoice } from '../types.ts';
-import { ArrowUpTrayIcon, PhotoIcon, XMarkIcon, MagnifyingGlassIcon, KeyIcon, InformationCircleIcon, UserCircleIcon, PlusCircleIcon, TrashIcon, PencilSquareIcon, SpeakerWaveIcon } from './Icons.tsx';
+import { Model, ModelSettings, SettingsPanelProps as LocalSettingsPanelProps, ApiKeyStatus, getActualModelIdentifier, ImagenSettings, Persona, OpenAITtsSettings, OpenAiTtsVoice, RealTimeTranslationSettings } from '../types.ts';
+import { ArrowUpTrayIcon, PhotoIcon, XMarkIcon, MagnifyingGlassIcon, KeyIcon, InformationCircleIcon, UserCircleIcon, PlusCircleIcon, TrashIcon, PencilSquareIcon, SpeakerWaveIcon, LanguageIcon } from './Icons.tsx';
+import { TRANSLATION_TARGET_LANGUAGES } from '../constants.ts';
 
 
 const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
@@ -81,15 +82,16 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
 
   const models: Model[] = Object.values(Model) as Model[];
   const currentApiKeyStatus = apiKeyStatuses[selectedModel];
-  const isCurrentModelGeminiPlatformChat = currentApiKeyStatus?.isGeminiPlatform && !currentApiKeyStatus?.isMock && !currentApiKeyStatus?.isImageGeneration;
+  const isCurrentModelGeminiPlatformChat = currentApiKeyStatus?.isGeminiPlatform && !currentApiKeyStatus?.isMock && !currentApiKeyStatus?.isImageGeneration && !currentApiKeyStatus?.isRealTimeTranslation;
   const isImagenModel = selectedModel === Model.IMAGEN3 || currentApiKeyStatus?.isImageGeneration;
   const isTextToSpeechModel = selectedModel === Model.OPENAI_TTS || currentApiKeyStatus?.isTextToSpeech;
+  const isRealTimeTranslationModel = selectedModel === Model.REAL_TIME_TRANSLATION || currentApiKeyStatus?.isRealTimeTranslation;
   const actualModelId = getActualModelIdentifier(selectedModel);
   const isDeepseekChat = actualModelId === 'deepseek-chat';
 
   const generalFileAcceptTypes = ".txt,.md,.json,.js,.ts,.jsx,.tsx,.py,.java,.c,.cpp,.h,.hpp,.cs,.go,.rs,.rb,.php,.html,.htm,.css,.scss,.less,.xml,.yaml,.yml,.ini,.sh,.bat,.ps1,.sql,.csv,.log,.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
-  const typedModelSettings = modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings; 
+  const typedModelSettings = modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings; 
 
   const aspectRatios: { value: string; label: string }[] = [
     { value: '1:1', label: '1:1 (Square)' },
@@ -142,7 +144,7 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
                     : 'bg-red-100 dark:bg-red-900 border-red-500 dark:border-red-400 text-red-700 dark:text-red-300'
             } border`}>
                 <p className="font-medium">
-                    {currentApiKeyStatus.modelName} ({currentApiKeyStatus.isMock ? "Mock" : (currentApiKeyStatus.isTextToSpeech ? "TTS API" : "Live API Key")})
+                    {currentApiKeyStatus.modelName} ({currentApiKeyStatus.isMock ? "Mock" : (currentApiKeyStatus.isTextToSpeech ? "TTS API" : (currentApiKeyStatus.isRealTimeTranslation ? "Translation API" : "Live API Key"))})
                 </p>
                 <p>Env Variable: <code>process.env.{currentApiKeyStatus.envVarName}</code></p>
                 {currentApiKeyStatus.isSet ? (
@@ -162,14 +164,14 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
                  )}
                  <p className="mt-2 text-xs text-neutral-600 dark:text-neutral-400">
                     <InformationCircleIcon className="w-4 h-4 inline mr-1" />
-                    Environment variables should be set in <code>config.js</code>.
+                    Environment variables should be set in <code>config.js</code> (for client-side keys if any) or on the proxy server.
                 </p>
             </div>
         )}
       </div>
 
-      {/* Persona Management Section */}
-      {!isImagenModel && !isTextToSpeechModel && (
+      {/* Persona Management Section - Hidden for Imagen, TTS, Real-Time Translation */}
+      {!isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && (
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
           <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light mb-2 flex items-center">
             <UserCircleIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" />
@@ -255,7 +257,8 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
       )}
 
 
-      {!isImagenModel && !isTextToSpeechModel && ( 
+      {/* Chat Model Settings - Hidden for Imagen, TTS, Real-Time Translation */}
+      {!isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && ( 
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
           <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light">Model Settings (Chat)</h3>
           <div>
@@ -325,6 +328,7 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
         </div>
       )}
       
+      {/* Imagen Settings */}
       {isImagenModel && currentApiKeyStatus?.isGeminiPlatform && ( 
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
            <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light">Image Generation Settings</h3>
@@ -378,6 +382,7 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
         </div>
       )}
 
+      {/* TTS Settings */}
       {isTextToSpeechModel && (
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
           <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
@@ -434,8 +439,35 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
         </div>
       )}
 
+      {/* Real-Time Translation Settings */}
+      {isRealTimeTranslationModel && (
+        <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
+          <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
+            <LanguageIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" />
+            Real-Time Translation Settings
+          </h3>
+          <div>
+            <label htmlFor="target-language-select" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Target Language
+            </label>
+            <select
+              id="target-language-select"
+              value={typedModelSettings.targetLanguage || 'en'}
+              onChange={(e) => onModelSettingsChange({ targetLanguage: e.target.value })}
+              disabled={disabled}
+              className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
+            >
+              {TRANSLATION_TARGET_LANGUAGES.map(lang => (
+                <option key={lang.code} value={lang.code}>{lang.flag} {lang.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
 
-      {!isImagenModel && !isTextToSpeechModel && ( 
+
+      {/* Attachments - Hidden for Imagen, TTS, Real-Time Translation */}
+      {!isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && ( 
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
           <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light">Attachments (Chat)</h3>
           
@@ -498,14 +530,16 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
         </div>
       )}
       
-      {(isImagenModel || isTextToSpeechModel) && (
+      {(isImagenModel || isTextToSpeechModel || isRealTimeTranslationModel) && (
          <p className="text-xs text-neutral-500 dark:text-neutral-400 border-t border-secondary dark:border-neutral-darkest pt-4">
-            {isImagenModel && "Attachments, Web Search, and Personas are not applicable for Imagen3 image generation."}
-            {isTextToSpeechModel && "Attachments, Web Search, and Personas are not applicable for OpenAI TTS."}
+            {isImagenModel && "Personas, Attachments, Web Search, and detailed Chat Model Settings are not applicable for Imagen3."}
+            {isTextToSpeechModel && "Personas, Attachments, Web Search, and detailed Chat Model Settings are not applicable for OpenAI TTS."}
+            {isRealTimeTranslationModel && "Personas, Chat Attachments, Web Search, and standard Chat Model Settings are not applicable for Real-Time Translation."}
         </p>
       )}
 
-      {isCurrentModelGeminiPlatformChat && !isTextToSpeechModel && ( 
+      {/* Web Search - Hidden for Imagen, TTS, Real-Time Translation */}
+      {isCurrentModelGeminiPlatformChat && !isTextToSpeechModel && !isRealTimeTranslationModel && ( 
         <div className="space-y-2 border-t border-secondary dark:border-neutral-darkest pt-4">
           <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light">Tools (Gemini Chat)</h3>
           <label htmlFor="web-search-toggle" className={`flex items-center ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>

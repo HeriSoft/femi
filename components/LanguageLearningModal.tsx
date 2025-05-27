@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
     LanguageLearningModalProps, 
@@ -11,9 +12,10 @@ import {
     LanguageLearningActivityType,
     LearningActivityState,
     getActualModelIdentifier,
-    ApiChatMessage
+    ApiChatMessage,
+    UserGlobalProfile
 } from '../types.ts';
-import { XMarkIcon, AcademicCapIcon, SpeakerWaveIcon, StopCircleIcon, CheckCircleIcon, XCircleIcon, MicrophoneIcon, ArrowPathIcon } from './Icons.tsx';
+import { XMarkIcon, AcademicCapIcon, SpeakerWaveIcon, StopCircleIcon, CheckCircleIcon, XCircleIcon, MicrophoneIcon, ArrowPathIcon, GlobeAltIcon } from './Icons.tsx';
 import { LANGUAGE_OPTIONS, BADGES_CATALOG, DEFAULT_USER_LANGUAGE_PROFILE, getNextMilestone } from '../constants.ts';
 import { useNotification } from '../contexts/NotificationContext.tsx';
 import { sendOpenAIMessageStream } from '../services/openaiService.ts'; 
@@ -29,6 +31,8 @@ const INITIAL_ACTIVITY_STATE: LearningActivityState = {
     isAnswerCorrect: null,
     audioUrl: undefined,
     isAudioPlaying: false,
+    translatedUserSpeech: undefined,
+    isLoadingTranslation: false,
 };
 
 const MAX_PREVIOUS_ITEMS_TO_AVOID = 5;
@@ -80,6 +84,40 @@ const LanguageLearningModal: React.FC<LanguageLearningModalProps> = ({
     }
   }, [isOpen, userProfile, selectedLanguage]);
 
+  const translateTranscribedText = async (textToTranslate: string, sourceLang: LanguageOption, targetLang: LanguageOption) => {
+    if (!textToTranslate.trim() || sourceLang === targetLang) {
+        setActivityState(prev => ({...prev, translatedUserSpeech: textToTranslate, isLoadingTranslation: false})); // No translation needed or possible
+        return;
+    }
+    setActivityState(prev => ({...prev, isLoadingTranslation: true, translatedUserSpeech: undefined }));
+    const sourceLangName = LANGUAGE_OPTIONS.find(l => l.code === sourceLang)?.name || sourceLang;
+    const targetLangName = LANGUAGE_OPTIONS.find(l => l.code === targetLang)?.name || targetLang;
+    const translationPrompt = `Translate the following text from ${sourceLangName} to ${targetLangName}.
+Only return the translated text as a plain string, without any additional explanations, prefixes like "Translation:", or markdown.
+Original text: "${textToTranslate}"`;
+
+    try {
+        const modelIdentifier = getActualModelIdentifier(Model.GPT4O_MINI);
+        const history: ApiChatMessage[] = [
+            { role: 'system', content: 'You are an AI assistant that provides direct translations as plain text strings.' },
+            { role: 'user', content: translationPrompt }
+        ];
+        const stream = sendOpenAIMessageStream({ modelIdentifier, history, modelSettings: { temperature: 0.2, topK: 1, topP: 0.9, systemInstruction: "Translate text directly." }});
+        
+        let translatedText = "";
+        for await (const chunk of stream) {
+            if (chunk.error) throw new Error(chunk.error);
+            if (chunk.textDelta) translatedText += chunk.textDelta;
+            if (chunk.isFinished) break;
+        }
+        setActivityState(prev => ({...prev, translatedUserSpeech: translatedText.trim(), isLoadingTranslation: false}));
+    } catch (error: any) {
+        addNotification(`Failed to translate speech: ${error.message}`, 'error');
+        setActivityState(prev => ({...prev, isLoadingTranslation: false, error: `Translation error: ${error.message}`}));
+    }
+  };
+
+
   useEffect(() => {
     if (!isOpen || activeActivityType !== 'speaking') {
         if (recognitionRef.current && isRecording) {
@@ -98,13 +136,25 @@ const LanguageLearningModal: React.FC<LanguageLearningModalProps> = ({
     const recognition = recognitionRef.current;
     recognition.continuous = false;
     recognition.interimResults = false;
-    recognition.lang = selectedLanguage || 'en-US'; 
+    const langForRecognition = selectedLanguage || 'en-US';
+    recognition.lang = langForRecognition;
+
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       const transcript = event.results[0][0].transcript;
       setTranscribedText(transcript);
-      setActivityState(prev => ({ ...prev, userAnswer: transcript, isAnswerSubmitted: false, isAnswerCorrect: null }));
+      setActivityState(prev => ({ ...prev, userAnswer: transcript, isAnswerSubmitted: false, isAnswerCorrect: null, translatedUserSpeech: undefined, isLoadingTranslation: false }));
       setIsRecording(false);
+
+      // Trigger translation
+      if (userProfile?.favoriteLanguage && selectedLanguage && transcript) {
+        if (userProfile.favoriteLanguage !== selectedLanguage) {
+            translateTranscribedText(transcript, selectedLanguage, userProfile.favoriteLanguage);
+        } else {
+            // If target and favorite language are the same, just show original transcript as "translation"
+            setActivityState(prev => ({...prev, translatedUserSpeech: transcript, isLoadingTranslation: false}));
+        }
+      }
     };
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       addNotification(`Speech recognition error: ${event.error}`, "error", event.message);
@@ -116,7 +166,7 @@ const LanguageLearningModal: React.FC<LanguageLearningModalProps> = ({
     return () => {
         recognition?.stop();
     }
-  }, [isOpen, activeActivityType, selectedLanguage, addNotification, isRecording]);
+  }, [isOpen, activeActivityType, selectedLanguage, addNotification, isRecording, userProfile?.favoriteLanguage]);
 
 
   const currentLangProfile: UserLanguageProfile | undefined = useMemo(() => {
@@ -150,7 +200,7 @@ const LanguageLearningModal: React.FC<LanguageLearningModalProps> = ({
     setPreviousSpeakingPhrases([]);
     setPreviousScrambledSentences([]);
     if (userProfile && !userProfile.languageProfiles[langCode]) {
-      const updatedProfile = {
+      const updatedProfile: UserGlobalProfile = {
         ...userProfile,
         languageProfiles: {
           ...(userProfile.languageProfiles || {}),
@@ -158,6 +208,17 @@ const LanguageLearningModal: React.FC<LanguageLearningModalProps> = ({
         }
       };
       onUpdateProfile(updatedProfile);
+    }
+  };
+
+  const handleFavoriteLanguageChange = (langCode: LanguageOption | "") => {
+    if (userProfile) {
+        const updatedProfile: UserGlobalProfile = {
+            ...userProfile,
+            favoriteLanguage: langCode === "" ? undefined : langCode,
+        };
+        onUpdateProfile(updatedProfile);
+        addNotification(`Favorite translation language set to ${LANGUAGE_OPTIONS.find(l=>l.code===langCode)?.name || 'None'}.`, 'info');
     }
   };
 
@@ -474,7 +535,7 @@ Another Japanese example: {"originalSentence": "私の名前は田中です。",
     if (isRecording) recognitionRef.current.stop();
     else {
         setTranscribedText(null); 
-        setActivityState(prev => ({ ...prev, userAnswer: null, isAnswerSubmitted: false, isAnswerCorrect: null }));
+        setActivityState(prev => ({ ...prev, userAnswer: null, isAnswerSubmitted: false, isAnswerCorrect: null, translatedUserSpeech: undefined, isLoadingTranslation: false }));
         recognitionRef.current.start();
     }
     setIsRecording(!isRecording);
@@ -627,13 +688,29 @@ Respond with a single, valid JSON object: {"is_match": boolean, "feedback": "bri
 
         <div className="flex-grow overflow-y-auto p-4 sm:p-6 space-y-6">
           {!activeActivityType && (
-            <div>
-              <label htmlFor="language-select" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Choose a Language to Learn:</label>
-              <select id="language-select" value={selectedLanguage || ''} onChange={(e) => handleLanguageSelect(e.target.value as LanguageOption)}
-                className="w-full p-2.5 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none text-neutral-darker dark:text-secondary-light">
-                <option value="" disabled>Select a language</option>
-                {LANGUAGE_OPTIONS.map(lang => (<option key={lang.code} value={lang.code}>{lang.flag} {lang.name}</option>))}
-              </select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="language-select" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Choose a Language to Learn:</label>
+                <select id="language-select" value={selectedLanguage || ''} onChange={(e) => handleLanguageSelect(e.target.value as LanguageOption)}
+                  className="w-full p-2.5 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none text-neutral-darker dark:text-secondary-light">
+                  <option value="" disabled>Select a language</option>
+                  {LANGUAGE_OPTIONS.map(lang => (<option key={lang.code} value={lang.code}>{lang.flag} {lang.name}</option>))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="favorite-language-select" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+                    <GlobeAltIcon className="w-4 h-4 inline mr-1" /> Favorite Language (for Translation):
+                </label>
+                <select 
+                    id="favorite-language-select" 
+                    value={userProfile?.favoriteLanguage || ''} 
+                    onChange={(e) => handleFavoriteLanguageChange(e.target.value as LanguageOption | "")}
+                    className="w-full p-2.5 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none text-neutral-darker dark:text-secondary-light"
+                >
+                  <option value="">None (No Translation)</option>
+                  {LANGUAGE_OPTIONS.map(lang => (<option key={`fav-${lang.code}`} value={lang.code}>{lang.flag} {lang.name}</option>))}
+                </select>
+              </div>
             </div>
           )}
 
@@ -690,11 +767,20 @@ Respond with a single, valid JSON object: {"is_match": boolean, "feedback": "bri
 
           {activeActivityType && selectedLanguage && (
             <div className="p-4 border border-primary/50 dark:border-primary-light/50 rounded-lg">
-              <h3 className="text-xl font-semibold text-primary dark:text-primary-light mb-4 capitalize">
-                {activeActivityType.replace('-', ' ')} Practice in {LANGUAGE_OPTIONS.find(l=>l.code === selectedLanguage)?.name}
-              </h3>
+              <div className="flex justify-between items-start">
+                <h3 className="text-xl font-semibold text-primary dark:text-primary-light mb-4 capitalize">
+                    {activeActivityType.replace('-', ' ')} Practice in {LANGUAGE_OPTIONS.find(l=>l.code === selectedLanguage)?.name}
+                </h3>
+                {activeActivityType === 'speaking' && userProfile?.favoriteLanguage && userProfile.favoriteLanguage !== selectedLanguage && (
+                    <div className="text-xs text-neutral-500 dark:text-neutral-400 mb-2 text-right">
+                        <GlobeAltIcon className="w-3 h-3 inline mr-0.5" />
+                        Translating to: {LANGUAGE_OPTIONS.find(l => l.code === userProfile.favoriteLanguage)?.name}
+                    </div>
+                )}
+              </div>
+
               {activityState.isLoadingContent && <p className="text-neutral-600 dark:text-neutral-300 animate-pulse">Loading exercise...</p>}
-              {activityState.error && !activityState.isLoadingContent && activeActivityType !== 'speaking' && <p className="text-red-500 dark:text-red-400">Error: {activityState.error}</p>} {/* Error for speaking is handled inside its block */}
+              {activityState.error && !activityState.isLoadingContent && activeActivityType !== 'speaking' && !activityState.isLoadingTranslation && <p className="text-red-500 dark:text-red-400">Error: {activityState.error}</p>}
               
               {!activityState.isLoadingContent && !activityState.error && activityState.content && activeActivityType !== 'sentence-scramble' && (
                 <div className="space-y-4">
@@ -732,27 +818,36 @@ Respond with a single, valid JSON object: {"is_match": boolean, "feedback": "bri
                      <>
                       <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-2">Read the following phrase aloud:</p>
                       <p className="text-lg font-semibold p-3 bg-secondary dark:bg-neutral-darkest rounded-md text-neutral-800 dark:text-neutral-100 my-2">"{activityState.content.phraseToSpeak}"</p>
-                      <button onClick={handleToggleRecording} disabled={activityState.isLoadingContent}
+                      <button onClick={handleToggleRecording} disabled={activityState.isLoadingContent || activityState.isLoadingTranslation}
                         className={`flex items-center px-4 py-2 my-2 rounded-md transition-colors ${isRecording ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-accent hover:bg-accent-dark text-white'}`}>
                         <MicrophoneIcon className="w-5 h-5 mr-2"/>
                         {isRecording ? 'Stop Recording' : (transcribedText ? 'Record Again' : 'Start Recording')}
                       </button>
                       {transcribedText && !isRecording && (
                         <div className="mt-2 p-2 border border-secondary dark:border-neutral-darkest rounded-md">
-                            <p className="text-sm text-neutral-500 dark:text-neutral-400">You said:</p>
+                            <p className="text-sm text-neutral-500 dark:text-neutral-400">You said ({LANGUAGE_OPTIONS.find(l=>l.code === selectedLanguage)?.name || 'Target Language'}):</p>
                             <p className="italic text-neutral-700 dark:text-neutral-300">"{transcribedText}"</p>
                         </div>
                       )}
-                      {activityState.isAnswerSubmitted && activityState.error && ( 
+                      {activityState.isLoadingTranslation && <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1 animate-pulse">Translating...</p>}
+                      {activityState.translatedUserSpeech && !activityState.isLoadingTranslation && userProfile?.favoriteLanguage && (
+                         <div className="mt-2 p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-secondary/30 dark:bg-neutral-dark/20">
+                            <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                                Translation ({LANGUAGE_OPTIONS.find(l => l.code === userProfile.favoriteLanguage)?.name || 'Favorite Language'}):
+                            </p>
+                            <p className="italic text-neutral-700 dark:text-neutral-300">"{activityState.translatedUserSpeech}"</p>
+                        </div>
+                      )}
+                      {activityState.error && !activityState.isLoadingContent && !activityState.isLoadingTranslation && (
                         <div className={`mt-3 p-3 rounded-md text-sm ${activityState.isAnswerCorrect ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'}`}>
                           {activityState.isAnswerCorrect ? <CheckCircleIcon className="inline w-5 h-5 mr-1 align-text-bottom" /> : <XCircleIcon className="inline w-5 h-5 mr-1 align-text-bottom" />}
                           {activityState.error} 
                         </div>
                       )}
-                       {activityState.isLoadingContent && activeActivityType === 'speaking' && <p className="text-neutral-600 dark:text-neutral-300 animate-pulse">Evaluating your speech...</p>}
-                      <button onClick={activityState.isAnswerSubmitted ? fetchSpeakingExercise : handleSubmitSpeakingAnswer} disabled={transcribedText === null || activityState.isLoadingContent || isRecording}
+                       {(activityState.isLoadingContent || activityState.isLoadingTranslation) && activeActivityType === 'speaking' && !activityState.error && <p className="text-neutral-600 dark:text-neutral-300 animate-pulse mt-2">Evaluating your speech...</p>}
+                      <button onClick={activityState.isAnswerSubmitted ? fetchSpeakingExercise : handleSubmitSpeakingAnswer} disabled={transcribedText === null || activityState.isLoadingContent || isRecording || activityState.isLoadingTranslation}
                         className="mt-4 px-5 py-2 bg-primary hover:bg-primary-dark text-white rounded-md transition-colors disabled:opacity-50">
-                        {activityState.isAnswerSubmitted ? 'Next Phrase' : 'Submit Recording'}
+                        {activityState.isAnswerSubmitted ? 'Next Phrase' : 'Submit for Evaluation'}
                       </button>
                     </>
                   )}
@@ -879,3 +974,10 @@ Respond with a single, valid JSON object: {"is_match": boolean, "feedback": "bri
 };
 
 export default LanguageLearningModal;
+// Add GlobeAltIcon to Icons.tsx
+// Ensure App.tsx correctly saves/loads `favoriteLanguage` in UserGlobalProfile
+// (This is handled as userProfile is saved as a whole)
+// Update INITIAL_ACTIVITY_STATE
+// Call translateTranscribedText after transcription
+// Update UI in Speaking Practice section
+// Add favorite language dropdown to main modal screen

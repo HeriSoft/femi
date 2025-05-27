@@ -1,10 +1,11 @@
+
 // Fix: Remove triple-slash directive for 'vite/client' as its types are not found and import.meta.env is manually typed.
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 // Update to .ts/.tsx extensions
-import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings } from '../types.ts';
+import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings } from '../types.ts';
 import type { Content } from '@google/genai'; // For constructing Gemini history
-import { ALL_MODEL_DEFAULT_SETTINGS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY } from '../constants.ts';
+import { ALL_MODEL_DEFAULT_SETTINGS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY, TRANSLATION_TARGET_LANGUAGES } from '../constants.ts';
 import MessageBubble from './MessageBubble.tsx';
 import SettingsPanel from './SettingsPanel.tsx';
 import HistoryPanel from './HistoryPanel.tsx'; // Import HistoryPanel
@@ -15,8 +16,8 @@ import { sendOpenAIMessageStream } from '../services/openaiService.ts';
 import { sendDeepseekMessageStream } from '../services/deepseekService.ts';
 import { sendMockMessageStream } from '../services/mockApiService.ts';
 import { generateOpenAITTS } from "../services/openaiTTSService"; // Changed this line
-// Added MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon
-import { PaperAirplaneIcon, CogIcon, XMarkIcon, PhotoIcon as PromptIcon, Bars3Icon, ChatBubbleLeftRightIcon, ClockIcon as HistoryIcon, MicrophoneIcon, StopCircleIcon, SpeakerWaveIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon } from './Icons.tsx';
+// Added MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon
+import { PaperAirplaneIcon, CogIcon, XMarkIcon, PhotoIcon as PromptIcon, Bars3Icon, ChatBubbleLeftRightIcon, ClockIcon as HistoryIcon, MicrophoneIcon, StopCircleIcon, SpeakerWaveIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon } from './Icons.tsx';
 
 // Helper to deep merge settings, useful for loading from localStorage
 const mergeSettings = (target: AllModelSettings, source: Partial<AllModelSettings>): AllModelSettings => {
@@ -203,7 +204,7 @@ const ChatPage: React.FC = () => {
   const modelSettings = useMemo(() => {
     const baseSettings = allSettings[selectedModel] || ALL_MODEL_DEFAULT_SETTINGS[Model.GEMINI]!;
     const activePersona = activePersonaId ? personas.find(p => p.id === activePersonaId) : null;
-    if (activePersona && selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS) {
+    if (activePersona && selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS && selectedModel !== Model.REAL_TIME_TRANSLATION) {
       return { ...baseSettings, systemInstruction: activePersona.instruction };
     }
     return baseSettings;
@@ -223,10 +224,10 @@ const ChatPage: React.FC = () => {
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>('settings');
 
   const chatEndRef = useRef<HTMLDivElement>(null);
-  // geminiChatState is removed as proxy calls are stateless for Gemini chat.
 
   const isImagenModelSelected = selectedModel === Model.IMAGEN3;
   const isTextToSpeechModelSelected = selectedModel === Model.OPENAI_TTS;
+  const isRealTimeTranslationMode = selectedModel === Model.REAL_TIME_TRANSLATION;
 
 
   const [savedSessions, setSavedSessions] = useState<ChatSession[]>(() => {
@@ -248,12 +249,20 @@ const ChatPage: React.FC = () => {
   const [modalPrompt, setModalPrompt] = useState<string>('');
   const [modalMimeType, setModalMimeType] = useState<'image/jpeg' | 'image/png'>('image/jpeg');
 
-  // Speech-to-Text state
-  const [isListening, setIsListening] = useState(false);
+  // Speech-to-Text state (shared between chat input and real-time translation)
+  const [isListening, setIsListening] = useState(false); // General listening state
   const [isSpeechRecognitionSupported, setIsSpeechRecognitionSupported] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const inputBeforeSpeechRef = useRef<string>(""); // Text in input field *before* current STT session started
-  const currentRecognizedTextSegmentRef = useRef<string>(""); // Text recognized *during* current STT session (final + latest interim)
+  // For regular chat input STT:
+  const inputBeforeSpeechRef = useRef<string>(""); 
+  const currentRecognizedTextSegmentRef = useRef<string>(""); 
+  // For Real-Time Translation Mode:
+  const liveTranscriptionRef = useRef<string>("");
+  const [liveTranscriptionDisplay, setLiveTranscriptionDisplay] = useState<string>("");
+  const liveTranslationAccumulatorRef = useRef<string>("");
+  const [liveTranslationDisplay, setLiveTranslationDisplay] = useState<string>("");
+  const currentTranslationStreamControllerRef = useRef<AbortController | null>(null);
+
 
   // Audio playback state
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
@@ -279,7 +288,8 @@ const ChatPage: React.FC = () => {
       [Model.DEEPSEEK]: { isSet: isProxyExpectedToHaveKey, envVarName: 'DEEPSEEK_API_KEY (on proxy)', modelName: 'Deepseek', isMock: false, isGeminiPlatform: false},
       [Model.CLAUDE]: { isSet: true, envVarName: 'N/A (Mock)', modelName: 'Claude', isMock: true, isGeminiPlatform: false}, 
       [Model.IMAGEN3]: {isSet: isProxyExpectedToHaveKey, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Imagen3 Image Gen', isMock: false, isGeminiPlatform: true, isImageGeneration: true},
-      [Model.OPENAI_TTS]: {isSet: isProxyExpectedToHaveKey, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'OpenAI TTS', isMock: false, isGeminiPlatform: false, isTextToSpeech: true }
+      [Model.OPENAI_TTS]: {isSet: isProxyExpectedToHaveKey, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'OpenAI TTS', isMock: false, isGeminiPlatform: false, isTextToSpeech: true },
+      [Model.REAL_TIME_TRANSLATION]: {isSet: isProxyExpectedToHaveKey, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Real-Time Translation (Gemini)', isMock: false, isGeminiPlatform: true, isRealTimeTranslation: true },
     };
   }, []);
 
@@ -313,120 +323,207 @@ const ChatPage: React.FC = () => {
 
 
   useEffect(() => {
-    if (!isSearchActive) { // Only auto-scroll on new messages if search is not active
+    if (!isSearchActive && !isRealTimeTranslationMode) { 
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, isSearchActive]);
+  }, [messages, isSearchActive, isRealTimeTranslationMode]);
   
   useEffect(() => {
     const currentModelStatus = apiKeyStatuses[selectedModel];
-    // No need to manage geminiChatState as it's removed.
-    if ((!currentModelStatus?.isGeminiPlatform || currentModelStatus?.isImageGeneration || currentModelStatus?.isTextToSpeech) && isWebSearchEnabled) {
+    if ((!currentModelStatus?.isGeminiPlatform || currentModelStatus?.isImageGeneration || currentModelStatus?.isTextToSpeech || currentModelStatus?.isRealTimeTranslation) && isWebSearchEnabled) {
         setIsWebSearchEnabled(false);
     }
     
-    if (isImagenModelSelected || isTextToSpeechModelSelected) { 
+    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode) { 
         setUploadedImage(null);
         setImagePreview(null); 
         setUploadedTextFileContent(null);
         setUploadedTextFileName(null);
         setActivePersonaId(null); 
-        if (isListening) { 
+        if (isListening && !isRealTimeTranslationMode) { // Stop chat STT if switching to special mode
             recognitionRef.current?.stop();
-            // Note: onend handler will set isListening to false
         }
     }
-    if (currentPlayingAudio && audioPlayerRef.current) {
-        audioPlayerRef.current.pause(); // Stop playback if model changes etc.
-        setCurrentPlayingAudio(null);   // Update state to reflect no audio is playing
+    if (isRealTimeTranslationMode) {
+      setInput(''); // Clear chat input when entering translation mode
+    } else {
+      // If exiting real-time translation mode, stop any active STT for it
+      if (isListening && recognitionRef.current) {
+          recognitionRef.current.stop(); // This will trigger onend, setting isListening to false
+      }
+      // Clear live translation displays
+      setLiveTranscriptionDisplay("");
+      setLiveTranslationDisplay("");
+      liveTranscriptionRef.current = "";
+      liveTranslationAccumulatorRef.current = "";
+      currentTranslationStreamControllerRef.current?.abort();
     }
 
-  }, [selectedModel, apiKeyStatuses, isWebSearchEnabled, isImagenModelSelected, isTextToSpeechModelSelected, isListening]);
+    if (currentPlayingAudio && audioPlayerRef.current) {
+        audioPlayerRef.current.pause(); 
+        setCurrentPlayingAudio(null);  
+    }
+
+  }, [selectedModel, apiKeyStatuses, isWebSearchEnabled, isImagenModelSelected, isTextToSpeechModelSelected, isRealTimeTranslationMode]);
+
+
+  const translateLiveSegment = useCallback(async (text: string, targetLangCode: string) => {
+      if (!text.trim() || !targetLangCode) return;
+
+      const targetLangName = TRANSLATION_TARGET_LANGUAGES.find(l => l.code === targetLangCode)?.name || targetLangCode;
+      const translationPlaceholder = `Translating to ${targetLangName}: "${text.substring(0, 20)}..."\n`;
+      
+      setLiveTranslationDisplay(prev => prev + translationPlaceholder);
+
+      currentTranslationStreamControllerRef.current?.abort(); // Cancel previous stream if any
+      currentTranslationStreamControllerRef.current = new AbortController();
+      const signal = currentTranslationStreamControllerRef.current.signal;
+
+      try {
+          const prompt = `Translate the following text to ${targetLangName}. Output only the translated text directly, without any introductory phrases or explanations: "${text}"`;
+          const history: Content[] = [{ role: 'user', parts: [{ text: prompt }] }];
+          const geminiModelId = getActualModelIdentifier(Model.GEMINI); // Use Gemini Flash for translation
+
+          const stream = sendGeminiMessageStream({
+              historyContents: history,
+              modelSettings: { temperature: 0.3, topK: 1, topP: 1, systemInstruction: "You are a direct text translator." } as ModelSettings,
+              enableGoogleSearch: false,
+              modelName: geminiModelId,
+          });
+
+          let segmentTranslation = "";
+          for await (const chunk of stream) {
+              if (signal.aborted) {
+                  console.log("Translation stream aborted for segment:", text);
+                  setLiveTranslationDisplay(prev => prev.replace(translationPlaceholder, `[Translation cancelled for "${text.substring(0,20)}..."]\n`));
+                  return;
+              }
+              if (chunk.error) throw new Error(chunk.error);
+              if (chunk.textDelta) {
+                  segmentTranslation += chunk.textDelta;
+                  setLiveTranslationDisplay(prev => prev.replace(translationPlaceholder, `[${targetLangName}]: ${segmentTranslation}\n`));
+              }
+          }
+          // Final update for the segment, replacing placeholder entirely
+          liveTranslationAccumulatorRef.current += `[${targetLangName}]: ${segmentTranslation.trim()}\n`;
+          setLiveTranslationDisplay(liveTranslationAccumulatorRef.current); // Show full accumulated history
+
+      } catch (error: any) {
+          if (error.name === 'AbortError') {
+            console.log('Previous translation fetch was aborted.');
+          } else {
+            console.error("Error translating segment:", error);
+            addNotification(`Translation error: ${error.message}`, "error");
+            setLiveTranslationDisplay(prev => prev.replace(translationPlaceholder, `[Error translating: ${error.message}]\n`));
+            liveTranslationAccumulatorRef.current += `[Error translating: ${error.message}]\n`;
+          }
+      }
+  }, [addNotification]);
 
   // Speech-to-Text Effect
   useEffect(() => {
     const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognitionAPI) {
-      setIsSpeechRecognitionSupported(true);
-      recognitionRef.current = new SpeechRecognitionAPI() as SpeechRecognition;
-      const recognition = recognitionRef.current;
+    if (!SpeechRecognitionAPI) {
+      setIsSpeechRecognitionSupported(false);
+      return;
+    }
+    
+    setIsSpeechRecognitionSupported(true);
+    recognitionRef.current = new SpeechRecognitionAPI() as SpeechRecognition;
+    const recognition = recognitionRef.current;
 
-      recognition.continuous = true; // Keep listening even after a pause in speech
-      recognition.interimResults = true; // Get results as they are being recognized
-      recognition.lang = navigator.language.startsWith('vi') ? 'vi-VN' : (navigator.language || 'en-US');
+    recognition.continuous = true; 
+    recognition.interimResults = true;
+    recognition.lang = isRealTimeTranslationMode ? (navigator.language || 'en-US') : (navigator.language.startsWith('vi') ? 'vi-VN' : (navigator.language || 'en-US'));
 
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
-        let finalizedSpeechForThisSession = "";
-        let latestInterimSegment = "";
 
-        // Reconstruct the full transcript for the current session from all result segments
-        for (let i = 0; i < event.results.length; i++) {
-          const segmentTranscript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalizedSpeechForThisSession += (finalizedSpeechForThisSession.length > 0 && segmentTranscript.trim().length > 0 ? " " : "") + segmentTranscript.trim();
-          } else {
-            latestInterimSegment = segmentTranscript; // Keep track of the latest interim part
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let finalTranscriptForSegment = "";
+      let currentInterimTranscript = "";
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscriptForSegment += transcript;
+        } else {
+          currentInterimTranscript += transcript;
+        }
+      }
+
+      if (isRealTimeTranslationMode) {
+          setLiveTranscriptionDisplay(liveTranscriptionRef.current + finalTranscriptForSegment + currentInterimTranscript);
+          if (finalTranscriptForSegment.trim()) {
+              liveTranscriptionRef.current += finalTranscriptForSegment.trim() + "\n"; 
+              const targetLangCode = (modelSettings as RealTimeTranslationSettings).targetLanguage || 'en';
+              translateLiveSegment(finalTranscriptForSegment.trim(), targetLangCode);
           }
-        }
-        
-        currentRecognizedTextSegmentRef.current = finalizedSpeechForThisSession + 
-            (finalizedSpeechForThisSession.length > 0 && latestInterimSegment.trim().length > 0 ? " " : "") + 
-            latestInterimSegment.trim();
+      } else { // Regular chat input STT
+          currentRecognizedTextSegmentRef.current = finalTranscriptForSegment.trim() + 
+              (finalTranscriptForSegment.trim() && currentInterimTranscript.trim() ? " " : "") + 
+              currentInterimTranscript.trim();
 
-        let displayInput = inputBeforeSpeechRef.current;
-        if (displayInput.trim() && currentRecognizedTextSegmentRef.current.trim()) {
-          displayInput += " ";
-        }
-        displayInput += currentRecognizedTextSegmentRef.current;
-        setInput(displayInput);
-      };
+          let displayInput = inputBeforeSpeechRef.current;
+          if (displayInput.trim() && currentRecognizedTextSegmentRef.current) {
+            displayInput += " ";
+          }
+          displayInput += currentRecognizedTextSegmentRef.current;
+          setInput(displayInput);
+      }
+    };
 
-      recognition.onend = () => {
-        setIsListening(false);
-        // Finalize the input with the text accumulated during the session
+    recognition.onend = () => {
+      setIsListening(false);
+      if (!isRealTimeTranslationMode) { // Finalize chat input
         let finalInputText = inputBeforeSpeechRef.current;
-        if (finalInputText.trim() && currentRecognizedTextSegmentRef.current.trim()) {
+         if (finalInputText.trim() && currentRecognizedTextSegmentRef.current.trim()) {
           finalInputText += " ";
         }
         finalInputText += currentRecognizedTextSegmentRef.current.trim();
         setInput(finalInputText);
-        // currentRecognizedTextSegmentRef.current will be reset if listening starts again
-      };
+      }
+      // For RTTM, onend just means recording stopped, display is already updated.
+    };
 
-      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        console.error('Speech recognition error', event.error, event.message);
-        let errorMessage = `Speech recognition error: ${event.error}.`;
-        if (event.error === 'not-allowed') {
-          errorMessage = "Microphone access denied. Please allow microphone access in your browser settings.";
-        } else if (event.error === 'no-speech') {
-          errorMessage = "No speech detected. Please try again.";
-        }
-        addNotification(errorMessage, "error", event.message);
-        setIsListening(false); // Ensure listening state is reset
-      };
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.error('Speech recognition error', event.error, event.message);
+      let errorMessage = `Speech recognition error: ${event.error}.`;
+      if (event.error === 'not-allowed') {
+        errorMessage = "Microphone access denied. Please allow microphone access in your browser settings.";
+      } else if (event.error === 'no-speech' && isListening) { // Only show no-speech error if actively listening
+        errorMessage = "No speech detected. Please try again.";
+      } else if (event.error === 'aborted' && !isListening) { // Expected if user stops it
+        return; 
+      }
+      addNotification(errorMessage, "error", event.message);
+      setIsListening(false);
+    };
 
-      return () => {
-        recognition?.stop();
-      };
-    } else {
-      setIsSpeechRecognitionSupported(false);
-      // No addNotification here to avoid spamming if it's called multiple times during setup
-    }
-  }, [addNotification]); // addNotification is stable
+    return () => {
+      recognition?.abort(); // Use abort instead of stop for faster cleanup
+    };
+  }, [addNotification, isRealTimeTranslationMode, modelSettings, translateLiveSegment]); 
+
 
   const handleToggleListen = () => {
     if (!isSpeechRecognitionSupported || !recognitionRef.current) return;
 
     if (isListening) {
-      recognitionRef.current.stop(); // This will trigger 'onend'
+      recognitionRef.current.stop(); // Will trigger 'onend' which sets isListening = false
     } else {
-      inputBeforeSpeechRef.current = input; // Store text existing before this speech session
-      currentRecognizedTextSegmentRef.current = ""; // Reset text for current speech session
+      if (isRealTimeTranslationMode) {
+          liveTranscriptionRef.current = "";
+          liveTranslationAccumulatorRef.current = "";
+          setLiveTranscriptionDisplay("");
+          setLiveTranslationDisplay("");
+          currentTranslationStreamControllerRef.current?.abort();
+      } else {
+          inputBeforeSpeechRef.current = input; 
+          currentRecognizedTextSegmentRef.current = "";
+      }
       try {
         recognitionRef.current.start();
         setIsListening(true);
       } catch (e: any) {
-        // Handle cases where start() might fail immediately (e.g., already started)
         console.error("Error starting speech recognition:", e);
         addNotification("Could not start voice input. Please try again.", "error", e.message);
         setIsListening(false);
@@ -435,7 +532,7 @@ const ChatPage: React.FC = () => {
   };
 
 
-  const handleModelSettingsChange = useCallback((newSettings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings>) => {
+  const handleModelSettingsChange = useCallback((newSettings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings>) => {
     setAllSettings(prev => {
       const baseModelSettings = prev[selectedModel] || ALL_MODEL_DEFAULT_SETTINGS[selectedModel]!;
       let processedNewSettings = { ...newSettings };
@@ -448,7 +545,7 @@ const ChatPage: React.FC = () => {
       }
       
       const activeP = activePersonaId ? personas.find(p => p.id === activePersonaId) : null;
-      if (activeP && 'systemInstruction' in processedNewSettings && selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS) {
+      if (activeP && 'systemInstruction' in processedNewSettings && selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS && selectedModel !== Model.REAL_TIME_TRANSLATION) {
           delete processedNewSettings.systemInstruction;
       }
 
@@ -462,7 +559,6 @@ const ChatPage: React.FC = () => {
 
   const handlePersonaChange = (personaId: string | null) => {
     setActivePersonaId(personaId);
-    // No geminiChatState to reset
   };
 
   const handlePersonaSave = (personaToSave: Persona) => {
@@ -490,6 +586,10 @@ const ChatPage: React.FC = () => {
   };
 
   const handleSaveCurrentChat = useCallback(() => {
+    if (isRealTimeTranslationMode) {
+        addNotification("Cannot save chat in Real-Time Translation mode.", "info");
+        return;
+    }
     if (messages.length === 0) {
       setError("Cannot save an empty chat.");
       addNotification("Cannot save an empty chat.", "info");
@@ -542,11 +642,15 @@ const ChatPage: React.FC = () => {
       addNotification(`Chat "${sessionName}" saved.`, "success");
     }
     clearSearch();
-  }, [messages, selectedModel, modelSettings, activeSessionId, savedSessions, activePersonaId, addNotification, currentChatName]);
+  }, [messages, selectedModel, modelSettings, activeSessionId, savedSessions, activePersonaId, addNotification, currentChatName, isRealTimeTranslationMode]);
 
   const handleLoadSession = useCallback((sessionId: string) => {
     const sessionToLoad = savedSessions.find(s => s.id === sessionId);
     if (sessionToLoad) {
+      if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION) {
+          addNotification("Cannot load Real-Time Translation sessions directly. Please start a new one if needed.", "info");
+          return;
+      }
       setMessages([...sessionToLoad.messages]);
       setSelectedModel(sessionToLoad.model);
       setActivePersonaId(sessionToLoad.activePersonaIdSnapshot || null);
@@ -561,7 +665,6 @@ const ChatPage: React.FC = () => {
 
       setActiveSessionId(sessionId);
       setCurrentChatName(sessionToLoad.name);
-      // geminiChatState removed
       setUploadedImage(null);
       setImagePreview(null);
       setUploadedTextFileContent(null);
@@ -580,28 +683,37 @@ const ChatPage: React.FC = () => {
     setMessages([]);
     setActiveSessionId(null);
     setCurrentChatName("New Chat");
-    // geminiChatState removed
     setUploadedImage(null);
     setImagePreview(null);
     setUploadedTextFileContent(null);
     setUploadedTextFileName(null);
     setIsWebSearchEnabled(false);
-    setAllSettings(prev => ({
-        ...prev,
-        [selectedModel]: { ...(ALL_MODEL_DEFAULT_SETTINGS[selectedModel] || ALL_MODEL_DEFAULT_SETTINGS[Model.GEMINI]!) }
-    }));
+    // Reset settings for current model, but don't change selectedModel unless it's RTTM
+    if (selectedModel !== Model.REAL_TIME_TRANSLATION) {
+        setAllSettings(prev => ({
+            ...prev,
+            [selectedModel]: { ...(ALL_MODEL_DEFAULT_SETTINGS[selectedModel] || ALL_MODEL_DEFAULT_SETTINGS[Model.GEMINI]!) }
+        }));
+    }
     setActivePersonaId(null); 
     setError(null);
     setIsSidebarOpen(false); 
     addNotification("Started new chat.", "info");
     clearSearch();
-  }, [selectedModel, addNotification]);
+     // If in RTTM, clear its specific displays
+    if (isRealTimeTranslationMode) {
+        setLiveTranscriptionDisplay("");
+        setLiveTranslationDisplay("");
+        liveTranscriptionRef.current = "";
+        liveTranslationAccumulatorRef.current = "";
+    }
+  }, [selectedModel, addNotification, isRealTimeTranslationMode]);
 
   const handleDeleteSession = useCallback((sessionId: string) => {
     const sessionToDelete = savedSessions.find(s => s.id === sessionId);
     setSavedSessions(prev => prev.filter(s => s.id !== sessionId));
     if (activeSessionId === sessionId) {
-      handleStartNewChat(); // This will also call clearSearch
+      handleStartNewChat(); 
     }
     if (sessionToDelete) {
       addNotification(`Deleted chat: "${sessionToDelete.name}".`, "info");
@@ -707,7 +819,7 @@ const ChatPage: React.FC = () => {
     let constructedMessageText = currentInputText.trim();
     const originalUserPromptForAi = currentInputText.trim(); 
 
-    if (currentUploadedTextFileName && !isImagenModelSelected && !isTextToSpeechModelSelected) {
+    if (currentUploadedTextFileName && !isImagenModelSelected && !isTextToSpeechModelSelected && !isRealTimeTranslationMode) {
         let fileInfo = `The user has uploaded a file named "${currentUploadedTextFileName}".`;
         if (currentUploadedTextContent) {
             fileInfo += `\nThe content of this file is:\n${currentUploadedTextContent}`;
@@ -719,8 +831,8 @@ const ChatPage: React.FC = () => {
         id: userMessageId,
         text: originalUserPromptForAi,
         sender: 'user',
-        imagePreview: !isImagenModelSelected && !isTextToSpeechModelSelected ? currentImagePreview || undefined : undefined,
-        fileName: !isImagenModelSelected && !isTextToSpeechModelSelected ? currentUploadedTextFileName || undefined : undefined,
+        imagePreview: !isImagenModelSelected && !isTextToSpeechModelSelected && !isRealTimeTranslationMode ? currentImagePreview || undefined : undefined,
+        fileName: !isImagenModelSelected && !isTextToSpeechModelSelected && !isRealTimeTranslationMode ? currentUploadedTextFileName || undefined : undefined,
         isImageQuery: isImagenModelSelected,
     };
 
@@ -745,15 +857,12 @@ const ChatPage: React.FC = () => {
     }
     
     try {
-      const currentModelSpecificSettings = modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings;
+      const currentModelSpecificSettings = modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings;
       const currentModelStatus = apiKeyStatuses[selectedModel];
       const actualModelIdentifier = getActualModelIdentifier(selectedModel);
-      // env variable is no longer read from client for API keys
 
       if (currentModelStatus?.isTextToSpeech && !currentModelStatus.isMock) {
-        // API key is handled by proxy
         const ttsResult = await generateOpenAITTS({
-            // apiKey parameter removed
             modelIdentifier: currentModelSpecificSettings.modelIdentifier || 'tts-1',
             textInput: originalUserPromptForAi,
             voice: currentModelSpecificSettings.voice || 'alloy',
@@ -789,12 +898,11 @@ const ChatPage: React.FC = () => {
             throw new Error("TTS generation failed to return audio.");
         }
 
-      } else if (currentModelStatus?.isGeminiPlatform && !currentModelStatus.isMock) { 
-        // API key is handled by proxy
+      } else if (currentModelStatus?.isGeminiPlatform && !currentModelStatus.isMock && !isRealTimeTranslationMode) { 
         if (isImagenModelSelected) { 
             const imagenSettings = currentModelSpecificSettings as ImagenSettings;
             const result = await generateImageWithImagen({
-              prompt: originalUserPromptForAi, modelSettings: imagenSettings, modelName: actualModelIdentifier, // apiKey removed
+              prompt: originalUserPromptForAi, modelSettings: imagenSettings, modelName: actualModelIdentifier,
             });
 
             if (result.error) throw new Error(result.error);
@@ -811,10 +919,9 @@ const ChatPage: React.FC = () => {
               );
             } else { throw new Error("Image generation failed to return any images. Check proxy logs and original API response for details."); }
         } else { 
-            // Construct Gemini history for stateless proxy call
             const geminiHistory: Content[] = [];
             messages
-              .filter(m => m.id !== aiMessageId && m.id !== newUserMessage.id) // Exclude current pending AI and new user message
+              .filter(m => m.id !== aiMessageId && m.id !== newUserMessage.id) 
               .forEach(msg => {
                 const messageParts: Part[] = [];
                 if (msg.text && msg.text.trim()) {
@@ -829,17 +936,13 @@ const ChatPage: React.FC = () => {
                       if (mimeTypeMatch && mimeTypeMatch[1]) {
                         messageParts.push({
                           inlineData: {
-                            mimeType: mimeTypeMatch[1], // More general MIME type
+                            mimeType: mimeTypeMatch[1], 
                             data: base64Data
                           }
                         });
-                      } else {
-                        console.warn("Could not determine mimeType from user imagePreview in history for Gemini:", msg.imagePreview);
                       }
                     }
-                  } catch (e) {
-                    console.error("Error processing user imagePreview in history for Gemini:", e);
-                  }
+                  } catch (e) { console.error("Error processing user imagePreview in history for Gemini:", e); }
                 }
 
                 if (msg.sender === 'ai' && msg.imagePreviews && msg.imagePreviews.length > 0) {
@@ -847,24 +950,15 @@ const ChatPage: React.FC = () => {
                     try {
                       const [header, base64Data] = imgPrev.split(',');
                       if (base64Data) {
-                        const mimeType = msg.imageMimeType || (header.includes('/png') ? 'image/png' : (header.includes('/jpeg') ? 'image/jpeg' : 'image/jpeg')); // Basic inference
-                        messageParts.push({
-                          inlineData: {
-                            mimeType: mimeType as 'image/jpeg' | 'image/png', // Still keep it tight for Gemini if possible
-                            data: base64Data
-                          }
-                        });
+                        const mimeType = msg.imageMimeType || (header.includes('/png') ? 'image/png' : 'image/jpeg');
+                        messageParts.push({ inlineData: { mimeType: mimeType, data: base64Data } });
                       }
-                    } catch (e) {
-                      console.error("Error processing AI imagePreview in history for Gemini:", e);
-                    }
+                    } catch (e) { console.error("Error processing AI imagePreview in history for Gemini:", e); }
                   });
                 }
                 
                 if (messageParts.length > 0) {
                   geminiHistory.push({ role: msg.sender === 'user' ? 'user' : 'model', parts: messageParts });
-                } else {
-                   console.warn(`Skipping historical message (ID: ${msg.id}, Sender: ${msg.sender}) for Gemini history as it has no parts.`);
                 }
             });
 
@@ -876,53 +970,34 @@ const ChatPage: React.FC = () => {
                 try {
                     const base64Image = currentImagePreview.split(',')[1];
                     if (base64Image) {
-                         currentUserParts.push({
-                            inlineData: {
-                                mimeType: currentUploadedImage.type, // Use file's original MIME type
-                                data: base64Image
-                            }
-                        });
+                         currentUserParts.push({ inlineData: { mimeType: currentUploadedImage.type, data: base64Image } });
                     }
-                } catch(e) {
-                    console.error("Error processing current user uploaded image for Gemini:", e);
-                }
+                } catch(e) { console.error("Error processing current user uploaded image for Gemini:", e); }
             }
             
             if (currentUserParts.length > 0) {
                 geminiHistory.push({ role: 'user', parts: currentUserParts });
             } else if (geminiHistory.length === 0 && !isRegenerationOfAiMsgId) {
-                // This case means the user sent a truly empty message (should be caught by handleSendMessage)
-                // or it's a regeneration of an AI message that was the first in chat.
-                // If geminiHistory is empty and current user parts are empty, it means no content at all.
                 console.error("Attempting to send an empty message to Gemini. Aborting.");
                 throw new Error("Cannot send an empty message to the AI.");
             }
-
 
             const stream = sendGeminiMessageStream({
               historyContents: geminiHistory, 
               modelSettings: currentModelSpecificSettings as ModelSettings, 
               enableGoogleSearch: isWebSearchEnabled,
               modelName: actualModelIdentifier, 
-              // apiKey and chatState removed
             });
 
             let currentText = ''; let currentGroundingSources: GroundingSource[] | undefined = undefined;
-
             for await (const chunk of stream) {
               if (chunk.error) throw new Error(chunk.error); 
               if (chunk.textDelta) currentText += chunk.textDelta;
               if (chunk.groundingSources && chunk.groundingSources.length > 0) currentGroundingSources = chunk.groundingSources;
-              
-              setMessages((prev) =>
-                prev.map((msg) =>
-                  msg.id === aiMessageId ? { ...msg, text: currentText, groundingSources: currentGroundingSources || msg.groundingSources, isRegenerating: false } : msg
-                )
-              );
+              setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? { ...msg, text: currentText, groundingSources: currentGroundingSources || msg.groundingSources, isRegenerating: false } : msg ));
             }
         }
-      } else if ((selectedModel === Model.GPT4O || selectedModel === Model.GPT4O_MINI) && !currentModelStatus.isMock) { // Adjusted for GPT4O_MINI
-        // API key handled by proxy
+      } else if ((selectedModel === Model.GPT4O || selectedModel === Model.GPT4O_MINI) && !currentModelStatus.isMock) { 
         const history: ApiChatMessage[] = [{ role: 'system', content: currentModelSpecificSettings.systemInstruction }];
         messages.filter(m => m.id !== aiMessageId && m.id !== newUserMessage.id).forEach(msg => { 
             if (msg.sender === 'user') {
@@ -942,7 +1017,6 @@ const ChatPage: React.FC = () => {
         else if (originalUserPromptForAi === "" && !currentUploadedImage) history.push({ role: 'user', content: " " }); 
 
         const stream = sendOpenAIMessageStream({ 
-            /* apiKey removed */ 
             modelIdentifier: actualModelIdentifier, 
             history, 
             modelSettings: currentModelSpecificSettings as ModelSettings 
@@ -956,7 +1030,6 @@ const ChatPage: React.FC = () => {
         }
 
       } else if (selectedModel === Model.DEEPSEEK && !currentModelStatus.isMock) {
-        // API key handled by proxy
         const history: ApiChatMessage[] = [{ role: 'system', content: currentModelSpecificSettings.systemInstruction }];
          messages.filter(m => m.id !== aiMessageId && m.id !== newUserMessage.id).forEach(msg => {
             if (msg.sender === 'user') history.push({ role: 'user', content: msg.text }); 
@@ -965,7 +1038,6 @@ const ChatPage: React.FC = () => {
         history.push({ role: 'user', content: constructedMessageText.trim() || " " });
 
         const stream = sendDeepseekMessageStream({ 
-            /* apiKey removed */ 
             modelIdentifier: actualModelIdentifier, 
             history, 
             modelSettings: currentModelSpecificSettings as ModelSettings 
@@ -978,8 +1050,7 @@ const ChatPage: React.FC = () => {
           if (chunk.isFinished) break;
         }
       
-      } else if (currentModelStatus?.isMock) { 
-        // For mock, prepare Gemini-like parts for simplicity, though mock service might not use all of it
+      } else if (currentModelStatus?.isMock && !isRealTimeTranslationMode) { 
         const mockParts: Part[] = [];
         if (constructedMessageText.trim()) mockParts.push({ text: constructedMessageText.trim() });
         if (currentUploadedImage && currentImagePreview) {
@@ -991,7 +1062,9 @@ const ChatPage: React.FC = () => {
           currentText += chunk;
           setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? { ...msg, text: currentText, isRegenerating: false } : msg));
         }
-      } else { throw new Error(`API integration for ${selectedModel} is not implemented or API key/Vertex config is missing and it's not a mock model.`); }
+      } else if (!isRealTimeTranslationMode) { 
+          throw new Error(`API integration for ${selectedModel} is not implemented or API key/Vertex config is missing and it's not a mock model.`); 
+      }
     } catch (e: any) {
       console.error("Error sending message:", e);
       const errorMessage = e.message || 'Failed to get response from AI (via proxy).';
@@ -1002,7 +1075,7 @@ const ChatPage: React.FC = () => {
     }
 
     setIsLoading(false);
-    if (!isRegenerationOfAiMsgId) {
+    if (!isRegenerationOfAiMsgId && !isRealTimeTranslationMode) {
         setInput(''); 
         if (!isImagenModelSelected && !isTextToSpeechModelSelected) { 
             setUploadedImage(null);
@@ -1015,7 +1088,7 @@ const ChatPage: React.FC = () => {
   };
 
   const handleSendMessage = async () => {
-    if (isListening) return; 
+    if (isRealTimeTranslationMode || isListening) return; 
     if (!input.trim() && !uploadedImage && !uploadedTextFileName && !isImagenModelSelected && !isTextToSpeechModelSelected) return;
     if ((isImagenModelSelected || isTextToSpeechModelSelected) && !input.trim()) {
         const errorMsg = isImagenModelSelected ? "Please enter a prompt for image generation." : "Please enter text for speech synthesis.";
@@ -1029,6 +1102,7 @@ const ChatPage: React.FC = () => {
   };
   
   const handleRegenerateResponse = async (aiMessageIdToRegenerate: string, promptedByMsgId: string) => {
+      if (isRealTimeTranslationMode) return;
       const userMessageForRegen = messages.find(m => m.id === promptedByMsgId && m.sender === 'user');
       const aiMessageToRegen = messages.find(m => m.id === aiMessageIdToRegenerate && m.sender === 'ai');
 
@@ -1047,29 +1121,10 @@ const ChatPage: React.FC = () => {
       setError(null);
       
       const regenInputText = userMessageForRegen.text;
-      // For regeneration, image/file data needs to be from the original user message.
-      // The current `uploadedImage`, `imagePreview` might be stale if user changed them after sending original.
-      // This requires ChatMessage to potentially store original file/image data if full fidelity regen is needed,
-      // or we assume regeneration uses the text and any *currently* selected image/file (simpler but might differ).
-      // For now, let's use what's available on userMessageForRegen if possible, else current state.
-
-      let regenImagePreview: string | null = userMessageForRegen.imagePreview || null;
-      let regenUploadedImageFile: File | null = null; // We don't store original File object, so this is tricky.
-                                                    // Proxy might need to handle image by URL if we passed it.
-                                                    // For simplicity, we might only be able to regen with text + current image if any.
-      // This part needs more thought for robust image/file regeneration via proxy.
-      // For now, if userMessageForRegen.imagePreview exists, we'll use that.
-      // The File object itself is lost, so the proxy would need image data.
-      // Let's assume if imagePreview exists on userMessageForRegen, the internalSendMessage needs to handle it.
-      // This implies internalSendMessage might need to fetch that imagePreview if it's a URL, or have base64 data.
-      
-      // Current implementation sends base64 of currentUploadedImage. If regenerating a message with an old image,
-      // this is not ideal. A true regeneration would re-use the *exact* inputs.
-      // Let's proceed with current image/file, as that's what the previous structure implicitly did.
-      const currentRegenImageFile = uploadedImage; // The one currently in state
-      const currentRegenImagePreview = imagePreview; // The one currently in state
-      const currentRegenUploadedTextContent = uploadedTextFileContent; // Current one
-      const currentRegenUploadedTextFileName = uploadedTextFileName; // Current one
+      const currentRegenImageFile = uploadedImage; 
+      const currentRegenImagePreview = imagePreview; 
+      const currentRegenUploadedTextContent = uploadedTextFileContent;
+      const currentRegenUploadedTextFileName = uploadedTextFileName;
 
 
       setMessages(prev => prev.map(msg => {
@@ -1090,9 +1145,9 @@ const ChatPage: React.FC = () => {
       }));
       
       await internalSendMessage(
-          regenInputText, // Text from original user message
-          currentRegenImageFile, // Current File object
-          currentRegenImagePreview, // Current preview string
+          regenInputText, 
+          currentRegenImageFile, 
+          currentRegenImagePreview, 
           currentRegenUploadedTextContent,
           currentRegenUploadedTextFileName,
           aiMessageIdToRegenerate 
@@ -1101,7 +1156,7 @@ const ChatPage: React.FC = () => {
 
 
   const handleImageUpload = (file: File | null) => {
-    if (isImagenModelSelected || isTextToSpeechModelSelected) return; 
+    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode) return; 
     setUploadedImage(file);
     if (file) {
       const reader = new FileReader();
@@ -1112,7 +1167,7 @@ const ChatPage: React.FC = () => {
   };
 
   const handleFileUpload = (file: File | null) => {
-    if (isImagenModelSelected || isTextToSpeechModelSelected) return; 
+    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode) return; 
 
     if (file) {
       const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
@@ -1189,12 +1244,12 @@ const ChatPage: React.FC = () => {
   const sidebarContent = (
     <>
         <div className="flex border-b border-secondary dark:border-neutral-darkest mb-4">
-            <button onClick={() => setActiveSidebarTab('settings')} disabled={isLoading}
+            <button onClick={() => setActiveSidebarTab('settings')} disabled={isLoading && !isRealTimeTranslationMode}
                 className={`flex-1 py-2 px-4 text-sm font-medium text-center rounded-t-lg focus:outline-none flex items-center justify-center ${activeSidebarTab === 'settings' ? 'bg-primary text-white dark:bg-primary-light dark:text-neutral-darker' : 'text-neutral-600 dark:text-neutral-300 hover:bg-secondary/50 dark:hover:bg-neutral-dark/50'}`}
                 aria-pressed={activeSidebarTab === 'settings'} >
                 <CogIcon className="w-5 h-5 mr-2"/> Settings
             </button>
-            <button onClick={() => setActiveSidebarTab('history')} disabled={isLoading}
+            <button onClick={() => setActiveSidebarTab('history')} disabled={isLoading && !isRealTimeTranslationMode}
                 className={`flex-1 py-2 px-4 text-sm font-medium text-center rounded-t-lg focus:outline-none flex items-center justify-center ${activeSidebarTab === 'history' ? 'bg-primary text-white dark:bg-primary-light dark:text-neutral-darker' : 'text-neutral-600 dark:text-neutral-300 hover:bg-secondary/50 dark:hover:bg-neutral-dark/50'}`}
                 aria-pressed={activeSidebarTab === 'history'} >
                 <HistoryIcon className="w-5 h-5 mr-2"/> History
@@ -1203,8 +1258,8 @@ const ChatPage: React.FC = () => {
         {activeSidebarTab === 'settings' && (
             <SettingsPanel
                 selectedModel={selectedModel}
-                onModelChange={(model) => { setSelectedModel(model); /* geminiChatState removed */ clearSearch();}} 
-                modelSettings={modelSettings} 
+                onModelChange={(model) => { setSelectedModel(model); clearSearch();}} 
+                modelSettings={modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings} 
                 onModelSettingsChange={handleModelSettingsChange}
                 onImageUpload={handleImageUpload}
                 imagePreview={imagePreview}
@@ -1212,7 +1267,7 @@ const ChatPage: React.FC = () => {
                 uploadedTextFileName={uploadedTextFileName}
                 isWebSearchEnabled={isWebSearchEnabled}
                 onWebSearchToggle={setIsWebSearchEnabled}
-                disabled={isLoading}
+                disabled={isLoading && !isRealTimeTranslationMode}
                 apiKeyStatuses={apiKeyStatuses}
                 personas={personas}
                 activePersonaId={activePersonaId}
@@ -1230,7 +1285,7 @@ const ChatPage: React.FC = () => {
                 onRenameSession={handleRenameSession}
                 onSaveCurrentChat={handleSaveCurrentChat}
                 onStartNewChat={handleStartNewChat}
-                isLoading={isLoading}
+                isLoading={isLoading && !isRealTimeTranslationMode}
                 onTogglePinSession={handleTogglePinSession}
             />
         )}
@@ -1244,9 +1299,10 @@ const ChatPage: React.FC = () => {
   };
 
   const currentPromptPlaceholder = () => {
-    if (isListening) return "Đang nghe...";
+    if (isListening && !isRealTimeTranslationMode) return "Đang nghe..."; // For chat input STT
     if (isImagenModelSelected) return "Enter prompt for image generation...";
     if (isTextToSpeechModelSelected) return "Enter text to synthesize speech...";
+    if (isRealTimeTranslationMode) return "Real-Time Translation Active. Use Microphone.";
     return "Type your message or upload an image/file...";
   }
 
@@ -1261,6 +1317,14 @@ const ChatPage: React.FC = () => {
     if (isTextToSpeechModelSelected) return <SpeakerWaveIcon className="w-6 h-6" />;
     return <PaperAirplaneIcon className="w-6 h-6" />;
   }
+
+  const targetTranslationLangName = useMemo(() => {
+    if (isRealTimeTranslationMode) {
+      const targetCode = (modelSettings as RealTimeTranslationSettings).targetLanguage || 'en';
+      return TRANSLATION_TARGET_LANGUAGES.find(l => l.code === targetCode)?.name || targetCode;
+    }
+    return '';
+  }, [isRealTimeTranslationMode, modelSettings]);
 
   return (
     <div className="flex h-full">
@@ -1288,84 +1352,87 @@ const ChatPage: React.FC = () => {
                     <Bars3Icon className="w-6 h-6" />
                 </button>
                 <h2 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light truncate">
-                    <ChatBubbleLeftRightIcon className="w-5 h-5 inline-block mr-2 align-text-bottom"/>
-                    {currentChatName || "New Chat"}
+                    {isRealTimeTranslationMode ? <LanguageIcon className="w-5 h-5 inline-block mr-2 align-text-bottom"/> : <ChatBubbleLeftRightIcon className="w-5 h-5 inline-block mr-2 align-text-bottom"/>}
+                    {isRealTimeTranslationMode ? "Real-Time Translation" : (currentChatName || "New Chat")}
                 </h2>
             </div>
-            {/* Search Bar */}
-            <div className="flex items-center space-x-1.5 ml-2">
-                <div className="relative">
-                    <input
-                        type="search"
-                        placeholder="Search messages..."
-                        value={tempSearchQuery}
-                        onChange={(e) => setTempSearchQuery(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') executeSearch(); }}
-                        className="pl-8 pr-2 py-1.5 border border-secondary dark:border-neutral-darkest rounded-md text-sm bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none w-32 sm:w-48"
-                        aria-label="Search messages in current chat"
-                    />
-                    <MagnifyingGlassIcon className="w-4 h-4 absolute left-2 top-1/2 transform -translate-y-1/2 text-neutral-400 dark:text-neutral-500" />
+            {/* Search Bar - Hidden in Real-Time Translation Mode */}
+            {!isRealTimeTranslationMode && (
+              <div className="flex items-center space-x-1.5 ml-2">
+                  <div className="relative">
+                      <input
+                          type="search"
+                          placeholder="Search messages..."
+                          value={tempSearchQuery}
+                          onChange={(e) => setTempSearchQuery(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') executeSearch(); }}
+                          className="pl-8 pr-2 py-1.5 border border-secondary dark:border-neutral-darkest rounded-md text-sm bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none w-32 sm:w-48"
+                          aria-label="Search messages in current chat"
+                      />
+                      <MagnifyingGlassIcon className="w-4 h-4 absolute left-2 top-1/2 transform -translate-y-1/2 text-neutral-400 dark:text-neutral-500" />
+                  </div>
+                  {isSearchActive && (
+                      <>
+                          <button onClick={() => navigateSearchResults('prev')} disabled={searchResults.length === 0} className="p-1.5 rounded-md text-neutral-darker dark:text-secondary-light hover:bg-secondary/70 dark:hover:bg-neutral-darkest disabled:opacity-50" aria-label="Previous search result" >
+                              <ChevronLeftIcon className="w-4 h-4" />
+                          </button>
+                          <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                              {searchResults.length > 0 ? `${currentSearchResultIndex + 1}/${searchResults.length}` : '0/0'}
+                          </span>
+                          <button onClick={() => navigateSearchResults('next')} disabled={searchResults.length === 0} className="p-1.5 rounded-md text-neutral-darker dark:text-secondary-light hover:bg-secondary/70 dark:hover:bg-neutral-darkest disabled:opacity-50" aria-label="Next search result" >
+                              <ChevronRightIcon className="w-4 h-4" />
+                          </button>
+                          <button onClick={clearSearch} className="p-1.5 rounded-md text-neutral-darker dark:text-secondary-light hover:bg-secondary/70 dark:hover:bg-neutral-darkest" aria-label="Clear search" >
+                              <XMarkIcon className="w-4 h-4" />
+                          </button>
+                      </>
+                  )}
+              </div>
+            )}
+        </div>
+
+        {/* Main Content Area: Chat Messages OR Real-Time Translation UI */}
+        {isRealTimeTranslationMode ? (
+            <div className="flex-grow grid grid-rows-2 gap-2 sm:gap-4 overflow-hidden mb-4">
+                <div className="bg-neutral-light dark:bg-neutral-darker p-3 rounded-lg shadow-sm overflow-y-auto border border-secondary dark:border-neutral-darkest">
+                    <h3 className="font-semibold text-neutral-darker dark:text-secondary-light mb-2 sticky top-0 bg-neutral-light dark:bg-neutral-darker py-1">Your Speech (Transcription)</h3>
+                    <p className="whitespace-pre-wrap text-sm text-neutral-700 dark:text-neutral-200">{liveTranscriptionDisplay || "Waiting for speech..."}</p>
                 </div>
-                {isSearchActive && (
-                    <>
-                        <button
-                            onClick={() => navigateSearchResults('prev')}
-                            disabled={searchResults.length === 0}
-                            className="p-1.5 rounded-md text-neutral-darker dark:text-secondary-light hover:bg-secondary/70 dark:hover:bg-neutral-darkest disabled:opacity-50"
-                            aria-label="Previous search result"
-                        >
-                            <ChevronLeftIcon className="w-4 h-4" />
-                        </button>
-                        <span className="text-xs text-neutral-500 dark:text-neutral-400">
-                            {searchResults.length > 0 ? `${currentSearchResultIndex + 1}/${searchResults.length}` : '0/0'}
-                        </span>
-                        <button
-                            onClick={() => navigateSearchResults('next')}
-                            disabled={searchResults.length === 0}
-                            className="p-1.5 rounded-md text-neutral-darker dark:text-secondary-light hover:bg-secondary/70 dark:hover:bg-neutral-darkest disabled:opacity-50"
-                            aria-label="Next search result"
-                        >
-                            <ChevronRightIcon className="w-4 h-4" />
-                        </button>
-                        <button
-                            onClick={clearSearch}
-                            className="p-1.5 rounded-md text-neutral-darker dark:text-secondary-light hover:bg-secondary/70 dark:hover:bg-neutral-darkest"
-                            aria-label="Clear search"
-                        >
-                            <XMarkIcon className="w-4 h-4" />
-                        </button>
-                    </>
-                )}
+                <div className="bg-neutral-light dark:bg-neutral-darker p-3 rounded-lg shadow-sm overflow-y-auto border border-secondary dark:border-neutral-darkest">
+                    <h3 className="font-semibold text-neutral-darker dark:text-secondary-light mb-2 sticky top-0 bg-neutral-light dark:bg-neutral-darker py-1">Translation ({targetTranslationLangName})</h3>
+                    <p className="whitespace-pre-wrap text-sm text-neutral-700 dark:text-neutral-200">{liveTranslationDisplay || "Translation will appear here..."}</p>
+                </div>
             </div>
-        </div>
+        ) : (
+          <div className="flex-grow overflow-y-auto mb-4 pr-2 space-y-4">
+            {messages.map((msg) => (
+              <div key={msg.id} ref={(el: HTMLDivElement | null) => { if(el) messageRefs.current[msg.id] = el; }}>
+                  <MessageBubble 
+                      message={msg}
+                      onImageClick={msg.sender === 'ai' && msg.imagePreviews && msg.imagePreviews.length > 0 ? handleOpenImageModal : undefined}
+                      onRegenerate={msg.sender === 'ai' && msg.promptedByMessageId && !msg.isRegenerating ? handleRegenerateResponse : undefined}
+                      isLoading={isLoading}
+                      onPlayAudio={msg.audioUrl ? () => handlePlayAudio(msg.audioUrl!, msg.id) : undefined}
+                      isAudioPlaying={currentPlayingAudio === msg.id}
+                      searchQuery={isSearchActive ? searchQuery : ''}
+                      isCurrentSearchResult={isSearchActive && searchResults[currentSearchResultIndex]?.messageId === msg.id}
+                  />
+              </div>
+            ))}
+            {isLoading && messages.length > 0 && messages[messages.length-1]?.sender === 'user' && !messages[messages.length-1]?.isRegenerating && ( 
+              <MessageBubble key="loading" message={{id: 'loading', text: isImagenModelSelected ? 'Generating image(s)...' : (isTextToSpeechModelSelected ? 'Synthesizing audio...' : 'Thinking...'), sender: 'ai', model: selectedModel, promptedByMessageId: messages[messages.length-1].id }} />
+            )}
+            {isLoading && messages.length === 0 && ( 
+              <MessageBubble key="loading-initial" message={{id: 'loading-initial', text: isImagenModelSelected ? 'Generating image(s)...' : (isTextToSpeechModelSelected ? 'Synthesizing audio...' : 'Thinking...'), sender: 'ai', model: selectedModel, promptedByMessageId: 'initial' }} />
+            )}
+            <div ref={chatEndRef} />
+          </div>
+        )}
 
-        <div className="flex-grow overflow-y-auto mb-4 pr-2 space-y-4">
-          {messages.map((msg) => (
-            <div key={msg.id} ref={(el: HTMLDivElement | null) => { if(el) messageRefs.current[msg.id] = el; }}>
-                <MessageBubble 
-                    message={msg}
-                    onImageClick={msg.sender === 'ai' && msg.imagePreviews && msg.imagePreviews.length > 0 ? handleOpenImageModal : undefined}
-                    onRegenerate={msg.sender === 'ai' && msg.promptedByMessageId && !msg.isRegenerating ? handleRegenerateResponse : undefined}
-                    isLoading={isLoading}
-                    onPlayAudio={msg.audioUrl ? () => handlePlayAudio(msg.audioUrl!, msg.id) : undefined}
-                    isAudioPlaying={currentPlayingAudio === msg.id}
-                    searchQuery={isSearchActive ? searchQuery : ''}
-                    isCurrentSearchResult={isSearchActive && searchResults[currentSearchResultIndex]?.messageId === msg.id}
-                />
-            </div>
-          ))}
-          {isLoading && messages.length > 0 && messages[messages.length-1]?.sender === 'user' && !messages[messages.length-1]?.isRegenerating && ( 
-             <MessageBubble key="loading" message={{id: 'loading', text: isImagenModelSelected ? 'Generating image(s)...' : (isTextToSpeechModelSelected ? 'Synthesizing audio...' : 'Thinking...'), sender: 'ai', model: selectedModel, promptedByMessageId: messages[messages.length-1].id }} />
-          )}
-           {isLoading && messages.length === 0 && ( 
-             <MessageBubble key="loading-initial" message={{id: 'loading-initial', text: isImagenModelSelected ? 'Generating image(s)...' : (isTextToSpeechModelSelected ? 'Synthesizing audio...' : 'Thinking...'), sender: 'ai', model: selectedModel, promptedByMessageId: 'initial' }} />
-          )}
-          <div ref={chatEndRef} />
-        </div>
+        {error && !isRealTimeTranslationMode && <div className="text-red-500 dark:text-red-400 p-2 my-2 bg-red-100 dark:bg-red-900 border border-red-500 dark:border-red-400 rounded-md text-sm">{error}</div>}
 
-        {error && <div className="text-red-500 dark:text-red-400 p-2 my-2 bg-red-100 dark:bg-red-900 border border-red-500 dark:border-red-400 rounded-md text-sm">{error}</div>}
-
-        {(!isImagenModelSelected && !isTextToSpeechModelSelected && (imagePreview || uploadedTextFileName)) && (
+        {/* Attachments Preview - Hidden in Real-Time Translation Mode */}
+        {!isRealTimeTranslationMode && (!isImagenModelSelected && !isTextToSpeechModelSelected && (imagePreview || uploadedTextFileName)) && (
             <div className="mb-2 p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-secondary-light dark:bg-neutral-darker">
                 {imagePreview && ( 
                     <div className="relative group inline-block w-24 h-24 mr-2 align-top">
@@ -1387,39 +1454,61 @@ const ChatPage: React.FC = () => {
             </div>
         )}
 
+        {/* Input Area: Standard Chat Input OR Real-Time Translation Controls */}
         <div className="flex items-end border-t border-secondary dark:border-neutral-darkest pt-2 sm:pt-4">
-          {(!isImagenModelSelected && !isTextToSpeechModelSelected) && (
-            <button
-              onClick={handleToggleListen}
-              disabled={isLoading || !isSpeechRecognitionSupported || isImagenModelSelected || isTextToSpeechModelSelected}
-              className={`mr-2 p-3 rounded-lg transition-colors self-stretch flex items-center justify-center ${
-                isListening 
-                  ? 'bg-red-500 hover:bg-red-600 text-white' 
-                  : 'bg-secondary dark:bg-neutral-darkest hover:bg-secondary-dark dark:hover:bg-neutral-dark text-primary dark:text-primary-light'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-              aria-label={isListening ? "Stop voice input" : "Start voice input"}
-              aria-pressed={isListening}
-            >
-              {isListening ? <StopCircleIcon className="w-6 h-6" /> : <MicrophoneIcon className="w-6 h-6" />}
-            </button>
+          {isRealTimeTranslationMode ? (
+            <div className="w-full flex justify-center">
+                <button
+                  onClick={handleToggleListen}
+                  disabled={!isSpeechRecognitionSupported}
+                  className={`p-3 rounded-lg transition-colors self-stretch flex items-center justify-center text-xl ${
+                    isListening 
+                      ? 'bg-red-500 hover:bg-red-600 text-white' 
+                      : 'bg-green-500 hover:bg-green-600 text-white' // Use green for "Start Recording" in this mode
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  aria-label={isListening ? "Stop Real-Time Translation" : "Start Real-Time Translation"}
+                  aria-pressed={isListening}
+                >
+                  {isListening ? <StopCircleIcon className="w-8 h-8" /> : <MicrophoneIcon className="w-8 h-8" />}
+                  <span className="ml-2 text-lg">{isListening ? "Stop Recording" : "Start Recording"}</span>
+                </button>
+            </div>
+          ) : (
+            <>
+              {(!isImagenModelSelected && !isTextToSpeechModelSelected) && (
+                <button
+                  onClick={handleToggleListen}
+                  disabled={isLoading || !isSpeechRecognitionSupported || isImagenModelSelected || isTextToSpeechModelSelected}
+                  className={`mr-2 p-3 rounded-lg transition-colors self-stretch flex items-center justify-center ${
+                    isListening 
+                      ? 'bg-red-500 hover:bg-red-600 text-white' 
+                      : 'bg-secondary dark:bg-neutral-darkest hover:bg-secondary-dark dark:hover:bg-neutral-dark text-primary dark:text-primary-light'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  aria-label={isListening ? "Stop voice input" : "Start voice input"}
+                  aria-pressed={isListening}
+                >
+                  {isListening ? <StopCircleIcon className="w-6 h-6" /> : <MicrophoneIcon className="w-6 h-6" />}
+                </button>
+              )}
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey && !isLoading && !isListening) { e.preventDefault(); handleSendMessage(); }}}
+                placeholder={currentPromptPlaceholder()}
+                className="flex-grow p-3 border border-secondary dark:border-neutral-darkest rounded-lg focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:border-transparent outline-none resize-none bg-neutral-light dark:bg-neutral-darker text-neutral-darker dark:text-secondary-light"
+                rows={calculateTextareaRows()}
+                disabled={isLoading || isListening}
+                aria-label="Chat input"
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={isLoading || isListening || (!input.trim() && (!isImagenModelSelected && !isTextToSpeechModelSelected && !uploadedImage && !uploadedTextFileName))}
+                className="ml-2 p-3 bg-primary hover:bg-primary-dark dark:bg-primary-light dark:hover:bg-primary text-white rounded-lg disabled:opacity-50 transition-colors self-stretch flex items-center justify-center" 
+                aria-label={sendButtonLabel()} >
+                {sendButtonIcon()}
+              </button>
+            </>
           )}
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey && !isLoading && !isListening) { e.preventDefault(); handleSendMessage(); }}}
-            placeholder={currentPromptPlaceholder()}
-            className="flex-grow p-3 border border-secondary dark:border-neutral-darkest rounded-lg focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:border-transparent outline-none resize-none bg-neutral-light dark:bg-neutral-darker text-neutral-darker dark:text-secondary-light"
-            rows={calculateTextareaRows()}
-            disabled={isLoading || isListening}
-            aria-label="Chat input"
-          />
-          <button
-            onClick={handleSendMessage}
-            disabled={isLoading || isListening || (!input.trim() && (!isImagenModelSelected && !isTextToSpeechModelSelected && !uploadedImage && !uploadedTextFileName))}
-            className="ml-2 p-3 bg-primary hover:bg-primary-dark dark:bg-primary-light dark:hover:bg-primary text-white rounded-lg disabled:opacity-50 transition-colors self-stretch flex items-center justify-center" 
-            aria-label={sendButtonLabel()} >
-            {sendButtonIcon()}
-          </button>
         </div>
       </div>
       {isImageModalOpen && modalImage && (
