@@ -37,8 +37,9 @@ app.use(cors({
   }
 }));
 
-// Middleware to parse JSON bodies
-app.use(express.json());
+// Middleware to parse JSON bodies - INCREASED LIMIT
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true })); // Also for form data if ever needed
 
 // --- Authentication ---
 const LOGIN_CODE_AUTH_SERVER = process.env.LOGIN_CODE_AUTH;
