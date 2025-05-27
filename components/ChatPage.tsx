@@ -1,4 +1,3 @@
-
 // Fix: Remove triple-slash directive for 'vite/client' as its types are not found and import.meta.env is manually typed.
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
@@ -253,8 +252,8 @@ const ChatPage: React.FC = () => {
   const [isListening, setIsListening] = useState(false);
   const [isSpeechRecognitionSupported, setIsSpeechRecognitionSupported] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const inputBeforeSpeechRef = useRef<string>("");
-  const currentRecognizedTextSegmentRef = useRef<string>("");
+  const inputBeforeSpeechRef = useRef<string>(""); // Text in input field *before* current STT session started
+  const currentRecognizedTextSegmentRef = useRef<string>(""); // Text recognized *during* current STT session (final + latest interim)
 
   // Audio playback state
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
@@ -270,20 +269,15 @@ const ChatPage: React.FC = () => {
 
 
   const apiKeyStatuses = React.useMemo((): Record<Model, ApiKeyStatus> => {
-    // This now reflects if the PROXY SERVER is expected to have the keys.
-    // The actual check for key presence happens on the proxy.
-    // Client-side `window.process.env` from `config.js` is mostly for `LOGIN_CODE_AUTH` now.
-    // We assume if the user is running the app, they've configured the proxy's .env.
-    // So, we can simplify this to always report true for live models, or make it more nuanced.
-    // For now, let's assume if it's not mock, the user *should* have configured the proxy.
-    const isProxyExpectedToHaveKey = true; // Placeholder for a more complex check if needed
+    const isProxyExpectedToHaveKey = true; 
 
     return {
       [Model.GEMINI]: {isSet: isProxyExpectedToHaveKey, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Gemini Flash', isMock: false, isGeminiPlatform: true},
       [Model.GEMINI_ADVANCED]: {isSet: isProxyExpectedToHaveKey, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Gemini Advanced', isMock: false, isGeminiPlatform: true},
-      [Model.GPT4O]: {isSet: isProxyExpectedToHaveKey, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'ChatGPT', isMock: false, isGeminiPlatform: false},
+      [Model.GPT4O]: {isSet: isProxyExpectedToHaveKey, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'ChatGPT (gpt-4o)', isMock: false, isGeminiPlatform: false},
+      [Model.GPT4O_MINI]: {isSet: isProxyExpectedToHaveKey, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'ChatGPT (gpt-4o-mini)', isMock: false, isGeminiPlatform: false},
       [Model.DEEPSEEK]: { isSet: isProxyExpectedToHaveKey, envVarName: 'DEEPSEEK_API_KEY (on proxy)', modelName: 'Deepseek', isMock: false, isGeminiPlatform: false},
-      [Model.CLAUDE]: { isSet: true, envVarName: 'N/A (Mock)', modelName: 'Claude', isMock: true, isGeminiPlatform: false}, // Mock models don't need proxy keys
+      [Model.CLAUDE]: { isSet: true, envVarName: 'N/A (Mock)', modelName: 'Claude', isMock: true, isGeminiPlatform: false}, 
       [Model.IMAGEN3]: {isSet: isProxyExpectedToHaveKey, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Imagen3 Image Gen', isMock: false, isGeminiPlatform: true, isImageGeneration: true},
       [Model.OPENAI_TTS]: {isSet: isProxyExpectedToHaveKey, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'OpenAI TTS', isMock: false, isGeminiPlatform: false, isTextToSpeech: true }
     };
@@ -339,7 +333,7 @@ const ChatPage: React.FC = () => {
         setActivePersonaId(null); 
         if (isListening) { 
             recognitionRef.current?.stop();
-            setIsListening(false);
+            // Note: onend handler will set isListening to false
         }
     }
     if (currentPlayingAudio && audioPlayerRef.current) {
@@ -357,49 +351,46 @@ const ChatPage: React.FC = () => {
       recognitionRef.current = new SpeechRecognitionAPI() as SpeechRecognition;
       const recognition = recognitionRef.current;
 
-      recognition.continuous = true;
-      recognition.interimResults = true;
+      recognition.continuous = true; // Keep listening even after a pause in speech
+      recognition.interimResults = true; // Get results as they are being recognized
       recognition.lang = navigator.language.startsWith('vi') ? 'vi-VN' : (navigator.language || 'en-US');
 
       recognition.onresult = (event: SpeechRecognitionEvent) => {
-        let interimTranscript = '';
-        let finalTranscript = '';
+        let finalizedSpeechForThisSession = "";
+        let latestInterimSegment = "";
 
+        // Reconstruct the full transcript for the current session from all result segments
         for (let i = 0; i < event.results.length; i++) {
-          const transcriptPart = event.results[i][0].transcript;
+          const segmentTranscript = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
-            finalTranscript += transcriptPart;
+            finalizedSpeechForThisSession += (finalizedSpeechForThisSession.length > 0 && segmentTranscript.trim().length > 0 ? " " : "") + segmentTranscript.trim();
           } else {
-            interimTranscript += transcriptPart;
+            latestInterimSegment = segmentTranscript; // Keep track of the latest interim part
           }
         }
         
-        if (finalTranscript.trim() && finalTranscript !== currentRecognizedTextSegmentRef.current) {
-             inputBeforeSpeechRef.current = inputBeforeSpeechRef.current + 
-                                           (inputBeforeSpeechRef.current.trim() && finalTranscript.trim() ? " " : "") +
-                                           finalTranscript.trim();
-             currentRecognizedTextSegmentRef.current = ""; 
-             setInput(inputBeforeSpeechRef.current);
-        } else {
-            currentRecognizedTextSegmentRef.current = interimTranscript;
-            setInput(
-              inputBeforeSpeechRef.current +
-              (inputBeforeSpeechRef.current.trim() && currentRecognizedTextSegmentRef.current.trim() ? " " : "") +
-              currentRecognizedTextSegmentRef.current
-            );
+        currentRecognizedTextSegmentRef.current = finalizedSpeechForThisSession + 
+            (finalizedSpeechForThisSession.length > 0 && latestInterimSegment.trim().length > 0 ? " " : "") + 
+            latestInterimSegment.trim();
+
+        let displayInput = inputBeforeSpeechRef.current;
+        if (displayInput.trim() && currentRecognizedTextSegmentRef.current.trim()) {
+          displayInput += " ";
         }
+        displayInput += currentRecognizedTextSegmentRef.current;
+        setInput(displayInput);
       };
 
       recognition.onend = () => {
         setIsListening(false);
-        if (currentRecognizedTextSegmentRef.current.trim()) {
-             const finalText = inputBeforeSpeechRef.current +
-                          (inputBeforeSpeechRef.current.trim() && currentRecognizedTextSegmentRef.current.trim() ? " " : "") +
-                          currentRecognizedTextSegmentRef.current.trim();
-             setInput(finalText);
-        } else {
-             setInput(inputBeforeSpeechRef.current.trim());
+        // Finalize the input with the text accumulated during the session
+        let finalInputText = inputBeforeSpeechRef.current;
+        if (finalInputText.trim() && currentRecognizedTextSegmentRef.current.trim()) {
+          finalInputText += " ";
         }
+        finalInputText += currentRecognizedTextSegmentRef.current.trim();
+        setInput(finalInputText);
+        // currentRecognizedTextSegmentRef.current will be reset if listening starts again
       };
 
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
@@ -411,7 +402,7 @@ const ChatPage: React.FC = () => {
           errorMessage = "No speech detected. Please try again.";
         }
         addNotification(errorMessage, "error", event.message);
-        setIsListening(false);
+        setIsListening(false); // Ensure listening state is reset
       };
 
       return () => {
@@ -419,20 +410,27 @@ const ChatPage: React.FC = () => {
       };
     } else {
       setIsSpeechRecognitionSupported(false);
-      addNotification("Speech recognition is not supported by your browser.", "info");
+      // No addNotification here to avoid spamming if it's called multiple times during setup
     }
-  }, [addNotification]);
+  }, [addNotification]); // addNotification is stable
 
   const handleToggleListen = () => {
     if (!isSpeechRecognitionSupported || !recognitionRef.current) return;
 
     if (isListening) {
-      recognitionRef.current.stop();
+      recognitionRef.current.stop(); // This will trigger 'onend'
     } else {
-      inputBeforeSpeechRef.current = input; 
-      currentRecognizedTextSegmentRef.current = ""; 
-      recognitionRef.current.start();
-      setIsListening(true);
+      inputBeforeSpeechRef.current = input; // Store text existing before this speech session
+      currentRecognizedTextSegmentRef.current = ""; // Reset text for current speech session
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+      } catch (e: any) {
+        // Handle cases where start() might fail immediately (e.g., already started)
+        console.error("Error starting speech recognition:", e);
+        addNotification("Could not start voice input. Please try again.", "error", e.message);
+        setIsListening(false);
+      }
     }
   };
 
@@ -923,7 +921,7 @@ const ChatPage: React.FC = () => {
               );
             }
         }
-      } else if (selectedModel === Model.GPT4O && !currentModelStatus.isMock) {
+      } else if ((selectedModel === Model.GPT4O || selectedModel === Model.GPT4O_MINI) && !currentModelStatus.isMock) { // Adjusted for GPT4O_MINI
         // API key handled by proxy
         const history: ApiChatMessage[] = [{ role: 'system', content: currentModelSpecificSettings.systemInstruction }];
         messages.filter(m => m.id !== aiMessageId && m.id !== newUserMessage.id).forEach(msg => { 
