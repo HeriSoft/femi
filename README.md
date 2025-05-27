@@ -11,6 +11,8 @@
 *   Web search grounding (Gemini).
 *   Chat history, personas, and theme customization.
 *   Secure API key management using a backend proxy.
+*   Language learning (English, Japanese, Korean, Chinese, Vietnamese)
+*   Mini entertainment games
 
 ## 🛠️ Tech Stack
 
