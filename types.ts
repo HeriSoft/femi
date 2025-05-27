@@ -5,6 +5,7 @@ export enum Model {
   GEMINI = 'Gemini (gemini-2.5-flash-preview-05-20)', // Updated model identifier
   DEEPSEEK = 'Deepseek (deepseek-chat)', 
   GPT4O = 'ChatGPT (gpt-4o)', // Changed display name
+  GPT4O_MINI = 'ChatGPT (gpt-4o-mini)', // New model for language learning
   CLAUDE = 'Claude (Mock)',
   GEMINI_ADVANCED = 'Gemini Advanced (gemini-1.5-pro-latest)',
   IMAGEN3 = 'Imagen3 (imagen-3.0-generate-002)',
@@ -186,4 +187,84 @@ export interface NotificationContextType {
   addNotification: (message: string, type: NotificationType, details?: string) => void;
   markAllAsRead: () => void;
   clearAllNotifications: () => void;
+}
+
+// Language Learning Feature Types
+export type LanguageOption = 'en' | 'ja' | 'ko';
+
+export interface LanguageOptionConfig {
+  code: LanguageOption;
+  name: string;
+  flag?: string; // e.g., emoji flag or URL to small image
+}
+
+export type LanguageLearningActivityType = 'listening' | 'speaking' | 'vocabulary' | 'quiz';
+
+export interface Badge {
+  id: string;
+  name: string;
+  description: string;
+  icon: string; // Emoji or a key for an Icon component
+  expThreshold: number; // EXP needed to earn this badge
+}
+
+export interface UserLanguageProfile {
+  exp: number;
+  earnedBadgeIds: string[];
+  // Could add lastActivityDate, streak, etc. later
+}
+
+export interface UserGlobalProfile {
+  languageProfiles: Partial<Record<LanguageOption, UserLanguageProfile>>; // Use Partial for initially unselected languages
+  // other global settings/achievements if any
+}
+
+export interface VocabularyItem {
+  word: string;
+  meaning: string; // Meaning in English or user's native language
+  exampleSentence: string; // Example sentence in the target language
+}
+
+export interface LearningContent {
+  id: string;
+  activityType: LanguageLearningActivityType;
+  language: LanguageOption;
+  title?: string;
+  instruction?: string; 
+  
+  // For Listening
+  script?: string; // Text to be converted to audio
+  question?: string; // Question about the script or for Quiz
+  options?: string[]; // MCQ options (Listening or Quiz)
+  correctAnswerIndex?: number; // Index of the correct option (Listening or Quiz)
+
+  // For Speaking
+  phraseToSpeak?: string; // Phrase for user to speak
+
+  // For Vocabulary
+  vocabularySet?: VocabularyItem[]; // Array of vocabulary words
+  
+  aiPromptForGeneration?: string; 
+  aiPromptForEvaluation?: string; 
+}
+
+// State for an active learning session/exercise
+export interface LearningActivityState {
+    isLoadingContent: boolean;
+    content: LearningContent | null;
+    error: string | null;
+    userAnswer: string | number | null; // For MCQ index, or transcribed text for speaking
+    isAnswerSubmitted: boolean;
+    isAnswerCorrect: boolean | null;
+    audioUrl?: string; // For listening exercise audio
+    isAudioPlaying?: boolean; // For listening exercise audio playback status
+}
+
+
+export interface LanguageLearningModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  userProfile: UserGlobalProfile | null;
+  onUpdateProfile: (updatedProfile: UserGlobalProfile) => void;
+  onAddExp: (language: LanguageOption, expPoints: number) => void;
 }
