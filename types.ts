@@ -5,8 +5,8 @@ import { Chat } from '@google/genai'; // Updated import
 export enum Model {
   GEMINI = 'Gemini (gemini-2.5-flash-preview-05-20)', // Updated model identifier
   DEEPSEEK = 'Deepseek (deepseek-chat)', 
-  GPT4O = 'ChatGPT (gpt-4o)', // Changed display name
-  GPT4O_MINI = 'ChatGPT (gpt-4o-mini)', // New model for language learning
+  GPT4O = 'ChatGPT (gpt-4.1)', // Changed display name and underlying model
+  GPT4O_MINI = 'ChatGPT (gpt-4.1-mini)', // Updated to gpt-4.1-mini
   CLAUDE = 'Claude (Mock)',
   GEMINI_ADVANCED = 'Gemini Advanced (gemini-1.5-pro-latest)',
   IMAGEN3 = 'Imagen3 (imagen-3.0-generate-002)',

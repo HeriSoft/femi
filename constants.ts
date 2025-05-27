@@ -28,8 +28,8 @@ export const DEFAULT_REAL_TIME_TRANSLATION_SETTINGS: RealTimeTranslationSettings
 export const ALL_MODEL_DEFAULT_SETTINGS: AllModelSettings = {
   [Model.GEMINI]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: 'You are a helpful and creative AI assistant powered by Gemini Flash.' },
   [Model.GEMINI_ADVANCED]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: 'You are Gemini Advanced, a powerful multimodal AI by Google.' },
-  [Model.GPT4O]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: 'You are ChatGPT (gpt-4o), a powerful AI by OpenAI.' }, 
-  [Model.GPT4O_MINI]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: 'You are ChatGPT (gpt-4o-mini), an efficient AI by OpenAI.' },
+  [Model.GPT4O]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: 'You are ChatGPT (gpt-4.1), a powerful AI by OpenAI.' }, 
+  [Model.GPT4O_MINI]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: 'You are ChatGPT (gpt-4.1-mini), an efficient AI by OpenAI.' }, // Updated
   [Model.DEEPSEEK]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: 'You are Deepseek Coder, an AI specialized in coding and chat, powered by the deepseek-chat model.' },
   [Model.CLAUDE]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: 'You are Claude, a helpful AI assistant by Anthropic.' },
   [Model.IMAGEN3]: { 
