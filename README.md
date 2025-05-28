@@ -51,7 +51,7 @@ cd femi
 
 **3. Setup Frontend:**
 
-1. Go back to the project root: cd ..
+1. Go back to the project root: cd femi
 2. Install dependencies: npm install
 3. Start frontend (in a new terminal): npm run dev (usually on http://localhost:5173)
    
