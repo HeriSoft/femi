@@ -1,7 +1,10 @@
 import React from 'react';
 import { XMarkIcon, CardsIcon } from '../../Icons.tsx';
 import { TienLenGameModalProps } from '../../../types.ts';
-import TienLenGame from './TienLenGame.tsx'; // Explicitly added .tsx extension
+// Attempting to resolve Vercel build issue.
+// The path "./TienLenGame.tsx" should be correct if both files are in the same directory
+// and casing matches the actual filename in the repository.
+import TienLenGame from './TienLenGame.tsx';
 
 const TienLenGameModal: React.FC<TienLenGameModalProps> = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
