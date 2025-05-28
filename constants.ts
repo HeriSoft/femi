@@ -145,23 +145,23 @@ export const ACCOUNT_MENU_ITEMS: Array<{ id: AccountTabType; label: string; stat
 ];
 
 export const DEMO_BACKGROUNDS: BackgroundOption[] = [
-  { id: 'bg_default_none', name: 'Default (None)', imageUrl: '', thumbnailUrl: '' }, // Represents no background
+  { id: 'bg_default_none', name: 'Default (None)', imageUrl: '', thumbnailUrl: '' }, 
   { 
-    id: 'bg_pattern_subtle', 
-    name: 'Subtle Pattern', 
-    imageUrl: 'https://picsum.photos/seed/femi_pattern/1920/1080', 
-    thumbnailUrl: 'https://picsum.photos/seed/femi_pattern/200/120' 
+    id: 'bg_cosmic_pattern', 
+    name: 'Cosmic Pattern', 
+    imageUrl: 'https://i.ibb.co/PZJc42yb/1f2023c9-af75-4a08-9c75-f72e7e1fd2f2.jpg', 
+    thumbnailUrl: 'https://i.ibb.co/PZJc42yb/1f2023c9-af75-4a08-9c75-f72e7e1fd2f2.jpg' 
   },
   { 
-    id: 'bg_abstract_blues', 
-    name: 'Abstract Blues', 
-    imageUrl: 'https://picsum.photos/seed/femi_blues/1920/1080', 
-    thumbnailUrl: 'https://picsum.photos/seed/femi_blues/200/120' 
+    id: 'bg_colorful_gradient', 
+    name: 'Colorful Gradient', 
+    imageUrl: 'https://i.ibb.co/tpKxvSy2/10081449.jpg', 
+    thumbnailUrl: 'https://i.ibb.co/tpKxvSy2/10081449.jpg' 
   },
   { 
-    id: 'bg_minimal_waves', 
-    name: 'Minimalist Waves', 
-    imageUrl: 'https://picsum.photos/seed/femi_waves/1920/1080', 
-    thumbnailUrl: 'https://picsum.photos/seed/femi_waves/200/120' 
+    id: 'bg_abstract_art', 
+    name: 'Abstract Art', 
+    imageUrl: 'https://i.ibb.co/mp8DJtd/v882-sasi-34-e.jpg', 
+    thumbnailUrl: 'https://i.ibb.co/mp8DJtd/v882-sasi-34-e.jpg' 
   },
 ];

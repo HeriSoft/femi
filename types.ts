@@ -18,6 +18,7 @@ export interface ChatMessage {
   id: string;
   text: string; // For user prompts or AI text responses
   sender: 'user' | 'ai';
+  timestamp: number; // Added to store the time of message creation
   model?: Model;
   imagePreview?: string; // For user messages with a single image (upload)
   imagePreviews?: string[]; // For AI generated images (can be multiple)
