@@ -1,4 +1,3 @@
-
 // Fix: Remove triple-slash directive for 'vite/client' as its types are not found and import.meta.env is manually typed.
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo, useContext } from 'react';
@@ -539,7 +538,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl }) => {
     return () => {
       recognition?.abort(); // Use abort instead of stop for faster cleanup
     };
-  }, [addNotification, isRealTimeTranslationMode, modelSettings, translateLiveSegment, isListening]); // Added isListening to deps to re-init correctly
+  // Removed `isListening` from dependencies to prevent premature abort/onend.
+  }, [addNotification, isRealTimeTranslationMode, modelSettings, translateLiveSegment]);
 
 
   const handleToggleListen = () => {
