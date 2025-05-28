@@ -15,6 +15,7 @@
 *   Mini entertainment games
 *   Voice translation in real-time
 *   Change Theme, Avatar
+*   Optimize UI chat like Telegram
 
 ## 🛠️ Tech Stack
 
