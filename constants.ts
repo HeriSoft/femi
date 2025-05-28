@@ -138,6 +138,7 @@ export const getNextMilestone = (currentExp: number): { milestoneExp: number, re
 
 // Account Settings Constants
 export const ACCOUNT_MENU_ITEMS: Array<{ id: AccountTabType; label: string; status?: 'coming_soon' }> = [
+  { id: 'profile', label: 'My Profile' }, // Added "My Profile" tab
   { id: 'devices', label: 'Devices' },
   { id: 'background', label: 'Background' },
   { id: 'avatar', label: 'Avatar', status: 'coming_soon' },

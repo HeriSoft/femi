@@ -233,6 +233,7 @@ export interface UserLanguageProfile {
 export interface UserGlobalProfile {
   languageProfiles: Partial<Record<LanguageOption, UserLanguageProfile>>; // Use Partial for initially unselected languages
   favoriteLanguage?: LanguageOption; // User's preferred language for translations
+  aboutMe?: string; // New field for user's self-description
 }
 
 export interface VocabularyItem {
@@ -318,7 +319,7 @@ export interface LoginDeviceLog {
 }
 
 // Account Settings
-export type AccountTabType = 'devices' | 'background' | 'avatar' | 'payment';
+export type AccountTabType = 'devices' | 'background' | 'avatar' | 'payment' | 'profile'; // Added 'profile'
 
 export interface BackgroundOption {
   id: string;
@@ -330,8 +331,10 @@ export interface BackgroundOption {
 export interface AccountSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onChatBackgroundChange: (newUrl: string | null) => void; // Callback to update App's background state
-  currentChatBackground: string | null; // Pass current background to initialize selection
+  onChatBackgroundChange: (newUrl: string | null) => void; 
+  currentChatBackground: string | null; 
+  userProfile: UserGlobalProfile | null; // Added userProfile
+  onUpdateUserProfile: (updatedProfile: UserGlobalProfile) => void; // Added onUpdateUserProfile
 }
 
 // Tien Len Game Types

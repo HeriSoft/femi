@@ -28,7 +28,7 @@ interface AppContentProps {
   isGamesModalOpen: boolean;
   onToggleGamesModal: () => void;
   
-  userProfile: UserGlobalProfile;
+  userProfile: UserGlobalProfile; // Changed from UserGlobalProfile | null
   onUpdateUserProfile: (updatedProfile: UserGlobalProfile) => void;
   onAddExpWithNotification: (language: LanguageOption, expPoints: number) => void;
 
@@ -86,10 +86,12 @@ const AppContent: React.FC<AppContentProps> = ({
         onToggleGamesModal={onToggleGamesModal} 
         chatBackgroundUrl={chatBackgroundUrl}
         onChatBackgroundChange={onChatBackgroundChange}
+        userProfile={userProfile} // Pass userProfile
+        onUpdateUserProfile={onUpdateUserProfile} // Pass onUpdateUserProfile
       />
       <main className="flex-grow overflow-hidden">
         {currentUser ? ( 
-          <ChatPage chatBackgroundUrl={chatBackgroundUrl} />
+          <ChatPage chatBackgroundUrl={chatBackgroundUrl} userProfile={userProfile} />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center p-8">
             <KeyIcon className="w-16 h-16 text-primary dark:text-primary-light mb-6" />
@@ -156,7 +158,7 @@ const App: React.FC = () => {
   });
 
   const [currentUser, setCurrentUser] = useState<MockUser | null>(null);
-  const [userProfile, setUserProfile] = useState<UserGlobalProfile>({ languageProfiles: {} });
+  const [userProfile, setUserProfile] = useState<UserGlobalProfile>({ languageProfiles: {}, aboutMe: '' }); // Initialize with aboutMe
   const [isLoginModalInitiallyOpen, setIsLoginModalInitiallyOpen] = useState(false);
   const [isAppReady, setIsAppReady] = useState(false); 
   const [isLanguageLearningModalOpen, setIsLanguageLearningModalOpen] = useState(false);
@@ -189,13 +191,13 @@ const App: React.FC = () => {
   useEffect(() => {
     if (currentUser) {
       setIsAppReady(false); 
-      let loadedProfile: UserGlobalProfile = { languageProfiles: {} };
+      let loadedProfile: UserGlobalProfile = { languageProfiles: {}, aboutMe: '' }; // Ensure aboutMe is part of default
       try {
         const storedProfileString = localStorage.getItem(LOCAL_STORAGE_USER_PROFILE_KEY);
         if (storedProfileString) {
           const parsedProfile = JSON.parse(storedProfileString);
           if (parsedProfile && typeof parsedProfile === 'object' && 'languageProfiles' in parsedProfile) {
-            loadedProfile = parsedProfile;
+            loadedProfile = { ...loadedProfile, ...parsedProfile }; // Merge with default to ensure aboutMe exists
           }
         }
       } catch (error) {
@@ -204,7 +206,7 @@ const App: React.FC = () => {
       setUserProfile(loadedProfile);
       setIsAppReady(true); 
     } else {
-      setUserProfile({ languageProfiles: {} }); 
+      setUserProfile({ languageProfiles: {}, aboutMe: '' }); 
       setIsAppReady(true); 
       setIsLoginModalInitiallyOpen(true); 
       setIsLanguageLearningModalOpen(false); 
@@ -216,14 +218,14 @@ const App: React.FC = () => {
   }, [currentUser]);
 
   useEffect(() => {
-    if (currentUser) { 
+    if (currentUser && isAppReady) { // Only save if app is ready and user is logged in
       try {
         localStorage.setItem(LOCAL_STORAGE_USER_PROFILE_KEY, JSON.stringify(userProfile));
       } catch (error) {
         console.error("Error saving user language profile to localStorage:", error);
       }
     }
-  }, [userProfile, currentUser]);
+  }, [userProfile, currentUser, isAppReady]);
 
   const toggleTheme = useCallback(() => {
     setTheme((prevTheme) => (prevTheme === 'light' ? 'dark' : 'light'));
