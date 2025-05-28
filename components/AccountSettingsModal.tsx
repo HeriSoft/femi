@@ -105,10 +105,10 @@ const AccountSettingsModal: React.FC<LocalAccountSettingsModalProps> = ({
 
   const getIconForTab = (tabId: AccountTabType) => {
     switch(tabId) {
-        case 'devices': return <ComputerDesktopIcon className="w-5 h-5 mr-3" />;
-        case 'background': return <PhotoIcon className="w-5 h-5 mr-3" />;
-        case 'avatar': return <AvatarIcon className="w-5 h-5 mr-3" />;
-        case 'payment': return <CreditCardIcon className="w-5 h-5 mr-3" />;
+        case 'devices': return <ComputerDesktopIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3" />;
+        case 'background': return <PhotoIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3" />;
+        case 'avatar': return <AvatarIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3" />;
+        case 'payment': return <CreditCardIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3" />;
         default: return null;
     }
   }
@@ -123,7 +123,7 @@ const AccountSettingsModal: React.FC<LocalAccountSettingsModalProps> = ({
             <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light mb-3">
               Device Activity
             </h3>
-            <div className="p-4 bg-secondary/30 dark:bg-neutral-dark/20 rounded-md">
+            <div className="p-3 sm:p-4 bg-secondary/30 dark:bg-neutral-dark/20 rounded-md">
               <h4 className="text-md font-medium text-neutral-700 dark:text-neutral-200 mb-2">
                 Logs
               </h4>
@@ -260,55 +260,58 @@ const AccountSettingsModal: React.FC<LocalAccountSettingsModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[70] p-4 transition-opacity duration-300"
+      className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[70] p-2 sm:p-4 transition-opacity duration-300"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-labelledby="account-settings-modal-title"
     >
       <div
-        className="bg-neutral-light dark:bg-neutral-darker rounded-lg shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col transform transition-all duration-300 scale-100 opacity-100"
+        className="bg-neutral-light dark:bg-neutral-darker rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] sm:max-h-[85vh] flex flex-col transform transition-all duration-300 scale-100 opacity-100"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center p-4 sm:p-5 border-b border-secondary dark:border-neutral-darkest sticky top-0 bg-neutral-light dark:bg-neutral-darker z-10">
           <h2 id="account-settings-modal-title" className="text-xl sm:text-2xl font-semibold text-primary dark:text-primary-light flex items-center">
-            <UserCogIcon className="w-7 h-7 mr-3" /> Account Settings
+            <UserCogIcon className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" /> Account Settings
           </h2>
           <button
             onClick={onClose}
-            className="p-2 rounded-full text-neutral-darker dark:text-secondary-light hover:bg-secondary dark:hover:bg-neutral-darkest transition-colors"
+            className="p-1.5 sm:p-2 rounded-full text-neutral-darker dark:text-secondary-light hover:bg-secondary dark:hover:bg-neutral-darkest transition-colors"
             aria-label="Close account settings modal"
           >
-            <XMarkIcon className="w-6 h-6" />
+            <XMarkIcon className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
         </div>
 
-        <div className="flex flex-grow overflow-hidden">
-          {/* Navigation Menu */}
-          <nav className="w-48 sm:w-56 border-r border-secondary dark:border-neutral-darkest p-3 sm:p-4 space-y-1 overflow-y-auto flex-shrink-0">
-            {ACCOUNT_MENU_ITEMS.map(item => (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                disabled={item.status === 'coming_soon'}
-                className={`w-full flex items-center px-3 py-2.5 text-sm rounded-md transition-colors text-left
-                            ${activeTab === item.id 
-                                ? 'bg-primary text-white dark:bg-primary-light dark:text-neutral-darker font-medium' 
-                                : 'text-neutral-600 dark:text-neutral-300 hover:bg-secondary/70 dark:hover:bg-neutral-dark/70'}
-                            ${item.status === 'coming_soon' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                aria-current={activeTab === item.id ? 'page' : undefined}
-              >
-                {getIconForTab(item.id)}
-                <span className="flex-grow">{item.label}</span>
-                {item.status === 'coming_soon' && (
-                    <span className="ml-auto text-xs px-1.5 py-0.5 bg-yellow-200 text-yellow-800 dark:bg-yellow-700 dark:text-yellow-100 rounded-full">Soon</span>
-                )}
-              </button>
-            ))}
+        <div className="flex flex-col md:flex-row flex-grow overflow-hidden">
+          {/* Navigation Menu: Tabs on mobile, Sidebar on desktop */}
+          <nav className="flex-shrink-0 md:w-48 lg:w-56 md:border-r border-secondary dark:border-neutral-darkest p-2 sm:p-3 md:p-4 md:space-y-1 overflow-x-auto md:overflow-y-auto whitespace-nowrap md:whitespace-normal">
+            <div className="flex flex-row md:flex-col space-x-1 md:space-x-0 md:space-y-1">
+              {ACCOUNT_MENU_ITEMS.map(item => (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  disabled={item.status === 'coming_soon'}
+                  className={`w-full flex items-center px-3 py-2.5 text-xs sm:text-sm rounded-md transition-colors text-left whitespace-nowrap
+                              ${activeTab === item.id 
+                                  ? 'bg-primary text-white dark:bg-primary-light dark:text-neutral-darker font-medium' 
+                                  : 'text-neutral-600 dark:text-neutral-300 hover:bg-secondary/70 dark:hover:bg-neutral-dark/70'}
+                              ${item.status === 'coming_soon' ? 'opacity-50 cursor-not-allowed' : ''}
+                              md:mb-1`} // mb-1 for mobile horizontal spacing
+                  aria-current={activeTab === item.id ? 'page' : undefined}
+                >
+                  {getIconForTab(item.id)}
+                  <span className="flex-grow">{item.label}</span>
+                  {item.status === 'coming_soon' && (
+                      <span className="ml-auto text-xs px-1.5 py-0.5 bg-yellow-200 text-yellow-800 dark:bg-yellow-700 dark:text-yellow-100 rounded-full hidden sm:inline">Soon</span>
+                  )}
+                </button>
+              ))}
+            </div>
           </nav>
 
           {/* Content Area */}
-          <main className="flex-grow p-4 sm:p-6 overflow-y-auto">
+          <main className="flex-grow p-3 sm:p-4 md:p-6 overflow-y-auto">
             {renderTabContent()}
           </main>
         </div>
@@ -316,7 +319,7 @@ const AccountSettingsModal: React.FC<LocalAccountSettingsModalProps> = ({
         <div className="p-4 sm:p-5 border-t border-secondary dark:border-neutral-darkest sticky bottom-0 bg-neutral-light dark:bg-neutral-darker z-10">
           <button
             onClick={onClose}
-            className="w-full px-4 py-2.5 bg-primary hover:bg-primary-dark dark:bg-primary-light dark:hover:bg-primary text-white dark:text-neutral-darker rounded-md text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-neutral-light dark:ring-offset-neutral-darker focus:ring-primary-dark transition-colors"
+            className="w-full px-4 py-2 sm:py-2.5 bg-primary hover:bg-primary-dark dark:bg-primary-light dark:hover:bg-primary text-white dark:text-neutral-darker rounded-md text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-neutral-light dark:ring-offset-neutral-darker focus:ring-primary-dark transition-colors"
           >
             Close
           </button>

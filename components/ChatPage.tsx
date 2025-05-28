@@ -1,3 +1,4 @@
+
 // Fix: Remove triple-slash directive for 'vite/client' as its types are not found and import.meta.env is manually typed.
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo, useContext } from 'react';
@@ -1517,9 +1518,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl }) => {
       </div>
 
        {isSidebarOpen && (
-          <div className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-start">
+          <div className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-[60] flex justify-start"> {/* Increased z-index */}
             <div className="w-full max-w-xs sm:max-w-sm h-full bg-neutral-light dark:bg-neutral-darker shadow-xl p-4 overflow-y-auto">
-              <button onClick={() => setIsSidebarOpen(false)} className="absolute top-4 right-4 text-neutral-darker dark:text-secondary-light hover:text-red-500 dark:hover:text-red-400 z-50" aria-label="Close sidebar">
+              <button onClick={() => setIsSidebarOpen(false)} className="absolute top-4 right-4 text-neutral-darker dark:text-secondary-light hover:text-red-500 dark:hover:text-red-400 z-[70]" aria-label="Close sidebar"> {/* Ensure button is above panel */}
                 <XMarkIcon className="w-6 h-6" />
               </button>
               {sidebarContent}
