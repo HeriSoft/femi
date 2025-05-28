@@ -3,7 +3,7 @@
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo, useContext } from 'react';
 // Update to .ts/.tsx extensions
-import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType } from '../types.ts';
+import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType, UserGlobalProfile } from '../types.ts';
 import type { Content } from '@google/genai'; // For constructing Gemini history
 import { ALL_MODEL_DEFAULT_SETTINGS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY, TRANSLATION_TARGET_LANGUAGES } from '../constants.ts';
 import MessageBubble from './MessageBubble.tsx';
@@ -165,9 +165,10 @@ interface SearchResult {
 
 interface ChatPageProps {
   chatBackgroundUrl: string | null;
+  userProfile: UserGlobalProfile; // Added userProfile prop
 }
 
-const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl }) => {
+const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [selectedModel, setSelectedModel] = useState<Model>(Model.GEMINI);
@@ -208,12 +209,28 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl }) => {
   
   const modelSettings = useMemo(() => {
     const baseSettings = allSettings[selectedModel] || ALL_MODEL_DEFAULT_SETTINGS[Model.GEMINI]!;
+    const aboutMeText = userProfile?.aboutMe?.trim();
     const activePersona = activePersonaId ? personas.find(p => p.id === activePersonaId) : null;
-    if (activePersona && selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS && selectedModel !== Model.REAL_TIME_TRANSLATION) {
-      return { ...baseSettings, systemInstruction: activePersona.instruction };
+
+    // For non-special models, construct system instruction with About Me and Persona
+    if (selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS && selectedModel !== Model.REAL_TIME_TRANSLATION) {
+        let finalSystemInstruction = baseSettings.systemInstruction;
+
+        if (activePersona) {
+            finalSystemInstruction = activePersona.instruction;
+            if (aboutMeText) {
+                finalSystemInstruction = `Background information about the user you are interacting with: "${aboutMeText}".\n\nYour current persona/task based on user's selection: "${activePersona.instruction}"`;
+            }
+        } else if (aboutMeText) {
+            // No persona, but "About Me" exists
+            finalSystemInstruction = `Background information about the user you are interacting with: "${aboutMeText}".\n\nYour task: "${baseSettings.systemInstruction}"`;
+        }
+        // If neither persona nor aboutMeText, finalSystemInstruction remains baseSettings.systemInstruction
+        return { ...baseSettings, systemInstruction: finalSystemInstruction };
     }
+    // For special models (Imagen, TTS, RTTM), just return base settings for that model
     return baseSettings;
-  }, [allSettings, selectedModel, activePersonaId, personas]);
+  }, [allSettings, selectedModel, activePersonaId, personas, userProfile]);
 
 
   const [isLoading, setIsLoading] = useState(false);

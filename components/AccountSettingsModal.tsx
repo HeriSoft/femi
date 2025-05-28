@@ -1,7 +1,8 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
-import { LoginDeviceLog, AccountSettingsModalProps as LocalAccountSettingsModalProps, AccountTabType, BackgroundOption } from '../types.ts';
-import { XMarkIcon, ComputerDesktopIcon, ClockIcon, PhotoIcon, UserCircleIcon as AvatarIcon, CreditCardIcon, CheckCircleIcon, UserCogIcon, ArrowUpTrayIcon } from './Icons.tsx';
+import { LoginDeviceLog, AccountSettingsModalProps as LocalAccountSettingsModalProps, AccountTabType, BackgroundOption, UserGlobalProfile } from '../types.ts';
+import { XMarkIcon, ComputerDesktopIcon, ClockIcon, PhotoIcon, UserCircleIcon as AvatarIcon, CreditCardIcon, CheckCircleIcon, UserCogIcon, ArrowUpTrayIcon, IdentificationIcon } from './Icons.tsx';
 import { LOCAL_STORAGE_DEVICE_LOGS_KEY, ACCOUNT_MENU_ITEMS, DEMO_BACKGROUNDS } from '../constants.ts';
 import { useNotification } from '../contexts/NotificationContext.tsx';
 
@@ -10,9 +11,11 @@ const AccountSettingsModal: React.FC<LocalAccountSettingsModalProps> = ({
     isOpen, 
     onClose,
     onChatBackgroundChange,
-    currentChatBackground
+    currentChatBackground,
+    userProfile, // Added
+    onUpdateUserProfile // Added
 }) => {
-  const [activeTab, setActiveTab] = useState<AccountTabType>('devices');
+  const [activeTab, setActiveTab] = useState<AccountTabType>(ACCOUNT_MENU_ITEMS[0].id); // Default to first item
   const [deviceLogs, setDeviceLogs] = useState<LoginDeviceLog[]>([]);
   const { addNotification } = useNotification();
   
@@ -22,6 +25,8 @@ const AccountSettingsModal: React.FC<LocalAccountSettingsModalProps> = ({
   const [customBackgroundFile, setCustomBackgroundFile] = useState<File | null>(null);
   const [customBackgroundPreviewUrl, setCustomBackgroundPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [aboutMeText, setAboutMeText] = useState(userProfile?.aboutMe || '');
 
   useEffect(() => {
     if (isOpen) {
@@ -55,8 +60,11 @@ const AccountSettingsModal: React.FC<LocalAccountSettingsModalProps> = ({
           addNotification("Failed to load device logs.", "error");
         }
       }
+      if (activeTab === 'profile') {
+        setAboutMeText(userProfile?.aboutMe || '');
+      }
     }
-  }, [isOpen, activeTab, currentChatBackground, addNotification]);
+  }, [isOpen, activeTab, currentChatBackground, userProfile, addNotification]);
 
   const formatTimestamp = (timestamp: number) => {
     return new Date(timestamp).toLocaleString(undefined, {
@@ -102,9 +110,23 @@ const AccountSettingsModal: React.FC<LocalAccountSettingsModalProps> = ({
         }
     }
   };
+  
+  const handleSaveAboutMe = () => {
+    if (userProfile) {
+        const updatedProfile: UserGlobalProfile = {
+            ...userProfile,
+            aboutMe: aboutMeText.trim(),
+        };
+        onUpdateUserProfile(updatedProfile);
+        addNotification("Your profile information has been saved.", "success");
+    } else {
+        addNotification("Could not save profile information. User profile not available.", "error");
+    }
+  };
 
   const getIconForTab = (tabId: AccountTabType) => {
     switch(tabId) {
+        case 'profile': return <IdentificationIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3" />;
         case 'devices': return <ComputerDesktopIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3" />;
         case 'background': return <PhotoIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3" />;
         case 'avatar': return <AvatarIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3" />;
@@ -117,6 +139,31 @@ const AccountSettingsModal: React.FC<LocalAccountSettingsModalProps> = ({
 
   const renderTabContent = () => {
     switch (activeTab) {
+      case 'profile':
+        return (
+          <section>
+            <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light mb-3">
+              About Me
+            </h3>
+            <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-3">
+              Provide some information about yourself so the AI can understand you better. 
+              This context will be used to tailor responses. (e.g., your profession, interests, communication style preferences).
+            </p>
+            <textarea
+              value={aboutMeText}
+              onChange={(e) => setAboutMeText(e.target.value)}
+              rows={8}
+              className="w-full p-3 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none text-sm"
+              placeholder="E.g., I am a software developer specializing in frontend technologies. I enjoy discussing programming, science fiction, and learning new languages. Please provide concise and technical answers when appropriate."
+            />
+            <button 
+              onClick={handleSaveAboutMe}
+              className="mt-4 px-6 py-2 bg-primary hover:bg-primary-dark dark:bg-primary-light dark:hover:bg-primary text-white dark:text-neutral-darker rounded-md text-sm font-medium"
+            >
+              Save Profile
+            </button>
+          </section>
+        );
       case 'devices':
         return (
           <section>

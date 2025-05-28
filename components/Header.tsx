@@ -3,7 +3,7 @@
 import React, { useContext, useState, useRef, useEffect } from 'react';
 import { ThemeContext } from '../App.tsx';
 import { ThemeContextType, UserGlobalProfile, LoginDeviceLog } from '../types.ts'; // Removed LanguageLearningModalProps, Added LoginDeviceLog
-import { SunIcon, MoonIcon, BellIcon, UserCircleIcon as AvatarIcon, KeyIcon, XMarkIcon, AcademicCapIcon, PuzzlePieceIcon, UserCogIcon, ComputerDesktopIcon } from './Icons.tsx'; // Renamed UserCircleIcon to AvatarIcon for clarity
+import { SunIcon, MoonIcon, BellIcon, UserCircleIcon as AvatarIcon, KeyIcon, XMarkIcon, AcademicCapIcon, PuzzlePieceIcon, UserCogIcon, ComputerDesktopIcon, IdentificationIcon } from './Icons.tsx'; // Renamed UserCircleIcon to AvatarIcon for clarity, Added IdentificationIcon
 import { useNotification } from '../contexts/NotificationContext.tsx';
 import NotificationPanel from './NotificationPanel.tsx';
 import AccountSettingsModal from './AccountSettingsModal.tsx'; // Import AccountSettingsModal
@@ -26,6 +26,9 @@ interface HeaderProps {
   // Props for Account Settings background feature
   chatBackgroundUrl: string | null;
   onChatBackgroundChange: (newUrl: string | null) => void;
+  // Props for Account Settings "About Me" feature
+  userProfile: UserGlobalProfile | null;
+  onUpdateUserProfile: (updatedProfile: UserGlobalProfile) => void;
 }
 
 // Helper to parse User Agent for basic OS info
@@ -54,6 +57,8 @@ const Header: React.FC<HeaderProps> = ({
   onToggleGamesModal, 
   chatBackgroundUrl,
   onChatBackgroundChange,
+  userProfile,
+  onUpdateUserProfile,
 }) => {
   const themeContext = useContext(ThemeContext);
   const { unreadCount, markAllAsRead, addNotification } = useNotification();
@@ -378,6 +383,8 @@ const Header: React.FC<HeaderProps> = ({
           onClose={() => setIsAccountSettingsModalOpen(false)}
           onChatBackgroundChange={onChatBackgroundChange}
           currentChatBackground={chatBackgroundUrl}
+          userProfile={userProfile}
+          onUpdateUserProfile={onUpdateUserProfile}
         />
       )}
     </>
