@@ -17,6 +17,7 @@ const placeholderGamesUiData: {
   { id: 'tictactoe-game', title: "Tic-Tac-Toe", description: "Classic X's and O's. Can you beat the opponent or a friend?", icon: <span className="text-2xl">⭕️</span>, isImplemented: true, webGameType: 'tic-tac-toe'},
   { id: 'slidingpuzzle-game', title: "Sliding Puzzle (Numbers)", description: "Arrange the tiles in numerical order.", icon: <span className="text-2xl">🔢</span>, isImplemented: true, webGameType: 'sliding-puzzle'}, 
   { id: 'flappybird-game', title: "Flappy Ball", description: "Navigate the ball through pipes by tapping.", icon: <span className="text-2xl">🏀</span>, isImplemented: true, webGameType: 'flappy-bird'}, 
+  { id: '8ballpool-game', title: "8-Ball Pool", description: "Classic billiards game. Pot your balls and then the 8-ball!", icon: <span className="text-2xl">🎱</span>, isImplemented: true, webGameType: '8-ball-pool'},
 ];
 
 

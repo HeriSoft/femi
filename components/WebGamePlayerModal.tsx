@@ -1,10 +1,12 @@
 
+
 import React from 'react';
 import { WebGamePlayerModalProps } from '../types.ts';
 import { XMarkIcon } from './Icons.tsx';
 import TicTacToeGame from './games/TicTacToeGame.tsx';
 import SlidingPuzzleGame from './games/SlidingPuzzleGame.tsx';
 import FlappyBirdGame from './games/FlappyBirdGame.tsx';
+import EightBallPoolGame from './games/EightBallPoolGame.tsx'; // Import the new game
 
 const WebGamePlayerModal: React.FC<WebGamePlayerModalProps> = ({ isOpen, onClose, gameType, gameTitle }) => {
   if (!isOpen || !gameType) return null;
@@ -17,6 +19,8 @@ const WebGamePlayerModal: React.FC<WebGamePlayerModalProps> = ({ isOpen, onClose
         return <SlidingPuzzleGame />;
       case 'flappy-bird':
         return <FlappyBirdGame />;
+      case '8-ball-pool':
+        return <EightBallPoolGame />;
       default:
         return <p className="text-center text-neutral-500 dark:text-neutral-400">Game not available or type is incorrect.</p>;
     }
@@ -30,6 +34,8 @@ const WebGamePlayerModal: React.FC<WebGamePlayerModalProps> = ({ isOpen, onClose
         return 'max-w-xs sm:max-w-sm'; // Sliding puzzle might be more compact
       case 'tic-tac-toe':
         return 'max-w-xs sm:max-w-sm'; // Tic-tac-toe is also compact
+      case '8-ball-pool':
+        return 'max-w-xl sm:max-w-2xl'; // 8-Ball Pool needs more width
       default:
         return 'max-w-md'; // Default
     }
@@ -75,7 +81,7 @@ const WebGamePlayerModal: React.FC<WebGamePlayerModalProps> = ({ isOpen, onClose
             </button>
         </div>
          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-2 text-center">
-            {gameType === 'flappy-bird' ? 'Click or Tap to Jump.' : 'Use mouse click or tap to play.'}
+            {gameType === 'flappy-bird' ? 'Click or Tap to Jump.' : (gameType === '8-ball-pool' ? 'Click & Drag to Aim & Shoot.' : 'Use mouse click or tap to play.')}
           </p>
       </div>
     </div>
