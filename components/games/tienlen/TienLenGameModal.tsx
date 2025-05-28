@@ -1,8 +1,7 @@
-
 import React from 'react';
 import { XMarkIcon, CardsIcon } from '../../Icons.tsx';
 import { TienLenGameModalProps } from '../../../types.ts';
-import TienLenGame from './TienLenGame';
+import TienLenGame from './TienLenGame.tsx'; // Explicitly added .tsx extension
 
 const TienLenGameModal: React.FC<TienLenGameModalProps> = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
