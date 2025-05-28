@@ -29,9 +29,9 @@ const CardDisplay: React.FC<CardDisplayProps> = ({
   };
 
   const baseClasses = `
-    w-16 h-24 sm:w-20 sm:h-28
+    w-11 h-[77px] sm:w-12 sm:h-[84px] md:w-14 md:h-[98px] lg:w-16 lg:h-24
     border-2 rounded-lg shadow-md flex flex-col items-center justify-center 
-    p-1 transition-all duration-150 ease-in-out
+    p-0.5 sm:p-1 transition-all duration-150 ease-in-out
     ${className}
   `;
 
@@ -39,7 +39,7 @@ const CardDisplay: React.FC<CardDisplayProps> = ({
     ? 'cursor-pointer hover:shadow-lg hover:-translate-y-1'
     : 'cursor-default';
   
-  const selectionClasses = isSelected ? 'ring-2 ring-blue-500 dark:ring-blue-400 ring-offset-2 ring-offset-green-600 dark:ring-offset-green-700 -translate-y-2' : '';
+  const selectionClasses = isSelected ? 'ring-2 ring-blue-500 dark:ring-blue-400 ring-offset-1 sm:ring-offset-2 ring-offset-green-600 dark:ring-offset-green-700 -translate-y-1 sm:-translate-y-1.5 md:-translate-y-2' : '';
   const dimmedClasses = isDimmed ? 'opacity-50 filter grayscale' : '';
   const playabilityClasses = !isPlayable && !isFaceDown ? 'opacity-60' : ''; // Dim if not playable but not completely greyed out
 
@@ -49,9 +49,9 @@ const CardDisplay: React.FC<CardDisplayProps> = ({
         className={`${baseClasses} bg-blue-500 border-blue-700 dark:bg-blue-700 dark:border-blue-900 relative`}
         aria-label="Facedown card"
       >
-        <div className="absolute inset-1 border-2 border-blue-300 dark:border-blue-500 rounded-md opacity-50"></div>
+        <div className="absolute inset-0.5 sm:inset-1 border-2 border-blue-300 dark:border-blue-500 rounded-md opacity-50"></div>
         {/* You can add a more detailed card back design here */}
-        <span className="text-white text-opacity-80 text-xs">CARD</span>
+        <span className="text-white text-opacity-80 text-[8px] sm:text-xs">CARD</span>
       </div>
     );
   }
@@ -73,9 +73,9 @@ const CardDisplay: React.FC<CardDisplayProps> = ({
       tabIndex={onClick && isPlayable && !isDimmed ? 0 : -1}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick?.();}}
     >
-      <div className={`text-lg sm:text-xl font-bold ${suitColor} self-start`}>{card.rank}</div>
-      <div className={`text-2xl sm:text-3xl ${suitColor}`}>{card.suit}</div>
-      <div className={`text-lg sm:text-xl font-bold ${suitColor} self-end transform rotate-180`}>{card.rank}</div>
+      <div className={`text-xs sm:text-sm md:text-base lg:text-lg font-bold ${suitColor} self-start`}>{card.rank}</div>
+      <div className={`text-base sm:text-lg md:text-xl lg:text-2xl ${suitColor}`}>{card.suit}</div>
+      <div className={`text-xs sm:text-sm md:text-base lg:text-lg font-bold ${suitColor} self-end transform rotate-180`}>{card.rank}</div>
     </div>
   );
 };
