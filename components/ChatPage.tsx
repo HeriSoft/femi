@@ -17,7 +17,7 @@ import { sendDeepseekMessageStream } from '../services/deepseekService.ts';
 import { sendMockMessageStream } from '../services/mockApiService.ts';
 import { generateOpenAITTS } from "../services/openaiTTSService"; // Changed this line
 // Added MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon
-import { PaperAirplaneIcon, CogIcon, XMarkIcon, PhotoIcon as PromptIcon, Bars3Icon, ChatBubbleLeftRightIcon, ClockIcon as HistoryIcon, MicrophoneIcon, StopCircleIcon, SpeakerWaveIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon } from './Icons.tsx';
+import { PaperAirplaneIcon, CogIcon, XMarkIcon, PromptIcon, Bars3Icon, ChatBubbleLeftRightIcon, ClockIcon as HistoryIcon, MicrophoneIcon, StopCircleIcon, SpeakerWaveIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon } from './Icons.tsx';
 
 // Helper to deep merge settings, useful for loading from localStorage
 const mergeSettings = (target: AllModelSettings, source: Partial<AllModelSettings>): AllModelSettings => {
@@ -162,8 +162,11 @@ interface SearchResult {
   // Potentially add matchIndex within message in future if needed
 }
 
+interface ChatPageProps {
+  chatBackgroundUrl: string | null;
+}
 
-const ChatPage: React.FC = () => {
+const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [selectedModel, setSelectedModel] = useState<Model>(Model.GEMINI);
@@ -1451,6 +1454,13 @@ const ChatPage: React.FC = () => {
     }
   };
 
+  const chatAreaStyle: React.CSSProperties = chatBackgroundUrl ? {
+    backgroundImage: `url(${chatBackgroundUrl})`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
+  } : {};
+
 
   return (
     <div className="flex h-full">
@@ -1541,7 +1551,10 @@ const ChatPage: React.FC = () => {
                 </div>
             </div>
         ) : (
-          <div className="flex-grow overflow-y-auto mb-4 pr-2 space-y-4">
+          <div 
+            className="flex-grow overflow-y-auto mb-4 pr-2 space-y-4 rounded-md"
+            style={chatAreaStyle}
+          >
             {messages.map((msg) => (
               <div key={msg.id} ref={(el: HTMLDivElement | null) => { if(el) messageRefs.current[msg.id] = el; }}>
                   <MessageBubble 

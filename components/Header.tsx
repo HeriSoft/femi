@@ -2,10 +2,12 @@
 
 import React, { useContext, useState, useRef, useEffect } from 'react';
 import { ThemeContext } from '../App.tsx';
-import { ThemeContextType, UserGlobalProfile } from '../types.ts'; // Removed LanguageLearningModalProps
-import { SunIcon, MoonIcon, BellIcon, UserCircleIcon, KeyIcon, XMarkIcon, AcademicCapIcon, PuzzlePieceIcon } from './Icons.tsx'; 
+import { ThemeContextType, UserGlobalProfile, LoginDeviceLog } from '../types.ts'; // Removed LanguageLearningModalProps, Added LoginDeviceLog
+import { SunIcon, MoonIcon, BellIcon, UserCircleIcon as AvatarIcon, KeyIcon, XMarkIcon, AcademicCapIcon, PuzzlePieceIcon, UserCogIcon, ComputerDesktopIcon } from './Icons.tsx'; // Renamed UserCircleIcon to AvatarIcon for clarity
 import { useNotification } from '../contexts/NotificationContext.tsx';
 import NotificationPanel from './NotificationPanel.tsx';
+import AccountSettingsModal from './AccountSettingsModal.tsx'; // Import AccountSettingsModal
+import { LOCAL_STORAGE_DEVICE_LOGS_KEY, MAX_DEVICE_LOGS } from '../constants.ts';
 // LanguageLearningModal import removed as it's now handled by App.tsx
 
 export interface MockUser {
@@ -20,9 +22,27 @@ interface HeaderProps {
   openLoginModalInitially?: boolean;
   onLoginModalOpened?: () => void; 
   onToggleLanguageLearningModal: () => void; 
-  onToggleGamesModal: () => void; // New prop for games modal
-  // userProfile, onUpdateUserProfile, onAddExp props removed as modal is in App.tsx
+  onToggleGamesModal: () => void; 
+  // Props for Account Settings background feature
+  chatBackgroundUrl: string | null;
+  onChatBackgroundChange: (newUrl: string | null) => void;
 }
+
+// Helper to parse User Agent for basic OS info
+const getDeviceType = (): string => {
+  const ua = navigator.userAgent;
+  const platform = (navigator as any).userAgentData?.platform || navigator.platform || "Unknown";
+
+  if (/\b(iPhone|iPod|iPad)/i.test(ua) || /iPhone|iPod|iPad/i.test(platform)) return "iPhone/iPad";
+  if (/\bAndroid/i.test(ua)) return "Android";
+  if (/\bWindows/i.test(ua) || /Win/i.test(platform)) return "Windows";
+  if (/\bMac/i.test(ua) || /Mac/i.test(platform)) return "Mac OS";
+  if (/\bLinux/i.test(ua) || /Linux/i.test(platform)) return "Linux";
+  if (/\bCrOS/i.test(ua)) return "Chrome OS"; // Chromebooks
+  
+  return "Unknown Device";
+};
+
 
 const Header: React.FC<HeaderProps> = ({
   currentUser,
@@ -32,6 +52,8 @@ const Header: React.FC<HeaderProps> = ({
   onLoginModalOpened,
   onToggleLanguageLearningModal,
   onToggleGamesModal, 
+  chatBackgroundUrl,
+  onChatBackgroundChange,
 }) => {
   const themeContext = useContext(ThemeContext);
   const { unreadCount, markAllAsRead, addNotification } = useNotification();
@@ -48,6 +70,9 @@ const Header: React.FC<HeaderProps> = ({
   const loginModalRef = useRef<HTMLDivElement>(null);
   const loginButtonRef = useRef<HTMLButtonElement>(null);
   const [isLoginLoading, setIsLoginLoading] = useState(false);
+
+  const [isAccountSettingsModalOpen, setIsAccountSettingsModalOpen] = useState(false);
+
 
   // isLanguageLearningModalOpen state removed
 
@@ -80,6 +105,27 @@ const Header: React.FC<HeaderProps> = ({
     setLoginCodeInput('');
   };
 
+  const recordLoginDevice = () => {
+    try {
+      const deviceLogsString = localStorage.getItem(LOCAL_STORAGE_DEVICE_LOGS_KEY);
+      let deviceLogs: LoginDeviceLog[] = deviceLogsString ? JSON.parse(deviceLogsString) : [];
+      
+      const newLog: LoginDeviceLog = {
+        id: `log-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        device: getDeviceType(),
+        timestamp: Date.now(),
+      };
+
+      deviceLogs.unshift(newLog); // Add to the beginning
+      deviceLogs = deviceLogs.slice(0, MAX_DEVICE_LOGS); // Keep only the N most recent
+
+      localStorage.setItem(LOCAL_STORAGE_DEVICE_LOGS_KEY, JSON.stringify(deviceLogs));
+    } catch (error) {
+      console.error("Error recording login device:", error);
+      addNotification("Could not record login device information.", "error", (error as Error).message);
+    }
+  };
+
   const handleLoginSubmit = async () => {
     if (!loginCodeInput.trim()) {
       addNotification("Please enter a login code.", "error");
@@ -101,6 +147,7 @@ const Header: React.FC<HeaderProps> = ({
         onLogin({ name: "Authenticated User" });
         addNotification("Login successful!", "success");
         setIsLoginModalOpen(false);
+        recordLoginDevice(); // Record device on successful login
       } else {
         addNotification(data.message || "Invalid login code or server error.", "error");
         setLoginCodeInput(''); 
@@ -118,6 +165,12 @@ const Header: React.FC<HeaderProps> = ({
     setIsLoginDropdownOpen(false);
     addNotification("You have been logged out.", "info");
   };
+  
+  const handleOpenAccountSettings = () => {
+    setIsAccountSettingsModalOpen(true);
+    setIsLoginDropdownOpen(false);
+  };
+
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -223,7 +276,7 @@ const Header: React.FC<HeaderProps> = ({
                   aria-label="User menu"
                   aria-expanded={isLoginDropdownOpen}
                 >
-                  <UserCircleIcon className="w-8 h-8 text-neutral-darker dark:text-secondary-light" />
+                  <AvatarIcon className="w-8 h-8 text-neutral-darker dark:text-secondary-light" />
                   <span className="text-sm font-medium text-neutral-darker dark:text-secondary-light hidden sm:block">{currentUser.name}</span>
                 </button>
                 {isLoginDropdownOpen && (
@@ -235,6 +288,12 @@ const Header: React.FC<HeaderProps> = ({
                       <p className="text-sm font-medium text-neutral-darker dark:text-secondary-light truncate">{currentUser.name}</p>
                       {currentUser.email && <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate">{currentUser.email}</p>}
                     </div>
+                    <button
+                      onClick={handleOpenAccountSettings}
+                      className="w-full text-left px-4 py-2 text-sm text-neutral-darker dark:text-secondary-light hover:bg-secondary dark:hover:bg-neutral-dark transition-colors flex items-center"
+                    >
+                      <UserCogIcon className="w-4 h-4 mr-2" /> Account
+                    </button>
                     <button
                       onClick={handleSignOut} 
                       className="w-full text-left px-4 py-2 text-sm text-neutral-darker dark:text-secondary-light hover:bg-secondary dark:hover:bg-neutral-dark transition-colors"
@@ -312,7 +371,15 @@ const Header: React.FC<HeaderProps> = ({
           </div>
         )}
       </header>
-      {/* LanguageLearningModal rendering moved to App.tsx */}
+      
+      {currentUser && isAccountSettingsModalOpen && (
+        <AccountSettingsModal
+          isOpen={isAccountSettingsModalOpen}
+          onClose={() => setIsAccountSettingsModalOpen(false)}
+          onChatBackgroundChange={onChatBackgroundChange}
+          currentChatBackground={chatBackgroundUrl}
+        />
+      )}
     </>
   );
 };
