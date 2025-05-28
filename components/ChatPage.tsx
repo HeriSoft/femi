@@ -1,3 +1,4 @@
+
 // Fix: Remove triple-slash directive for 'vite/client' as its types are not found and import.meta.env is manually typed.
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo, useContext } from 'react';
@@ -15,8 +16,8 @@ import { sendOpenAIMessageStream } from '../services/openaiService.ts';
 import { sendDeepseekMessageStream } from '../services/deepseekService.ts';
 import { sendMockMessageStream } from '../services/mockApiService.ts';
 import { generateOpenAITTS } from "../services/openaiTTSService"; // Changed this line
-// Added MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon
-import { PaperAirplaneIcon, CogIcon, XMarkIcon, PromptIcon, Bars3Icon, ChatBubbleLeftRightIcon, ClockIcon as HistoryIcon, MicrophoneIcon, StopCircleIcon, SpeakerWaveIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon } from './Icons.tsx';
+// Added MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon, ChevronDownIcon
+import { PaperAirplaneIcon, CogIcon, XMarkIcon, PromptIcon, Bars3Icon, ChatBubbleLeftRightIcon, ClockIcon as HistoryIcon, MicrophoneIcon, StopCircleIcon, SpeakerWaveIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon, ChevronDownIcon } from './Icons.tsx';
 import { ThemeContext } from '../App.tsx'; // Import ThemeContext
 
 // Helper to deep merge settings, useful for loading from localStorage
@@ -228,6 +229,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl }) => {
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>('settings');
 
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null); // For scroll button
+  const [showScrollToBottomButton, setShowScrollToBottomButton] = useState(false);
 
   const isImagenModelSelected = selectedModel === Model.IMAGEN3;
   const isTextToSpeechModelSelected = selectedModel === Model.OPENAI_TTS;
@@ -336,10 +339,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl }) => {
 
 
   useEffect(() => {
-    if (!isSearchActive && !isRealTimeTranslationMode) { 
+    if (!isSearchActive && !isRealTimeTranslationMode && !showScrollToBottomButton) { 
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, isSearchActive, isRealTimeTranslationMode]);
+  }, [messages, isSearchActive, isRealTimeTranslationMode, showScrollToBottomButton]);
   
   // Effect for model selection changes, including GPT-4.1 access modal
   useEffect(() => {
@@ -536,7 +539,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl }) => {
     return () => {
       recognition?.abort(); // Use abort instead of stop for faster cleanup
     };
-  }, [addNotification, isRealTimeTranslationMode, modelSettings, translateLiveSegment]); 
+  }, [addNotification, isRealTimeTranslationMode, modelSettings, translateLiveSegment, isListening]); // Added isListening to deps to re-init correctly
 
 
   const handleToggleListen = () => {
@@ -1358,6 +1361,27 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl }) => {
     }
   }, [currentSearchResultIndex, searchResults, isSearchActive]);
 
+  // Scroll to bottom button logic
+  const handleScroll = useCallback(() => {
+    if (chatContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+      // Show button if scrolled up more than 40px from the bottom
+      setShowScrollToBottomButton(scrollHeight - scrollTop - clientHeight > 40);
+    }
+  }, []);
+
+  useEffect(() => {
+    const chatDiv = chatContainerRef.current;
+    if (chatDiv) {
+      chatDiv.addEventListener('scroll', handleScroll);
+      return () => chatDiv.removeEventListener('scroll', handleScroll);
+    }
+  }, [handleScroll]);
+
+  const scrollToBottomUiButton = useCallback(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setShowScrollToBottomButton(false); // Hide button after clicking
+  }, []);
   
   const sidebarContent = (
     <>
@@ -1575,7 +1599,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl }) => {
             </div>
         ) : (
           <div 
-            className="flex-grow overflow-y-auto mb-4 pr-2 space-y-2" // Reduced space-y-4 to space-y-2 for tighter packing
+            ref={chatContainerRef}
+            className="flex-grow overflow-y-auto mb-4 pr-2 space-y-2 relative" // Added relative for button positioning
             style={chatAreaStyle}
           >
             {messages.map((msg, index) => {
@@ -1605,6 +1630,26 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl }) => {
               <MessageBubble key="loading-initial" message={{id: 'loading-initial', text: isImagenModelSelected ? 'Generating image(s)...' : (isTextToSpeechModelSelected ? 'Synthesizing audio...' : 'Thinking...'), sender: 'ai', model: selectedModel, timestamp: Date.now(), promptedByMessageId: 'initial' }} showAvatar={true} />
             )}
             <div ref={chatEndRef} />
+            {/* Scroll to Bottom Button - Only shown if not in RTTM */}
+            {!isRealTimeTranslationMode && (
+                <button
+                    onClick={scrollToBottomUiButton}
+                    className={`
+                        absolute bottom-4 right-4 z-20 p-2.5 
+                        bg-primary dark:bg-primary-light text-white 
+                        rounded-full shadow-lg 
+                        hover:bg-primary-dark dark:hover:bg-primary 
+                        focus:outline-none focus:ring-2 focus:ring-primary-dark dark:focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-neutral-darker 
+                        transition-all duration-300 ease-in-out transform
+                        ${showScrollToBottomButton ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-4 pointer-events-none'}
+                    `}
+                    aria-label="Scroll to latest messages"
+                    title="Scroll to Bottom"
+                    aria-hidden={!showScrollToBottomButton}
+                >
+                    <ChevronDownIcon className="w-5 h-5" />
+                </button>
+            )}
           </div>
         )}
 
