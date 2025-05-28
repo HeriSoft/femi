@@ -116,7 +116,7 @@ const AppContent: React.FC<AppContentProps> = ({
             onClose={onToggleGamesModal} 
             onPlayWebGame={onPlayWebGame}
           />
-          {activeWebGameType !== 'tien-len' && ( // Render WebGamePlayerModal only if not Tien Len
+          {activeWebGameType !== 'tien-len' && activeWebGameType !== '8-ball-pool' && ( // Render WebGamePlayerModal only if not Tien Len or 8-Ball Pool
             <WebGamePlayerModal
                 isOpen={isWebGamePlayerModalOpen}
                 onClose={onCloseWebGamePlayerModal}
@@ -124,10 +124,21 @@ const AppContent: React.FC<AppContentProps> = ({
                 gameTitle={activeWebGameTitle}
             />
           )}
-          <TienLenGameModal 
-            isOpen={isTienLenModalOpen}
-            onClose={onToggleTienLenModal}
-          />
+          {/* Specific modals for games that need full screen or special layout */}
+          {activeWebGameType === 'tien-len' && (
+            <TienLenGameModal 
+                isOpen={isWebGamePlayerModalOpen} // Reuse isWebGamePlayerModalOpen for Tien Len
+                onClose={onCloseWebGamePlayerModal} // Reuse onCloseWebGamePlayerModal
+            />
+          )}
+           {activeWebGameType === '8-ball-pool' && (
+            <WebGamePlayerModal // 8-Ball pool can use the generic WebGamePlayerModal
+                isOpen={isWebGamePlayerModalOpen}
+                onClose={onCloseWebGamePlayerModal}
+                gameType={activeWebGameType}
+                gameTitle={activeWebGameTitle}
+            />
+          )}
         </>
       )}
     </div>
@@ -153,7 +164,7 @@ const App: React.FC = () => {
   const [isWebGamePlayerModalOpen, setIsWebGamePlayerModalOpen] = useState(false);
   const [activeWebGameType, setActiveWebGameType] = useState<WebGameType>(null);
   const [activeWebGameTitle, setActiveWebGameTitle] = useState<string>('');
-  const [isTienLenModalOpen, setIsTienLenModalOpen] = useState(false); // Tien Len state
+  // const [isTienLenModalOpen, setIsTienLenModalOpen] = useState(false); // Tien Len state - managed by activeWebGameType now
   const [chatBackgroundUrl, setChatBackgroundUrl] = useState<string | null>(null);
   
   const notificationsHook = useNotification(); 
@@ -199,7 +210,7 @@ const App: React.FC = () => {
       setIsLanguageLearningModalOpen(false); 
       setIsGamesModalOpen(false); 
       setIsWebGamePlayerModalOpen(false);
-      setIsTienLenModalOpen(false); // Close Tien Len modal on logout
+      // setIsTienLenModalOpen(false); // Close Tien Len modal on logout
       setActiveWebGameType(null);
     }
   }, [currentUser]);
@@ -289,29 +300,31 @@ const App: React.FC = () => {
     }
   }, [currentUser]);
 
-  const onToggleTienLenModal = useCallback(() => {
-    if (currentUser) {
-        setIsTienLenModalOpen(prev => !prev);
-    }
-  }, [currentUser]);
-
+  // Combined logic for playing any web game (including Tien Len or 8-ball pool which use WebGamePlayerModal)
   const onPlayWebGame = useCallback((gameType: WebGameType, gameTitle: string) => {
-    if (gameType === 'tien-len') {
-      onToggleTienLenModal();
-      setIsGamesModalOpen(false);
-    } else if (gameType) {
+    if (gameType) {
       setActiveWebGameType(gameType);
       setActiveWebGameTitle(gameTitle);
-      setIsWebGamePlayerModalOpen(true);
-      setIsGamesModalOpen(false); 
+      setIsWebGamePlayerModalOpen(true); // Open the generic (or specific if handled by type) player modal
+      setIsGamesModalOpen(false); // Close the main games selection modal
     }
-  }, [onToggleTienLenModal]);
+  }, []);
 
   const onCloseWebGamePlayerModal = useCallback(() => {
     setIsWebGamePlayerModalOpen(false);
     setActiveWebGameType(null);
     setActiveWebGameTitle('');
   }, []);
+  
+  // Remove onToggleTienLenModal as it's now covered by general game playing logic
+  // const onToggleTienLenModal = useCallback(() => {
+  //   if (currentUser) {
+  //       // This might need to be reworked if TienLen uses a different modal flag
+  //       setActiveWebGameType(prev => prev === 'tien-len' ? null : 'tien-len');
+  //       setIsWebGamePlayerModalOpen(prev => !prev); // Example: toggle general game player modal
+  //   }
+  // }, [currentUser]);
+
 
   const themeContextValue = useMemo(() => ({ theme, toggleTheme }), [theme, toggleTheme]);
 
@@ -340,8 +353,8 @@ const App: React.FC = () => {
         isWebGamePlayerModalOpen={isWebGamePlayerModalOpen}
         onCloseWebGamePlayerModal={onCloseWebGamePlayerModal}
         
-        isTienLenModalOpen={isTienLenModalOpen} 
-        onToggleTienLenModal={onToggleTienLenModal}
+        isTienLenModalOpen={activeWebGameType === 'tien-len' && isWebGamePlayerModalOpen} // Derived state
+        onToggleTienLenModal={() => { /* Handled by onPlayWebGame and onCloseWebGamePlayerModal */ }} // Simplified
 
         chatBackgroundUrl={chatBackgroundUrl}
         onChatBackgroundChange={handleChatBackgroundChange}

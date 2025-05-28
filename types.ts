@@ -293,7 +293,7 @@ export interface LanguageLearningModalProps {
 }
 
 // Mini Games Arcade Types
-export type WebGameType = 'tic-tac-toe' | 'sliding-puzzle' | 'snake' | 'flappy-bird' | 'tien-len' | null;
+export type WebGameType = 'tic-tac-toe' | 'sliding-puzzle' | 'snake' | 'flappy-bird' | 'tien-len' | '8-ball-pool' | null;
 
 
 export interface GamesModalProps {
