@@ -1,10 +1,9 @@
 
+
 import React from 'react';
-import { XMarkIcon, PuzzlePieceIcon } from './Icons.tsx'; 
+import { XMarkIcon, PuzzlePieceIcon, CardsIcon } from './Icons.tsx'; 
 import { useNotification } from '../contexts/NotificationContext.tsx';
 import { GamesModalProps as LocalGamesModalProps, WebGameType } from '../types.ts'; // Removed DosGameConfig
-
-// dosGamesList removed as DOS games are removed.
 
 const placeholderGamesUiData: { 
   id: string; 
@@ -12,27 +11,22 @@ const placeholderGamesUiData: {
   description: string; 
   icon?: React.ReactNode; 
   isImplemented?: boolean; 
-  // dosGameId removed
   webGameType?: WebGameType; 
 }[] = [
+  { id: 'tienlen-game', title: "Tiến Lên (Miền Nam)", description: "Classic Vietnamese card game. Be the first to empty your hand!", icon: <CardsIcon className="w-6 h-6 text-red-500" />, isImplemented: true, webGameType: 'tien-len'},
   { id: 'tictactoe-game', title: "Tic-Tac-Toe", description: "Classic X's and O's. Can you beat the opponent or a friend?", icon: <span className="text-2xl">⭕️</span>, isImplemented: true, webGameType: 'tic-tac-toe'},
   { id: 'slidingpuzzle-game', title: "Sliding Puzzle (Numbers)", description: "Arrange the tiles in numerical order.", icon: <span className="text-2xl">🔢</span>, isImplemented: true, webGameType: 'sliding-puzzle'}, 
   { id: 'flappybird-game', title: "Flappy Ball", description: "Navigate the ball through pipes by tapping.", icon: <span className="text-2xl">🏀</span>, isImplemented: true, webGameType: 'flappy-bird'}, 
-  // Sky Jumper removed
-  // Speed Racer removed
-  // Block Puzzle removed
-  // Retro Shooter removed
 ];
 
 
-const GamesModal: React.FC<LocalGamesModalProps> = ({ isOpen, onClose, onPlayWebGame }) => { // onPlayDosGame removed
+const GamesModal: React.FC<LocalGamesModalProps> = ({ isOpen, onClose, onPlayWebGame }) => {
   const { addNotification } = useNotification();
 
   const handlePlayGameClick = (gameUiData: typeof placeholderGamesUiData[0]) => {
     if (gameUiData.isImplemented) {
       if (gameUiData.webGameType) {
         onPlayWebGame(gameUiData.webGameType, gameUiData.title);
-      // DOS game logic removed
       } else {
         addNotification(`${gameUiData.title} configuration is incomplete.`, 'error');
       }
