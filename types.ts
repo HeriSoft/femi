@@ -293,18 +293,15 @@ export interface LanguageLearningModalProps {
 }
 
 // Mini Games Arcade Types
-// DosGameConfig removed as DOS games are removed.
+export type WebGameType = 'tic-tac-toe' | 'sliding-puzzle' | 'snake' | 'flappy-bird' | 'tien-len' | null;
 
-export type WebGameType = 'tic-tac-toe' | 'sliding-puzzle' | 'snake' | 'flappy-bird' | null;
 
 export interface GamesModalProps {
   isOpen: boolean;
   onClose: () => void;
-  // onPlayDosGame removed
   onPlayWebGame: (gameType: WebGameType, gameTitle: string) => void; 
 }
 
-// DosGamePlayerModalProps removed as DOS games are removed.
 
 export interface WebGamePlayerModalProps {
   isOpen: boolean;
@@ -335,4 +332,72 @@ export interface AccountSettingsModalProps {
   onClose: () => void;
   onChatBackgroundChange: (newUrl: string | null) => void; // Callback to update App's background state
   currentChatBackground: string | null; // Pass current background to initialize selection
+}
+
+// Tien Len Game Types
+export enum CardSuit {
+  SPADES = '♠',   // Bích
+  CLUBS = '♣',    // Chuồn (Tép)
+  DIAMONDS = '♦', // Rô
+  HEARTS = '♥',   // Cơ
+}
+
+export enum CardRank { // Values for sorting, 3 is lowest, 2 is highest
+  THREE = '3', FOUR = '4', FIVE = '5', SIX = '6', SEVEN = '7',
+  EIGHT = '8', NINE = '9', TEN = '10', JACK = 'J', QUEEN = 'Q',
+  KING = 'K', ACE = 'A', TWO = '2',
+}
+
+export interface TienLenCard {
+  id: string; // e.g., "H3" for Heart 3, "S2" for Spade 2
+  rank: CardRank;
+  suit: CardSuit;
+  value: number; // Numerical value for comparison (3=0, ..., 2=12)
+  isSelected?: boolean;
+}
+
+export type PlayerHand = TienLenCard[];
+
+export enum TienLenHandType {
+  INVALID = 'INVALID',
+  SINGLE = 'SINGLE',
+  PAIR = 'PAIR',
+  TRIPLE = 'TRIPLE',
+  STRAIGHT = 'STRAIGHT', // Sequence of 3+ cards
+  THREE_PAIR_STRAIGHT = 'THREE_PAIR_STRAIGHT', // Ba đôi thông
+  FOUR_OF_A_KIND = 'FOUR_OF_A_KIND', // Tứ quý
+  // Add more complex types like FOUR_PAIR_STRAIGHT (Bốn đôi thông), STRAIGHT_FLUSH (Sảnh rồng) later if needed
+}
+
+export interface ValidatedHand {
+  type: TienLenHandType;
+  cards: TienLenCard[];
+  rankValue: number; // For singles, pairs, triples, quads: the rank of the cards. For straights: the rank of the highest card.
+  suitValue?: number; // For singles, the suit value for tie-breaking.
+  length?: number; // For straights, the number of cards in the straight.
+}
+
+
+export interface TienLenGameState {
+  playerHand: PlayerHand;
+  aiHand: PlayerHand;
+  table: TienLenCard[]; // Cards currently displayed on the table (from the last played valid hand)
+  lastPlayedHand: ValidatedHand | null; // The last successfully played hand's structured info
+  currentPlayer: 'player' | 'ai';
+  turnHistory: Array<{ player: 'player' | 'ai'; playedCards: ValidatedHand | null; passed: boolean }>;
+  winner: 'player' | 'ai' | null;
+  isDealing: boolean;
+  statusMessage: string;
+  playerScore: number;
+  aiScore: number;
+  turnTimer: number;
+  isPaused: boolean;
+  firstPlayerOfTheGame: 'player' | 'ai' | null; // Who holds 3 of Spades
+  isFirstTurnOfGame: boolean; // Is it the very first turn of the entire game?
+}
+
+
+export interface TienLenGameModalProps {
+  isOpen: boolean;
+  onClose: () => void;
 }

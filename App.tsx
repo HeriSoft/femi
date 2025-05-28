@@ -1,11 +1,13 @@
 
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { ThemeContextType, Model, UserGlobalProfile, LanguageOption, UserLanguageProfile, WebGameType, NotificationType as AppNotificationType } from './types.ts';
+import { ThemeContextType, Model, UserGlobalProfile, LanguageOption, UserLanguageProfile, WebGameType, NotificationType as AppNotificationType, TienLenGameModalProps } from './types.ts';
 import ChatPage from './components/ChatPage.tsx';
 import Header, { MockUser } from './components/Header.tsx';
 import LanguageLearningModal from './components/LanguageLearningModal.tsx';
 import GamesModal from './components/GamesModal.tsx';
 import WebGamePlayerModal from './components/WebGamePlayerModal.tsx';
+import TienLenGameModal from './components/games/tienlen/TienLenGameModal.tsx'; // Import TienLenGameModal
 import { NotificationProvider, useNotification } from './contexts/NotificationContext.tsx';
 import { KeyIcon } from './components/Icons.tsx';
 import { LOCAL_STORAGE_USER_PROFILE_KEY, DEFAULT_USER_LANGUAGE_PROFILE, EXP_MILESTONES_CONFIG, BADGES_CATALOG, LOCAL_STORAGE_CHAT_BACKGROUND_KEY } from './constants.ts';
@@ -36,6 +38,9 @@ interface AppContentProps {
   isWebGamePlayerModalOpen: boolean;
   onCloseWebGamePlayerModal: () => void;
   
+  isTienLenModalOpen: boolean; // Tien Len Modal State
+  onToggleTienLenModal: () => void; // Tien Len Modal Toggle
+
   chatBackgroundUrl: string | null;
   onChatBackgroundChange: (newUrl: string | null) => void;
   
@@ -49,10 +54,10 @@ const AppContent: React.FC<AppContentProps> = ({
   isGamesModalOpen, onToggleGamesModal,
   userProfile, onUpdateUserProfile, onAddExpWithNotification,
   activeWebGameType, onPlayWebGame, activeWebGameTitle, isWebGamePlayerModalOpen, onCloseWebGamePlayerModal,
+  isTienLenModalOpen, onToggleTienLenModal, // Tien Len props
   chatBackgroundUrl, onChatBackgroundChange,
   isAppReady
 }) => {
-  // const { addNotification: addAppNotification } = useNotification(); // Not needed directly here anymore
 
   if (currentUser && !isAppReady) {
     return (
@@ -101,21 +106,27 @@ const AppContent: React.FC<AppContentProps> = ({
         <>
           <LanguageLearningModal
             isOpen={isLanguageLearningModalOpen}
-            onClose={onToggleLanguageLearningModal} // Use toggle to close
+            onClose={onToggleLanguageLearningModal} 
             userProfile={userProfile}
             onUpdateProfile={onUpdateUserProfile}
             onAddExp={onAddExpWithNotification}
           />
           <GamesModal
             isOpen={isGamesModalOpen}
-            onClose={onToggleGamesModal} // Use toggle to close
+            onClose={onToggleGamesModal} 
             onPlayWebGame={onPlayWebGame}
           />
-          <WebGamePlayerModal
-              isOpen={isWebGamePlayerModalOpen}
-              onClose={onCloseWebGamePlayerModal}
-              gameType={activeWebGameType}
-              gameTitle={activeWebGameTitle}
+          {activeWebGameType !== 'tien-len' && ( // Render WebGamePlayerModal only if not Tien Len
+            <WebGamePlayerModal
+                isOpen={isWebGamePlayerModalOpen}
+                onClose={onCloseWebGamePlayerModal}
+                gameType={activeWebGameType}
+                gameTitle={activeWebGameTitle}
+            />
+          )}
+          <TienLenGameModal 
+            isOpen={isTienLenModalOpen}
+            onClose={onToggleTienLenModal}
           />
         </>
       )}
@@ -142,11 +153,10 @@ const App: React.FC = () => {
   const [isWebGamePlayerModalOpen, setIsWebGamePlayerModalOpen] = useState(false);
   const [activeWebGameType, setActiveWebGameType] = useState<WebGameType>(null);
   const [activeWebGameTitle, setActiveWebGameTitle] = useState<string>('');
+  const [isTienLenModalOpen, setIsTienLenModalOpen] = useState(false); // Tien Len state
   const [chatBackgroundUrl, setChatBackgroundUrl] = useState<string | null>(null);
   
-  // Access addNotification from the context to pass to handleAddExp
-  // This hook must be called within NotificationProvider, so we'll grab it in App and pass the function down
-  const notificationsHook = useNotification(); // Call the hook at the top level of a component wrapped by provider
+  const notificationsHook = useNotification(); 
   const addAppNotification = notificationsHook.addNotification;
 
   useEffect(() => {
@@ -189,6 +199,7 @@ const App: React.FC = () => {
       setIsLanguageLearningModalOpen(false); 
       setIsGamesModalOpen(false); 
       setIsWebGamePlayerModalOpen(false);
+      setIsTienLenModalOpen(false); // Close Tien Len modal on logout
       setActiveWebGameType(null);
     }
   }, [currentUser]);
@@ -278,14 +289,23 @@ const App: React.FC = () => {
     }
   }, [currentUser]);
 
+  const onToggleTienLenModal = useCallback(() => {
+    if (currentUser) {
+        setIsTienLenModalOpen(prev => !prev);
+    }
+  }, [currentUser]);
+
   const onPlayWebGame = useCallback((gameType: WebGameType, gameTitle: string) => {
-    if (gameType) {
+    if (gameType === 'tien-len') {
+      onToggleTienLenModal();
+      setIsGamesModalOpen(false);
+    } else if (gameType) {
       setActiveWebGameType(gameType);
       setActiveWebGameTitle(gameTitle);
       setIsWebGamePlayerModalOpen(true);
       setIsGamesModalOpen(false); 
     }
-  }, []);
+  }, [onToggleTienLenModal]);
 
   const onCloseWebGamePlayerModal = useCallback(() => {
     setIsWebGamePlayerModalOpen(false);
@@ -297,7 +317,6 @@ const App: React.FC = () => {
 
   return (
     <ThemeContext.Provider value={themeContextValue}>
-      {/* NotificationProvider is now at the root, AppContent uses its context */}
       <AppContent
         currentUser={currentUser}
         onLogin={handleLogin}
@@ -313,7 +332,7 @@ const App: React.FC = () => {
         
         userProfile={userProfile}
         onUpdateUserProfile={handleUpdateUserProfile}
-        onAddExpWithNotification={handleAddExpWithNotification} // Pass the bound version
+        onAddExpWithNotification={handleAddExpWithNotification}
 
         activeWebGameType={activeWebGameType}
         onPlayWebGame={onPlayWebGame}
@@ -321,6 +340,9 @@ const App: React.FC = () => {
         isWebGamePlayerModalOpen={isWebGamePlayerModalOpen}
         onCloseWebGamePlayerModal={onCloseWebGamePlayerModal}
         
+        isTienLenModalOpen={isTienLenModalOpen} 
+        onToggleTienLenModal={onToggleTienLenModal}
+
         chatBackgroundUrl={chatBackgroundUrl}
         onChatBackgroundChange={handleChatBackgroundChange}
         
@@ -330,9 +352,6 @@ const App: React.FC = () => {
   );
 };
 
-
-// This RootAppWrapper is necessary because useNotification must be called inside NotificationProvider.
-// App component sets up providers, RootAppWrapper then contains the logic that might call useNotification (indirectly via handleAddExp).
 const RootAppWrapper: React.FC = () => {
   return (
     <NotificationProvider>

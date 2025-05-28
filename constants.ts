@@ -1,6 +1,6 @@
 
 
-import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption } from './types.ts'; // Update to .ts
+import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank } from './types.ts'; // Update to .ts
 
 export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
   temperature: 0.7,
@@ -165,3 +165,31 @@ export const DEMO_BACKGROUNDS: BackgroundOption[] = [
     thumbnailUrl: 'https://i.ibb.co/mp8DJtd/v882-sasi-34-e.jpg' 
   },
 ];
+
+// Tien Len Game Constants
+export const TIEN_LEN_SUITS: CardSuit[] = [CardSuit.SPADES, CardSuit.CLUBS, CardSuit.DIAMONDS, CardSuit.HEARTS];
+export const TIEN_LEN_RANKS: CardRank[] = [
+  CardRank.THREE, CardRank.FOUR, CardRank.FIVE, CardRank.SIX, CardRank.SEVEN,
+  CardRank.EIGHT, CardRank.NINE, CardRank.TEN, CardRank.JACK, CardRank.QUEEN,
+  CardRank.KING, CardRank.ACE, CardRank.TWO
+];
+
+// Numerical values for ranks (3 is lowest, 2 is highest)
+export const TIEN_LEN_RANK_VALUES: Record<CardRank, number> = {
+  [CardRank.THREE]: 0, [CardRank.FOUR]: 1, [CardRank.FIVE]: 2, [CardRank.SIX]: 3,
+  [CardRank.SEVEN]: 4, [CardRank.EIGHT]: 5, [CardRank.NINE]: 6, [CardRank.TEN]: 7,
+  [CardRank.JACK]: 8, [CardRank.QUEEN]: 9, [CardRank.KING]: 10, [CardRank.ACE]: 11,
+  [CardRank.TWO]: 12,
+};
+
+// Suit priorities (lower value is weaker suit for same rank)
+export const TIEN_LEN_SUIT_VALUES: Record<CardSuit, number> = {
+  [CardSuit.SPADES]: 0,   // Bích
+  [CardSuit.CLUBS]: 1,    // Chuồn (Tép)
+  [CardSuit.DIAMONDS]: 2, // Rô
+  [CardSuit.HEARTS]: 3,   // Cơ
+};
+
+export const CARDS_PER_PLAYER = 12; // Changed from 13 to 12
+export const TIEN_LEN_TURN_COUNTDOWN_SECONDS = 10;
+export const TIEN_LEN_AI_THINKING_MILLISECONDS = 1500;
