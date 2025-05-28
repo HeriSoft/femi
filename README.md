@@ -1,4 +1,5 @@
-![Untitled](https://github.com/user-attachments/assets/460db9ab-3804-4e7c-bddc-42fadeb96462)
+![Untitled](https://github.com/user-attachments/assets/0be0d945-e609-4237-aa84-ce0a05791a06)
+
 
 # femi - Multimodel AI Chat
 
