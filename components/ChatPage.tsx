@@ -1,9 +1,8 @@
-
 // Fix: Remove triple-slash directive for 'vite/client' as its types are not found and import.meta.env is manually typed.
 // Fix: Add 'useMemo' to React import
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo, useContext } from 'react';
 // Update to .ts/.tsx extensions
-import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice } from '../types.ts';
+import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType } from '../types.ts';
 import type { Content } from '@google/genai'; // For constructing Gemini history
 import { ALL_MODEL_DEFAULT_SETTINGS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY, TRANSLATION_TARGET_LANGUAGES } from '../constants.ts';
 import MessageBubble from './MessageBubble.tsx';
@@ -18,6 +17,7 @@ import { sendMockMessageStream } from '../services/mockApiService.ts';
 import { generateOpenAITTS } from "../services/openaiTTSService"; // Changed this line
 // Added MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon
 import { PaperAirplaneIcon, CogIcon, XMarkIcon, PromptIcon, Bars3Icon, ChatBubbleLeftRightIcon, ClockIcon as HistoryIcon, MicrophoneIcon, StopCircleIcon, SpeakerWaveIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon } from './Icons.tsx';
+import { ThemeContext } from '../App.tsx'; // Import ThemeContext
 
 // Helper to deep merge settings, useful for loading from localStorage
 const mergeSettings = (target: AllModelSettings, source: Partial<AllModelSettings>): AllModelSettings => {
@@ -171,6 +171,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl }) => {
   const [input, setInput] = useState('');
   const [selectedModel, setSelectedModel] = useState<Model>(Model.GEMINI);
   const { addNotification } = useNotification(); 
+  const themeContext = useContext(ThemeContext);
 
   const [personas, setPersonas] = useState<Persona[]>(() => {
     try {
@@ -930,7 +931,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl }) => {
     isRegenerationOfAiMsgId?: string 
   ) => {
     
-    const userMessageId = Date.now().toString();
+    const messageTimestamp = Date.now();
+    const userMessageId = messageTimestamp.toString();
     let constructedMessageText = currentInputText.trim();
     const originalUserPromptForAi = currentInputText.trim(); 
 
@@ -946,6 +948,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl }) => {
         id: userMessageId,
         text: originalUserPromptForAi,
         sender: 'user',
+        timestamp: messageTimestamp,
         imagePreview: !isImagenModelSelected && !isTextToSpeechModelSelected && !isRealTimeTranslationMode ? currentImagePreview || undefined : undefined,
         fileName: !isImagenModelSelected && !isTextToSpeechModelSelected && !isRealTimeTranslationMode ? currentUploadedTextFileName || undefined : undefined,
         isImageQuery: isImagenModelSelected,
@@ -955,18 +958,20 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl }) => {
         setMessages((prev) => [...prev, newUserMessage]);
     }
     
-    const aiMessageId = isRegenerationOfAiMsgId || (Date.now() + 1).toString();
+    const aiMessageTimestamp = Date.now(); // Timestamp for AI message creation
+    const aiMessageId = isRegenerationOfAiMsgId || (aiMessageTimestamp + 1).toString();
     const aiMessagePlaceholder: ChatMessage = {
         id: aiMessageId,
         text: isImagenModelSelected ? 'Generating image(s)...' : (isTextToSpeechModelSelected ? 'Synthesizing audio...' : (isRegenerationOfAiMsgId ? 'Regenerating...' : '')),
         sender: 'ai',
+        timestamp: aiMessageTimestamp,
         model: selectedModel,
         isRegenerating: !!isRegenerationOfAiMsgId,
         promptedByMessageId: userMessageId, 
     };
 
     if (isRegenerationOfAiMsgId) {
-        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? aiMessagePlaceholder : msg));
+        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? {...aiMessagePlaceholder, timestamp: msg.timestamp || aiMessageTimestamp } : msg)); // Preserve original timestamp on regen
     } else {
         setMessages((prev) => [...prev, aiMessagePlaceholder]);
     }
@@ -991,7 +996,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl }) => {
                 ...msg,
                 text: `Audio generated for: "${originalUserPromptForAi}"`,
                 audioUrl: audioBlobUrl,
-                isRegenerating: false
+                isRegenerating: false,
+                timestamp: msg.timestamp || Date.now() // Ensure timestamp exists
             } : msg));
              if (audioPlayerRef.current && audioBlobUrl) { 
                 handlePlayAudio(audioBlobUrl, aiMessageId);
@@ -1016,6 +1022,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl }) => {
                   msg.id === aiMessageId ? { 
                     ...msg, text: `Generated ${imageUrls.length} image(s) for: "${originalUserPromptForAi}"`, 
                     imagePreviews: imageUrls, imageMimeType: mimeType, originalPrompt: originalUserPromptForAi, isRegenerating: false,
+                    timestamp: msg.timestamp || Date.now() 
                   } : msg
                 )
               );
@@ -1172,8 +1179,16 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl }) => {
       const errorMessage = e.message || 'Failed to get response from AI (via proxy).';
       setError(errorMessage); 
       addNotification(`API Error: ${errorMessage}`, "error", e.stack); 
-      setMessages((prev) => prev.filter(msg => msg.id !== aiMessageId)); 
-      setMessages((prev) => [...prev, {id: aiMessageId, text: `Error: ${errorMessage}`, sender: 'ai', model: selectedModel, promptedByMessageId: userMessageId}]);
+      const errorAiMessageId = aiMessageId || `error-${Date.now()}`;
+      setMessages((prev) => prev.filter(msg => msg.id !== aiMessageId)); // Remove placeholder if it exists
+      setMessages((prev) => [...prev, {
+        id: errorAiMessageId, 
+        text: `Error: ${errorMessage}`, 
+        sender: 'ai', 
+        model: selectedModel, 
+        timestamp: Date.now(), // Timestamp for the error message
+        promptedByMessageId: userMessageId
+      }]);
     }
 
     setIsLoading(false);
@@ -1241,6 +1256,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl }) => {
                   groundingSources: undefined, 
                   audioUrl: undefined, 
                   isRegenerating: true,
+                  // timestamp remains from original AI message placeholder or its update
               };
           }
           return msg;
@@ -1454,12 +1470,19 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl }) => {
     }
   };
 
-  const chatAreaStyle: React.CSSProperties = chatBackgroundUrl ? {
-    backgroundImage: `url(${chatBackgroundUrl})`,
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    backgroundRepeat: 'no-repeat',
-  } : {};
+  const chatAreaStyle: React.CSSProperties = useMemo(() => {
+    if (chatBackgroundUrl) {
+        return {
+            backgroundImage: `url(${chatBackgroundUrl})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+        };
+    }
+    // Default background color based on theme
+    const currentTheme = themeContext?.theme || 'light';
+    return { backgroundColor: currentTheme === 'dark' ? '#0e1621' : '#ffffff' };
+  }, [chatBackgroundUrl, themeContext?.theme]);
 
 
   return (
@@ -1552,28 +1575,34 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl }) => {
             </div>
         ) : (
           <div 
-            className="flex-grow overflow-y-auto mb-4 pr-2 space-y-4 rounded-md"
+            className="flex-grow overflow-y-auto mb-4 pr-2 space-y-2" // Reduced space-y-4 to space-y-2 for tighter packing
             style={chatAreaStyle}
           >
-            {messages.map((msg) => (
-              <div key={msg.id} ref={(el: HTMLDivElement | null) => { if(el) messageRefs.current[msg.id] = el; }}>
-                  <MessageBubble 
-                      message={msg}
-                      onImageClick={msg.sender === 'ai' && msg.imagePreviews && msg.imagePreviews.length > 0 ? handleOpenImageModal : undefined}
-                      onRegenerate={msg.sender === 'ai' && msg.promptedByMessageId && !msg.isRegenerating ? handleRegenerateResponse : undefined}
-                      isLoading={isLoading}
-                      onPlayAudio={msg.audioUrl ? () => handlePlayAudio(msg.audioUrl!, msg.id) : undefined}
-                      isAudioPlaying={currentPlayingMessageId === msg.id}
-                      searchQuery={isSearchActive ? searchQuery : ''}
-                      isCurrentSearchResult={isSearchActive && searchResults[currentSearchResultIndex]?.messageId === msg.id}
-                  />
-              </div>
-            ))}
+            {messages.map((msg, index) => {
+                const nextMessage = messages[index + 1];
+                // Show avatar if it's the last message OR the next message is from a different sender
+                const showAvatar = !nextMessage || nextMessage.sender !== msg.sender;
+                return (
+                    <div key={msg.id} ref={(el: HTMLDivElement | null) => { if(el) messageRefs.current[msg.id] = el; }}>
+                        <MessageBubble 
+                            message={msg}
+                            showAvatar={showAvatar}
+                            onImageClick={msg.sender === 'ai' && msg.imagePreviews && msg.imagePreviews.length > 0 ? handleOpenImageModal : undefined}
+                            onRegenerate={msg.sender === 'ai' && msg.promptedByMessageId && !msg.isRegenerating ? handleRegenerateResponse : undefined}
+                            isLoading={isLoading}
+                            onPlayAudio={msg.audioUrl ? () => handlePlayAudio(msg.audioUrl!, msg.id) : undefined}
+                            isAudioPlaying={currentPlayingMessageId === msg.id}
+                            searchQuery={isSearchActive ? searchQuery : ''}
+                            isCurrentSearchResult={isSearchActive && searchResults[currentSearchResultIndex]?.messageId === msg.id}
+                        />
+                    </div>
+                );
+            })}
             {isLoading && messages.length > 0 && messages[messages.length-1]?.sender === 'user' && !messages[messages.length-1]?.isRegenerating && ( 
-              <MessageBubble key="loading" message={{id: 'loading', text: isImagenModelSelected ? 'Generating image(s)...' : (isTextToSpeechModelSelected ? 'Synthesizing audio...' : 'Thinking...'), sender: 'ai', model: selectedModel, promptedByMessageId: messages[messages.length-1].id }} />
+              <MessageBubble key="loading" message={{id: 'loading', text: isImagenModelSelected ? 'Generating image(s)...' : (isTextToSpeechModelSelected ? 'Synthesizing audio...' : 'Thinking...'), sender: 'ai', model: selectedModel, timestamp: Date.now(), promptedByMessageId: messages[messages.length-1].id }} showAvatar={true} />
             )}
             {isLoading && messages.length === 0 && ( 
-              <MessageBubble key="loading-initial" message={{id: 'loading-initial', text: isImagenModelSelected ? 'Generating image(s)...' : (isTextToSpeechModelSelected ? 'Synthesizing audio...' : 'Thinking...'), sender: 'ai', model: selectedModel, promptedByMessageId: 'initial' }} />
+              <MessageBubble key="loading-initial" message={{id: 'loading-initial', text: isImagenModelSelected ? 'Generating image(s)...' : (isTextToSpeechModelSelected ? 'Synthesizing audio...' : 'Thinking...'), sender: 'ai', model: selectedModel, timestamp: Date.now(), promptedByMessageId: 'initial' }} showAvatar={true} />
             )}
             <div ref={chatEndRef} />
           </div>
