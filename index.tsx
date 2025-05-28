@@ -1,7 +1,7 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App.tsx'; // Update to .tsx
+import RootAppWrapper from './App.tsx'; // Update to .tsx and RootAppWrapper
 
 console.log("[index.tsx] Script start. React version available:", React.version);
 console.log("[index.tsx] ReactDOM available:", ReactDOM);
@@ -30,7 +30,7 @@ if (!rootElement) {
     console.log("[index.tsx] Attempting to render <App /> component into the React root...");
     root.render(
       <React.StrictMode>
-        <App />
+        <RootAppWrapper />
       </React.StrictMode>
     );
     console.log("[index.tsx] <App /> component has been passed to root.render(). If the page is still blank, check for errors within App or its children, or issues with async operations.");
