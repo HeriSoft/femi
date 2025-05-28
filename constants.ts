@@ -1,5 +1,6 @@
 
-import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings } from './types.ts'; // Update to .ts
+
+import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption } from './types.ts'; // Update to .ts
 
 export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
   temperature: 0.7,
@@ -54,6 +55,10 @@ export const LOCAL_STORAGE_HISTORY_KEY = 'femiAiChatHistory';
 export const LOCAL_STORAGE_PERSONAS_KEY = 'femiAiChatPersonas';
 export const LOCAL_STORAGE_NOTIFICATIONS_KEY = 'femiAiNotifications';
 export const MAX_NOTIFICATIONS = 50; // Max notifications to store
+export const LOCAL_STORAGE_DEVICE_LOGS_KEY = 'femiAiDeviceLogs';
+export const MAX_DEVICE_LOGS = 5;
+export const LOCAL_STORAGE_CHAT_BACKGROUND_KEY = 'femiAiChatBackgroundUrl';
+
 
 // Language Learning Constants
 export const LOCAL_STORAGE_USER_PROFILE_KEY = 'femiAiLanguageLearningProfile';
@@ -130,3 +135,33 @@ export const getNextMilestone = (currentExp: number): { milestoneExp: number, re
     nextLevelMilestone: lastMilestoneExp + 500 
   }; 
 };
+
+// Account Settings Constants
+export const ACCOUNT_MENU_ITEMS: Array<{ id: AccountTabType; label: string; status?: 'coming_soon' }> = [
+  { id: 'devices', label: 'Devices' },
+  { id: 'background', label: 'Background' },
+  { id: 'avatar', label: 'Avatar', status: 'coming_soon' },
+  { id: 'payment', label: 'Payment', status: 'coming_soon' },
+];
+
+export const DEMO_BACKGROUNDS: BackgroundOption[] = [
+  { id: 'bg_default_none', name: 'Default (None)', imageUrl: '', thumbnailUrl: '' }, // Represents no background
+  { 
+    id: 'bg_pattern_subtle', 
+    name: 'Subtle Pattern', 
+    imageUrl: 'https://picsum.photos/seed/femi_pattern/1920/1080', 
+    thumbnailUrl: 'https://picsum.photos/seed/femi_pattern/200/120' 
+  },
+  { 
+    id: 'bg_abstract_blues', 
+    name: 'Abstract Blues', 
+    imageUrl: 'https://picsum.photos/seed/femi_blues/1920/1080', 
+    thumbnailUrl: 'https://picsum.photos/seed/femi_blues/200/120' 
+  },
+  { 
+    id: 'bg_minimal_waves', 
+    name: 'Minimalist Waves', 
+    imageUrl: 'https://picsum.photos/seed/femi_waves/1920/1080', 
+    thumbnailUrl: 'https://picsum.photos/seed/femi_waves/200/120' 
+  },
+];

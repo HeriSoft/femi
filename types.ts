@@ -311,3 +311,27 @@ export interface WebGamePlayerModalProps {
   gameType: WebGameType;
   gameTitle: string;
 }
+
+// Login Device Log
+export interface LoginDeviceLog {
+  id: string; 
+  device: string; 
+  timestamp: number; 
+}
+
+// Account Settings
+export type AccountTabType = 'devices' | 'background' | 'avatar' | 'payment';
+
+export interface BackgroundOption {
+  id: string;
+  name: string;
+  imageUrl: string;
+  thumbnailUrl: string;
+}
+
+export interface AccountSettingsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onChatBackgroundChange: (newUrl: string | null) => void; // Callback to update App's background state
+  currentChatBackground: string | null; // Pass current background to initialize selection
+}

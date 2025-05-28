@@ -10,7 +10,7 @@ import GamesModal from './components/GamesModal.tsx';
 import WebGamePlayerModal from './components/WebGamePlayerModal.tsx'; 
 import { NotificationProvider, useNotification } from './contexts/NotificationContext.tsx';
 import { KeyIcon } from './components/Icons.tsx';
-import { LOCAL_STORAGE_USER_PROFILE_KEY, DEFAULT_USER_LANGUAGE_PROFILE, EXP_MILESTONES_CONFIG, BADGES_CATALOG } from './constants.ts';
+import { LOCAL_STORAGE_USER_PROFILE_KEY, DEFAULT_USER_LANGUAGE_PROFILE, EXP_MILESTONES_CONFIG, BADGES_CATALOG, LOCAL_STORAGE_CHAT_BACKGROUND_KEY } from './constants.ts';
 
 export const ThemeContext = React.createContext<ThemeContextType | undefined>(undefined);
 
@@ -33,6 +33,7 @@ const App: React.FC = () => {
   const [isWebGamePlayerModalOpen, setIsWebGamePlayerModalOpen] = useState(false);
   const [activeWebGameType, setActiveWebGameType] = useState<WebGameType>(null);
   const [activeWebGameTitle, setActiveWebGameTitle] = useState<string>('');
+  const [chatBackgroundUrl, setChatBackgroundUrl] = useState<string | null>(null);
 
 
   useEffect(() => {
@@ -43,6 +44,14 @@ const App: React.FC = () => {
     }
     localStorage.setItem('theme', theme);
   }, [theme]);
+
+  // Load chat background from localStorage on initial load
+  useEffect(() => {
+    const storedBg = localStorage.getItem(LOCAL_STORAGE_CHAT_BACKGROUND_KEY);
+    if (storedBg) {
+        setChatBackgroundUrl(storedBg);
+    }
+  }, []);
 
   useEffect(() => {
     if (currentUser) {
@@ -102,6 +111,15 @@ const App: React.FC = () => {
   
   const handleUpdateUserProfile = useCallback((updatedProfile: UserGlobalProfile) => {
     setUserProfile(updatedProfile);
+  }, []);
+
+  const handleChatBackgroundChange = useCallback((newUrl: string | null) => {
+    setChatBackgroundUrl(newUrl);
+    if (newUrl) {
+        localStorage.setItem(LOCAL_STORAGE_CHAT_BACKGROUND_KEY, newUrl);
+    } else {
+        localStorage.removeItem(LOCAL_STORAGE_CHAT_BACKGROUND_KEY);
+    }
   }, []);
 
   const handleAddExp = useCallback((language: LanguageOption, expPoints: number, addAppNotification?: (message: string, type: import('./types.ts').NotificationType, details?: string) => void) => {
@@ -201,10 +219,12 @@ const App: React.FC = () => {
           onLoginModalOpened={() => setIsLoginModalInitiallyOpen(false)}
           onToggleLanguageLearningModal={handleToggleLanguageLearningModal}
           onToggleGamesModal={handleToggleGamesModal} 
+          chatBackgroundUrl={chatBackgroundUrl}
+          onChatBackgroundChange={handleChatBackgroundChange}
         />
         <main className="flex-grow overflow-hidden">
           {currentUser ? ( 
-            <ChatPage />
+            <ChatPage chatBackgroundUrl={chatBackgroundUrl} />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center p-8">
               <KeyIcon className="w-16 h-16 text-primary dark:text-primary-light mb-6" />
