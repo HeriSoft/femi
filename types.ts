@@ -214,7 +214,7 @@ export interface TranslationLanguageOptionConfig { // For Real-Time Translation 
 }
 
 
-export type LanguageLearningActivityType = 'listening' | 'speaking' | 'vocabulary' | 'quiz' | 'sentence-scramble';
+export type LanguageLearningActivityType = 'listening' | 'speaking' | 'vocabulary' | 'quiz' | 'sentence-scramble' | 'handwriting';
 
 export interface Badge {
   id: string;
@@ -265,6 +265,9 @@ export interface LearningContent {
   originalSentence?: string;
   scrambledWords?: { word: string, id: number }[]; // id is the original index of the word
 
+  // For Handwriting
+  targetText?: string; // Character/word to write
+
   aiPromptForGeneration?: string; 
   aiPromptForEvaluation?: string; 
 }
@@ -282,6 +285,12 @@ export interface LearningActivityState {
     isAudioPlaying?: boolean; // For listening exercise audio playback status
     translatedUserSpeech?: string; // For speaking practice translation
     isLoadingTranslation?: boolean; // For speaking practice translation loading state
+
+    // For Handwriting
+    userHandwritingImage?: string; // base64 data URL of user's input (canvas or uploaded)
+    accuracyScore?: number;        // 0-100
+    aiFeedback?: string;           // Qualitative feedback from AI
+    handwritingInputMethod?: 'draw' | 'upload'; // Current input method
 }
 
 
@@ -403,4 +412,14 @@ export interface TienLenGameState {
 export interface TienLenGameModalProps {
   isOpen: boolean;
   onClose: () => void;
+}
+
+// Props for HandwritingCanvas component
+export interface HandwritingCanvasProps {
+  width: number;
+  height: number;
+  penColor?: string;
+  penThickness?: number;
+  canvasRef: React.RefObject<HTMLCanvasElement>; // Pass ref from parent to allow parent to access canvas data
+  disabled?: boolean;
 }
