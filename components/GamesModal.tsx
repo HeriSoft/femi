@@ -13,7 +13,7 @@ const placeholderGamesUiData: {
   isImplemented?: boolean; 
   webGameType?: WebGameType; 
 }[] = [
-  { id: 'tienlen-game', title: "Tiến Lên (Miền Nam)", description: "Classic Vietnamese card game. Be the first to empty your hand!", icon: <CardsIcon className="w-6 h-6 text-red-500" />, isImplemented: true, webGameType: 'tien-len'},
+  { id: 'tienlen-game', title: "Tiến Lên ", description: "Classic Vietnamese card game. Be the first to empty your hand!", icon: <CardsIcon className="w-6 h-6 text-red-500" />, isImplemented: true, webGameType: 'tien-len'},
   { id: 'tictactoe-game', title: "Tic-Tac-Toe", description: "Classic X's and O's. Can you beat the opponent or a friend?", icon: <span className="text-2xl">⭕️</span>, isImplemented: true, webGameType: 'tic-tac-toe'},
   { id: 'slidingpuzzle-game', title: "Sliding Puzzle (Numbers)", description: "Arrange the tiles in numerical order.", icon: <span className="text-2xl">🔢</span>, isImplemented: true, webGameType: 'sliding-puzzle'}, 
   { id: 'flappybird-game', title: "Flappy Ball", description: "Navigate the ball through pipes by tapping.", icon: <span className="text-2xl">🏀</span>, isImplemented: true, webGameType: 'flappy-bird'}, 
