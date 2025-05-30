@@ -12,6 +12,7 @@ export enum Model {
   IMAGEN3 = 'Imagen3 (imagen-3.0-generate-002)',
   OPENAI_TTS = 'OpenAI (TTS)', // New TTS Model
   REAL_TIME_TRANSLATION = 'Real-Time Translation (Gemini)', // New Real-Time Translation Model
+  AI_AGENT = 'AI Agent (gemini-2.5-flash-preview-04-17)', // Renamed from AI_TASK_ORCHESTRATOR and updated model ID
 }
 
 export interface ChatMessage {
@@ -31,6 +32,9 @@ export interface ChatMessage {
   // Stores the ID of the user message that led to this AI response, crucial for regeneration
   promptedByMessageId?: string; 
   audioUrl?: string; // For AI messages with synthesized audio
+  // Fields for AI Agent (previously Task Orchestrator)
+  isTaskGoal?: boolean; // Flags if this user message defines a main task goal for the AI Agent
+  isTaskPlan?: boolean; // Flags if this AI message contains a task plan/response from the AI Agent
 }
 
 export interface GroundingSource {
@@ -63,8 +67,12 @@ export interface RealTimeTranslationSettings {
   targetLanguage: string; // language code e.g. 'vi', 'en'
 }
 
+// Settings for AI Agent (previously Task Orchestrator)
+export interface AiAgentSettings extends ModelSettings {}
+
+
 export type AllModelSettings = {
-  [key in Model]?: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings>;
+  [key in Model]?: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings>;
 };
 
 export interface ThemeContextType {
@@ -99,6 +107,7 @@ export interface ApiKeyStatus {
   isImageGeneration?: boolean; // Flag for image generation models
   isTextToSpeech?: boolean; // Flag for TTS models
   isRealTimeTranslation?: boolean; // Flag for real-time translation model
+  isAiAgent?: boolean; // Flag for AI Agent model (renamed from isTaskOrchestrator)
 }
 
 export interface Persona {
@@ -110,8 +119,8 @@ export interface Persona {
 export interface SettingsPanelProps {
   selectedModel: Model;
   onModelChange: (model: Model) => void;
-  modelSettings: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings>; 
-  onModelSettingsChange: (settings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings>) => void;
+  modelSettings: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings>; 
+  onModelSettingsChange: (settings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings>) => void;
   onImageUpload: (file: File | null) => void;
   imagePreview: string | null; // For user uploaded image preview
   onFileUpload: (file: File | null) => void;
@@ -160,7 +169,7 @@ export interface ChatSession {
   timestamp: number;
   model: Model; // The primary model used for this session
   messages: ChatMessage[];
-  modelSettingsSnapshot: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings>; 
+  modelSettingsSnapshot: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings>; 
   isPinned?: boolean; // For pinning important chats
   activePersonaIdSnapshot?: string | null; // Snapshot of active persona
 }

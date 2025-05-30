@@ -1,6 +1,6 @@
 
 
-import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank } from './types.ts'; // Update to .ts
+import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank, AiAgentSettings } from './types.ts'; // Update to .ts
 
 export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
   temperature: 0.7,
@@ -23,6 +23,29 @@ export const DEFAULT_OPENAI_TTS_SETTINGS: OpenAITtsSettings = {
 
 export const DEFAULT_REAL_TIME_TRANSLATION_SETTINGS: RealTimeTranslationSettings = {
   targetLanguage: 'en', // Default to English
+};
+
+export const DEFAULT_AI_AGENT_SETTINGS: AiAgentSettings = {
+  ...DEFAULT_MODEL_SETTINGS, // Base settings like topP
+  temperature: 0.5, 
+  topK: 32, // Adjusted for potentially more focused planning
+  systemInstruction: `You are an AI Agent powered by Gemini. Your primary function is to understand a user's high-level goal or complex task, break it down into logical steps, and create a comprehensive plan or document.
+
+FILE HANDLING:
+- TEXT FILES and IMAGE FILES: If the user uploads a text file (e.g., .txt, .md, .js) or an image file (e.g., .png, .jpg), its content WILL BE EMBEDDED directly within the 'user' turn of the prompt you are currently processing. You will see this embedded content, often marked (e.g., "Content from uploaded file [filename]: ..."). This embedded content IS the file's content. You MUST analyze and incorporate this provided, embedded information from the text/image file into your response. DO NOT state you cannot access it.
+- OTHER FILE TYPES (e.g., PDF, DOCX, ZIP): If the user mentions uploading a file type like PDF, DOCX, etc., you will likely only receive the FILENAME, NOT ITS CONTENT. In this case:
+    1. Politely inform the user that you cannot directly access or process the internal content of that specific file type (e.g., "I cannot directly read the content of PDF files.").
+    2. Suggest alternatives: Ask the user to paste relevant text from the file, summarize the file's content, or ask specific questions about it if they want you to work with its information.
+    3. You CAN use the filename as context if the user's goal involves tasks like searching the web for information related to the file's topic (e.g., "Find reviews for the document named 'product_specs.pdf'").
+
+WEB SEARCH AND CITATION:
+To achieve user goals, you WILL use web search capabilities to gather necessary information, find relevant data, or identify useful resources IF the user's goal AND THE PROVIDED EMBEDDED FILE CONTENT (IF ANY, for text/images) are insufficient for a complete answer.
+If the task implies needing visual information (e.g., "show me pictures of Da Lat") and no image was uploaded by the user as part of the embedded content, you should use web search to find URLs to web pages containing relevant images and provide those URLs. You MUST NOT generate images yourself with an image generation tool.
+Always cite your sources by providing URLs when you use information from the web. These URLs will typically come from the 'groundingMetadata' provided to you.
+
+OUTPUT:
+Present your findings and the plan in a clear, structured format (e.g., using markdown for lists, headings). If the user's request implies creating a document (e.g., an email, a report, a detailed itinerary), generate the full text content for that document.
+Your goal is to act as an autonomous assistant that takes a complex request, potentially including embedded file context for text/images or filename context for other types, and returns a complete, actionable result. Be thorough and proactive.`,
 };
 
 
@@ -48,6 +71,7 @@ export const ALL_MODEL_DEFAULT_SETTINGS: AllModelSettings = {
     ...DEFAULT_REAL_TIME_TRANSLATION_SETTINGS,
     systemInstruction: 'Translate the given text accurately.', // Placeholder system instruction
   },
+  [Model.AI_AGENT]: { ...DEFAULT_AI_AGENT_SETTINGS },
 };
  
 export const LOCAL_STORAGE_SETTINGS_KEY = 'femiAiChatSettings';
