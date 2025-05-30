@@ -1,8 +1,7 @@
-
 import React, { useEffect, useRef, useState, useContext } from 'react';
 import hljs from 'https://esm.sh/highlight.js@11.9.0'; 
 import { ChatMessage, ThemeContextType } from '../types.ts';
-import { RobotIcon, UserIcon, LinkIcon, PhotoIcon, ArrowPathIcon, ClipboardIcon, CheckIcon, SpeakerWaveIcon, StopCircleIcon } from './Icons.tsx';
+import { RobotIcon, UserIcon, LinkIcon, PhotoIcon, ArrowPathIcon, ClipboardIcon, CheckIcon, SpeakerWaveIcon, StopCircleIcon, ArrowDownTrayIcon } from './Icons.tsx'; // Added ArrowDownTrayIcon
 import { useNotification } from '../contexts/NotificationContext.tsx'; 
 import { ThemeContext } from '../App.tsx';
 
@@ -120,7 +119,7 @@ const EnhancedMessageContent: React.FC<EnhancedMessageContentProps> = React.memo
         const textPart = segmentText.substring(lastIndex);
         elements.push(...highlightText(textPart, searchQuery || '', `${keyPrefix}-text-${partKey++}`));
     }
-    return elements;
+    return elements; 
   };
 
   const processRegularTextLine = (line: string, lineKey: string | number): React.ReactNode[] => {
@@ -244,36 +243,42 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const isUser = message.sender === 'user';
   const themeContext = useContext(ThemeContext);
   const currentTheme = themeContext?.theme || 'light';
+  const { addNotification } = useNotification();
 
   let bubbleBackgroundColor = '';
   let bubbleTextColor = '';
   let tailColor = '';
-  let audioButtonClasses = ''; // For the play audio button
+  let audioButtonClasses = ''; 
   let timestampColor = '';
+  let specialBorderClass = '';
 
   if (currentTheme === 'light') {
     if (isUser) {
-      bubbleBackgroundColor = '#effdde'; // Light green for user
-      bubbleTextColor = '#374151';    // Dark gray text (Tailwind gray-700 like)
-      audioButtonClasses = 'bg-black/10 hover:bg-black/20 text-neutral-700'; // Darker button on light green
-      timestampColor = 'rgba(75, 85, 99, 0.7)'; // Tailwind gray-600 with opacity
+      bubbleBackgroundColor = message.isTaskGoal ? '#e0f2fe' : '#effdde'; // Light blue for goal, light green for normal
+      bubbleTextColor = '#374151';    
+      audioButtonClasses = 'bg-black/10 hover:bg-black/20 text-neutral-700'; 
+      timestampColor = 'rgba(75, 85, 99, 0.7)'; 
+      if (message.isTaskGoal) specialBorderClass = 'border-l-4 border-blue-400';
     } else { // AI in light theme
-      bubbleBackgroundColor = '#ffffff'; // White for AI
-      bubbleTextColor = '#374151';    // Dark gray text
-      audioButtonClasses = 'bg-gray-200 hover:bg-gray-300 text-neutral-700'; // Standard light button on white
-      timestampColor = 'rgba(107, 114, 128, 0.9)'; // Tailwind gray-500 with opacity
+      bubbleBackgroundColor = message.isTaskPlan ? '#dcfce7' : '#ffffff'; // Light green for AI Agent plan, white for normal AI
+      bubbleTextColor = '#374151';    
+      audioButtonClasses = 'bg-gray-200 hover:bg-gray-300 text-neutral-700'; 
+      timestampColor = 'rgba(107, 114, 128, 0.9)'; 
+      if (message.isTaskPlan) specialBorderClass = 'border-l-4 border-green-400';
     }
   } else { // Dark theme
     if (isUser) {
-      bubbleBackgroundColor = '#2b5278'; // Dark blue for user
-      bubbleTextColor = '#FFFFFF';    // White text
-      audioButtonClasses = 'bg-white/20 hover:bg-white/30 text-white'; // Light button on dark blue
-      timestampColor = 'rgba(209, 213, 219, 0.7)'; // Tailwind gray-300 with opacity
+      bubbleBackgroundColor = message.isTaskGoal ? '#1e3a8a' : '#2b5278'; // Darker blue for goal, standard dark blue for normal
+      bubbleTextColor = '#FFFFFF';    
+      audioButtonClasses = 'bg-white/20 hover:bg-white/30 text-white'; 
+      timestampColor = 'rgba(209, 213, 219, 0.7)'; 
+      if (message.isTaskGoal) specialBorderClass = 'border-l-4 border-blue-500';
     } else { // AI in dark theme
-      bubbleBackgroundColor = '#182533'; // Darker gray/blue for AI
-      bubbleTextColor = '#FFFFFF';    // White text
-      audioButtonClasses = 'bg-white/20 hover:bg-white/30 text-white'; // Light button on dark gray/blue
-      timestampColor = 'rgba(156, 163, 175, 0.8)'; // Tailwind gray-400 with opacity
+      bubbleBackgroundColor = message.isTaskPlan ? '#14532d' : '#182533'; // Darker green for AI Agent plan, standard dark gray/blue for normal AI
+      bubbleTextColor = '#FFFFFF';    
+      audioButtonClasses = 'bg-white/20 hover:bg-white/30 text-white'; 
+      timestampColor = 'rgba(156, 163, 175, 0.8)'; 
+      if (message.isTaskPlan) specialBorderClass = 'border-l-4 border-green-500';
     }
   }
   tailColor = bubbleBackgroundColor;
@@ -294,10 +299,43 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const bubbleContentClasses = [
     "max-w-md sm:max-w-lg md:max-w-xl p-3 rounded-xl shadow relative z-10",
     message.isRegenerating ? 'opacity-75' : '',
-    searchHighlightStyle
+    searchHighlightStyle,
+    specialBorderClass 
   ].filter(Boolean).join(' ');
 
   const tailClasses = "absolute bottom-0 w-3 h-3 z-0 left-[-6px]";
+
+  const displayText = message.text;
+  const taskGoalPrefix = message.isTaskGoal ? "🎯 **Goal:** " : "";
+  const taskPlanPrefix = message.isTaskPlan ? "📝 **Agent Response:** " : ""; // Changed prefix for AI Agent response
+  const finalDisplayText = `${taskGoalPrefix}${taskPlanPrefix}${displayText}`;
+
+  const handleDownloadResponse = () => {
+    if (!message.text || !message.promptedByMessageId) return;
+
+    // Find the user message that prompted this AI plan to get goal text for filename
+    // This part assumes 'messages' array is accessible here or passed down.
+    // For now, let's use a generic name or pass user's goal text.
+    // A better approach would be to have user's goal text available in `message` object itself or passed to this bubble.
+    // Let's assume for now we get promptedByMessageId which contains the original goal.
+    // This is a simplification; a robust solution might require looking up the original message.
+    const goalText = message.originalPrompt || message.promptedByMessageId || "ai_agent_plan";
+    
+    const sanitizedGoalText = goalText.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, 30);
+    const fileName = `${sanitizedGoalText}_${new Date().toISOString().split('T')[0]}.txt`;
+
+    const blob = new Blob([message.text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    addNotification("Agent response downloaded.", "success");
+  };
+
 
   return (
     <div className={`flex items-end space-x-2 group justify-start`}> 
@@ -325,12 +363,60 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         ></div>
         
         <div className={bubbleContentClasses} style={bubbleStyle}>
-          <div className="mb-1">
+          <div className="flex justify-between items-start mb-1"> {/* Adjusted for button alignment */}
             {!isUser && (
-                <span className="font-semibold text-sm" style={{ color: bubbleTextColor }}>
+                <span className="font-semibold text-sm flex-grow" style={{ color: bubbleTextColor }}>
                 {message.model || 'AI'}
                 {message.isRegenerating && <span className="italic text-xs"> (Regenerating...)</span>}
                 </span>
+            )}
+             {!isUser && onRegenerate && message.promptedByMessageId && !message.isRegenerating && !message.isTaskPlan && ( // Hide regenerate for AI Agent plan
+                <button
+                onClick={() => onRegenerate(message.id, message.promptedByMessageId!)}
+                disabled={isLoading}
+                className="p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 disabled:opacity-30 ml-2 flex-shrink-0"
+                style={{ 
+                    color: bubbleTextColor === '#FFFFFF' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)',
+                }}
+                onMouseEnter={e => {
+                    const target = e.currentTarget as HTMLButtonElement;
+                    target.style.backgroundColor = bubbleTextColor === '#FFFFFF' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)';
+                    target.style.color = bubbleTextColor === '#FFFFFF' ? 'white' : 'black';
+                }}
+                onMouseLeave={e => {
+                    const target = e.currentTarget as HTMLButtonElement;
+                    target.style.backgroundColor = 'transparent';
+                    target.style.color = bubbleTextColor === '#FFFFFF' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)';
+                }}
+                aria-label="Regenerate response"
+                title="Regenerate response"
+                >
+                <ArrowPathIcon className="w-4 h-4" />
+                </button>
+            )}
+             {!isUser && message.isTaskPlan && (
+                <button
+                    onClick={handleDownloadResponse}
+                    disabled={isLoading || !message.text}
+                    className="p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 disabled:opacity-30 ml-2 flex-shrink-0"
+                    style={{ 
+                        color: bubbleTextColor === '#FFFFFF' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)',
+                    }}
+                    onMouseEnter={e => {
+                        const target = e.currentTarget as HTMLButtonElement;
+                        target.style.backgroundColor = bubbleTextColor === '#FFFFFF' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)';
+                        target.style.color = bubbleTextColor === '#FFFFFF' ? 'white' : 'black';
+                    }}
+                    onMouseLeave={e => {
+                        const target = e.currentTarget as HTMLButtonElement;
+                        target.style.backgroundColor = 'transparent';
+                        target.style.color = bubbleTextColor === '#FFFFFF' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)';
+                    }}
+                    aria-label="Download AI Agent Response"
+                    title="Download AI Agent Response"
+                >
+                    <ArrowDownTrayIcon className="w-4 h-4" />
+                </button>
             )}
           </div>
 
@@ -364,17 +450,17 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           )}
 
           {message.fileName && isUser && (
-             <div className="my-1 p-2 rounded text-xs" style={{ backgroundColor: 'rgba(0,0,0,0.05)' }}> {/* Slightly darker overlay */}
+             <div className="my-1 p-2 rounded text-xs" style={{ backgroundColor: 'rgba(0,0,0,0.05)' }}> 
                 Attached File: {message.fileName}
             </div>
           )}
           
-          {message.text && message.text.trim().length > 0 && (
+          {finalDisplayText && finalDisplayText.trim().length > 0 && (
             <div className="text-sm whitespace-pre-wrap break-words" style={{ color: bubbleTextColor }}>
-              <EnhancedMessageContent text={message.text} searchQuery={searchQuery} />
+              <EnhancedMessageContent text={finalDisplayText} searchQuery={searchQuery} />
             </div>
           )}
-           {message.text === '' && !isUser && !message.isRegenerating && ( 
+           {finalDisplayText.trim() === '' && !isUser && !message.isRegenerating && !message.isTaskGoal && !message.isTaskPlan && ( 
               <div className="text-sm italic" style={{ color: currentTheme === 'light' ? '#6b7280' : '#9ca3af' }}>(AI returned an empty response)</div>
           )}
 
@@ -397,7 +483,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           )}
 
           {message.groundingSources && message.groundingSources.length > 0 && (
-            <div className="mt-2 pt-2 border-t" style={{ borderColor: 'rgba(255,255,255,0.2)'}}> {/* Adjusted border for dynamic bubble colors */}
+            <div className="mt-2 pt-2 border-t" style={{ borderColor: 'rgba(255,255,255,0.2)'}}> 
               <p className="text-xs font-semibold mb-1">Sources:</p>
               <ul className="space-y-1">
                 {message.groundingSources.map((source, index) => (
@@ -406,7 +492,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                       href={source.uri}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center hover:underline text-accent dark:text-accent-light" // Keep accent for links
+                      className="flex items-center hover:underline text-accent dark:text-accent-light" 
                     >
                       <LinkIcon className="w-3 h-3 mr-1 flex-shrink-0" />
                       <span className="truncate">{source.title || source.uri}</span>
@@ -416,32 +502,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
               </ul>
             </div>
           )}
-          {!isUser && onRegenerate && message.promptedByMessageId && !message.isRegenerating && (
-            <button
-              onClick={() => onRegenerate(message.id, message.promptedByMessageId!)}
-              disabled={isLoading}
-              className="absolute top-1 right-1 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 disabled:opacity-30"
-              style={{ 
-                color: bubbleTextColor === '#FFFFFF' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)',
-              }}
-              onMouseEnter={e => {
-                const target = e.currentTarget as HTMLButtonElement;
-                target.style.backgroundColor = bubbleTextColor === '#FFFFFF' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)';
-                target.style.color = bubbleTextColor === '#FFFFFF' ? 'white' : 'black';
-              }}
-              onMouseLeave={e => {
-                const target = e.currentTarget as HTMLButtonElement;
-                target.style.backgroundColor = 'transparent';
-                target.style.color = bubbleTextColor === '#FFFFFF' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)';
-              }}
-              aria-label="Regenerate response"
-              title="Regenerate response"
-            >
-              <ArrowPathIcon className="w-4 h-4" />
-            </button>
-          )}
-
-          {/* Timestamp */}
+          
           {message.timestamp > 0 && (
              <div 
                 className="text-xs text-right mt-1" 

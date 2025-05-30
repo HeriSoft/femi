@@ -1,9 +1,8 @@
-
 // Fix: Remove triple-slash directive for 'vite/client' as its types are not found and import.meta.env is manually typed.
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo, useContext } from 'react';
 // Update to .ts/.tsx extensions
-import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType, UserGlobalProfile } from '../types.ts';
+import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType, UserGlobalProfile, AiAgentSettings } from '../types.ts';
 import type { Content } from '@google/genai'; // For constructing Gemini history
 import { ALL_MODEL_DEFAULT_SETTINGS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY, TRANSLATION_TARGET_LANGUAGES } from '../constants.ts';
 import MessageBubble from './MessageBubble.tsx';
@@ -17,7 +16,7 @@ import { sendDeepseekMessageStream } from '../services/deepseekService.ts';
 import { sendMockMessageStream } from '../services/mockApiService.ts';
 import { generateOpenAITTS } from "../services/openaiTTSService"; // Changed this line
 // Added MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon, ChevronDownIcon
-import { PaperAirplaneIcon, CogIcon, XMarkIcon, PromptIcon, Bars3Icon, ChatBubbleLeftRightIcon, ClockIcon as HistoryIcon, MicrophoneIcon, StopCircleIcon, SpeakerWaveIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon, ChevronDownIcon } from './Icons.tsx';
+import { PaperAirplaneIcon, CogIcon, XMarkIcon, PromptIcon, Bars3Icon, ChatBubbleLeftRightIcon, ClockIcon as HistoryIcon, MicrophoneIcon, StopCircleIcon, SpeakerWaveIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon, ChevronDownIcon, ArrowDownTrayIcon } from './Icons.tsx';
 import { ThemeContext } from '../App.tsx'; // Import ThemeContext
 
 // Helper to deep merge settings, useful for loading from localStorage
@@ -213,7 +212,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     const activePersona = activePersonaId ? personas.find(p => p.id === activePersonaId) : null;
 
     // For non-special models, construct system instruction with About Me and Persona
-    if (selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS && selectedModel !== Model.REAL_TIME_TRANSLATION) {
+    if (selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS && selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.AI_AGENT) {
         let finalSystemInstruction = baseSettings.systemInstruction;
 
         if (activePersona) {
@@ -228,7 +227,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         // If neither persona nor aboutMeText, finalSystemInstruction remains baseSettings.systemInstruction
         return { ...baseSettings, systemInstruction: finalSystemInstruction };
     }
-    // For special models (Imagen, TTS, RTTM), just return base settings for that model
+    // For special models (Imagen, TTS, RTTM, AiAgent), just return base settings for that model
     return baseSettings;
   }, [allSettings, selectedModel, activePersonaId, personas, userProfile]);
 
@@ -252,6 +251,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   const isImagenModelSelected = selectedModel === Model.IMAGEN3;
   const isTextToSpeechModelSelected = selectedModel === Model.OPENAI_TTS;
   const isRealTimeTranslationMode = selectedModel === Model.REAL_TIME_TRANSLATION;
+  const isAiAgentMode = selectedModel === Model.AI_AGENT;
 
 
   const [savedSessions, setSavedSessions] = useState<ChatSession[]>(() => {
@@ -323,6 +323,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       [Model.IMAGEN3]: {isSet: isProxyExpectedToHaveKey, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Imagen3 Image Gen', isMock: false, isGeminiPlatform: true, isImageGeneration: true},
       [Model.OPENAI_TTS]: {isSet: isProxyExpectedToHaveKey, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'OpenAI TTS', isMock: false, isGeminiPlatform: false, isTextToSpeech: true },
       [Model.REAL_TIME_TRANSLATION]: {isSet: isProxyExpectedToHaveKey, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Real-Time Translation (Gemini)', isMock: false, isGeminiPlatform: true, isRealTimeTranslation: true },
+      [Model.AI_AGENT]: {
+        isSet: isProxyExpectedToHaveKey,
+        envVarName: 'GEMINI_API_KEY (on proxy)', 
+        modelName: 'AI Agent (gemini-2.5-flash-preview-04-17)', 
+        isMock: false, 
+        isGeminiPlatform: true, 
+        isAiAgent: true,
+      },
     };
   }, []);
 
@@ -364,16 +372,17 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   // Effect for model selection changes, including GPT-4.1 access modal
   useEffect(() => {
     const currentModelStatus = apiKeyStatuses[selectedModel];
-    if ((!currentModelStatus?.isGeminiPlatform || currentModelStatus?.isImageGeneration || currentModelStatus?.isTextToSpeech || currentModelStatus?.isRealTimeTranslation) && isWebSearchEnabled) {
+    // Disable web search if current model is not Gemini platform chat or if AI Agent (which handles its own search)
+    if ((!currentModelStatus?.isGeminiPlatform || currentModelStatus?.isImageGeneration || currentModelStatus?.isTextToSpeech || currentModelStatus?.isRealTimeTranslation || currentModelStatus?.isAiAgent) && isWebSearchEnabled) {
         setIsWebSearchEnabled(false);
     }
     
-    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode) { 
+    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode ) { // AI Agent can have attachments
         setUploadedImage(null);
         setImagePreview(null); 
         setUploadedTextFileContent(null);
         setUploadedTextFileName(null);
-        setActivePersonaId(null); 
+        if (!isAiAgentMode) setActivePersonaId(null); // AI Agent doesn't use personas, but other special models do clear it
         if (isListening && !isRealTimeTranslationMode) { // Stop chat STT if switching to special mode
             recognitionRef.current?.stop();
         }
@@ -593,7 +602,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   };
 
 
-  const handleModelSettingsChange = useCallback((newSettings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings>) => {
+  const handleModelSettingsChange = useCallback((newSettings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings>) => {
     setAllSettings(prev => {
       const baseModelSettings = prev[selectedModel] || ALL_MODEL_DEFAULT_SETTINGS[selectedModel]!;
       let processedNewSettings = { ...newSettings };
@@ -606,7 +615,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       }
       
       const activeP = activePersonaId ? personas.find(p => p.id === activePersonaId) : null;
-      if (activeP && 'systemInstruction' in processedNewSettings && selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS && selectedModel !== Model.REAL_TIME_TRANSLATION) {
+      if (activeP && 'systemInstruction' in processedNewSettings && selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS && selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.AI_AGENT) {
           delete processedNewSettings.systemInstruction;
       }
 
@@ -647,8 +656,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   };
 
   const handleSaveCurrentChat = useCallback(() => {
-    if (isRealTimeTranslationMode) {
-        addNotification("Cannot save chat in Real-Time Translation mode.", "info");
+    if (isRealTimeTranslationMode || isAiAgentMode) {
+        addNotification(`Cannot save chat in ${isRealTimeTranslationMode ? 'Real-Time Translation' : 'AI Agent'} mode.`, "info");
         return;
     }
     if (messages.length === 0) {
@@ -663,6 +672,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     if (firstUserMessage) {
         if (firstUserMessage.isImageQuery && firstUserMessage.text) {
             sessionName = `Image: ${firstUserMessage.text.substring(0, 30)}${firstUserMessage.text.length > 30 ? '...' : ''}`;
+        } else if (firstUserMessage.isTaskGoal && firstUserMessage.text) { 
+            sessionName = `Agent Goal: ${firstUserMessage.text.substring(0, 30)}${firstUserMessage.text.length > 30 ? '...' : ''}`;
         } else if (firstUserMessage.text) {
             sessionName = firstUserMessage.text.substring(0, 40) + (firstUserMessage.text.length > 40 ? '...' : '');
         } else if (firstUserMessage.imagePreview) {
@@ -703,13 +714,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       addNotification(`Chat "${sessionName}" saved.`, "success");
     }
     clearSearch();
-  }, [messages, selectedModel, modelSettings, activeSessionId, savedSessions, activePersonaId, addNotification, currentChatName, isRealTimeTranslationMode]);
+  }, [messages, selectedModel, modelSettings, activeSessionId, savedSessions, activePersonaId, addNotification, currentChatName, isRealTimeTranslationMode, isAiAgentMode]);
 
   const handleLoadSession = useCallback((sessionId: string) => {
     const sessionToLoad = savedSessions.find(s => s.id === sessionId);
     if (sessionToLoad) {
-      if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION) {
-          addNotification("Cannot load Real-Time Translation sessions directly. Please start a new one if needed.", "info");
+      if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT) {
+          addNotification(`Cannot load ${sessionToLoad.model === Model.REAL_TIME_TRANSLATION ? 'Real-Time Translation' : 'AI Agent'} sessions directly. Please start a new one if needed.`, "info");
           return;
       }
       setMessages([...sessionToLoad.messages]);
@@ -749,25 +760,25 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     setUploadedTextFileContent(null);
     setUploadedTextFileName(null);
     setIsWebSearchEnabled(false);
-    // Reset settings for current model, but don't change selectedModel unless it's RTTM or GPT4O access modal is involved
-    if (selectedModel !== Model.REAL_TIME_TRANSLATION && !(selectedModel === Model.GPT4O && !isGpt41Unlocked)) {
+    
+    if (selectedModel !== Model.REAL_TIME_TRANSLATION && !(selectedModel === Model.GPT4O && !isGpt41Unlocked)) { // AI Agent settings reset normally
         setAllSettings(prev => ({
             ...prev,
             [selectedModel]: { ...(ALL_MODEL_DEFAULT_SETTINGS[selectedModel] || ALL_MODEL_DEFAULT_SETTINGS[Model.GEMINI]!) }
         }));
-    } else if (selectedModel === Model.GPT4O && isGpt41Unlocked) { // If unlocked, reset its settings
+    } else if (selectedModel === Model.GPT4O && isGpt41Unlocked) { 
          setAllSettings(prev => ({
             ...prev,
             [selectedModel]: { ...(ALL_MODEL_DEFAULT_SETTINGS[selectedModel] || ALL_MODEL_DEFAULT_SETTINGS[Model.GEMINI]!) }
         }));
     }
 
-    setActivePersonaId(null); 
+    if (!isAiAgentMode) setActivePersonaId(null); // AI Agent doesn't use personas, so don't clear if it's the active model
     setError(null);
     setIsSidebarOpen(false); 
     addNotification("Started new chat.", "info");
     clearSearch();
-     // If in RTTM, clear its specific displays
+     
     if (isRealTimeTranslationMode) {
         setLiveTranscriptionDisplay("");
         setLiveTranslationDisplay("");
@@ -778,7 +789,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             setIsSpeakingLiveTranslation(false);
         }
     }
-  }, [selectedModel, addNotification, isRealTimeTranslationMode, isSpeakingLiveTranslation, isGpt41Unlocked]);
+  }, [selectedModel, addNotification, isRealTimeTranslationMode, isSpeakingLiveTranslation, isGpt41Unlocked, isAiAgentMode]);
 
   const handleDeleteSession = useCallback((sessionId: string) => {
     const sessionToDelete = savedSessions.find(s => s.id === sessionId);
@@ -945,8 +956,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
 
   const internalSendMessage = async (
     currentInputText: string,
-    currentUploadedImage: File | null,
-    currentImagePreview: string | null,
+    currentUploadedImageFile: File | null, 
+    currentImagePreviewDataUrl: string | null, 
     currentUploadedTextContent: string | null,
     currentUploadedTextFileName: string | null,
     isRegenerationOfAiMsgId?: string 
@@ -954,58 +965,76 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     
     const messageTimestamp = Date.now();
     const userMessageId = messageTimestamp.toString();
-    let constructedMessageText = currentInputText.trim();
-    const originalUserPromptForAi = currentInputText.trim(); 
+    let userDisplayedText = currentInputText.trim(); 
+    let textForApi = currentInputText.trim();
+    
+    const fileContextNote = `(System Note: User uploaded a file named '${currentUploadedTextFileName}'. Its content is not directly available to you. Please refer to your system instructions on how to handle this situation.)`;
 
-    if (currentUploadedTextFileName && !isImagenModelSelected && !isTextToSpeechModelSelected && !isRealTimeTranslationMode) {
-        let fileInfo = `The user has uploaded a file named "${currentUploadedTextFileName}".`;
-        if (currentUploadedTextContent) {
-            fileInfo += `\nThe content of this file is:\n${currentUploadedTextContent}`;
+    if (isAiAgentMode) {
+        if (currentUploadedTextFileName && currentUploadedTextContent) {
+            textForApi = `Content from uploaded file "${currentUploadedTextFileName}":\n${currentUploadedTextContent}\n\n---\n\nUser's goal: ${textForApi}`;
+        } else if (currentUploadedTextFileName && !currentUploadedTextContent && !currentUploadedImageFile) {
+            textForApi = `${fileContextNote}\n\nUser's goal: ${textForApi}`;
         }
-        constructedMessageText = `${fileInfo}\n\n---\n\n${originalUserPromptForAi}`;
+    } else if (currentUploadedTextFileName && currentUploadedTextContent) { // Standard chat with text file
+        textForApi = `The user has uploaded a file named "${currentUploadedTextFileName}".\nThe content of this file is:\n${currentUploadedTextContent}\n\n---\n\n${textForApi}`;
     }
+    // For standard chat models, if a non-text/non-image file is uploaded, `textForApi` might need the fileContextNote later for those specific model handlers.
 
     const newUserMessage: ChatMessage = {
         id: userMessageId,
-        text: originalUserPromptForAi,
+        text: userDisplayedText, 
         sender: 'user',
         timestamp: messageTimestamp,
-        imagePreview: !isImagenModelSelected && !isTextToSpeechModelSelected && !isRealTimeTranslationMode ? currentImagePreview || undefined : undefined,
-        fileName: !isImagenModelSelected && !isTextToSpeechModelSelected && !isRealTimeTranslationMode ? currentUploadedTextFileName || undefined : undefined,
+        imagePreview: currentImagePreviewDataUrl || undefined,
+        fileName: currentUploadedTextFileName || undefined,
         isImageQuery: isImagenModelSelected,
+        isTaskGoal: isAiAgentMode, 
     };
 
     if (!isRegenerationOfAiMsgId) {
         setMessages((prev) => [...prev, newUserMessage]);
     }
     
-    const aiMessageTimestamp = Date.now(); // Timestamp for AI message creation
+    const aiMessageTimestamp = Date.now(); 
     const aiMessageId = isRegenerationOfAiMsgId || (aiMessageTimestamp + 1).toString();
+    
+    let aiPlaceholderText = isRegenerationOfAiMsgId ? 'Regenerating...' : '';
+    if (!isRegenerationOfAiMsgId) {
+        if (isImagenModelSelected) aiPlaceholderText = 'Generating image(s)...';
+        else if (isTextToSpeechModelSelected) aiPlaceholderText = 'Synthesizing audio...';
+        else if (isAiAgentMode) aiPlaceholderText = 'AI Agent is processing your goal...';
+        else aiPlaceholderText = 'Thinking...';
+    }
+
+
     const aiMessagePlaceholder: ChatMessage = {
         id: aiMessageId,
-        text: isImagenModelSelected ? 'Generating image(s)...' : (isTextToSpeechModelSelected ? 'Synthesizing audio...' : (isRegenerationOfAiMsgId ? 'Regenerating...' : '')),
+        text: aiPlaceholderText,
         sender: 'ai',
         timestamp: aiMessageTimestamp,
         model: selectedModel,
         isRegenerating: !!isRegenerationOfAiMsgId,
         promptedByMessageId: userMessageId, 
+        isTaskPlan: isAiAgentMode, 
+        originalPrompt: userDisplayedText, 
     };
 
     if (isRegenerationOfAiMsgId) {
-        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? {...aiMessagePlaceholder, timestamp: msg.timestamp || aiMessageTimestamp } : msg)); // Preserve original timestamp on regen
+        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? {...aiMessagePlaceholder, timestamp: msg.timestamp || aiMessageTimestamp } : msg));
     } else {
         setMessages((prev) => [...prev, aiMessagePlaceholder]);
     }
     
     try {
-      const currentModelSpecificSettings = modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings;
+      const currentModelSpecificSettings = modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings;
       const currentModelStatus = apiKeyStatuses[selectedModel];
       const actualModelIdentifier = getActualModelIdentifier(selectedModel);
 
       if (currentModelStatus?.isTextToSpeech && !currentModelStatus.isMock) {
         const ttsResult = await generateOpenAITTS({
             modelIdentifier: currentModelSpecificSettings.modelIdentifier || 'tts-1',
-            textInput: originalUserPromptForAi,
+            textInput: userDisplayedText, 
             voice: currentModelSpecificSettings.voice || 'alloy',
             speed: currentModelSpecificSettings.speed || 1.0
         });
@@ -1015,10 +1044,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             const audioBlobUrl = URL.createObjectURL(ttsResult.audioBlob);
             setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? {
                 ...msg,
-                text: `Audio generated for: "${originalUserPromptForAi}"`,
+                text: `Audio generated for: "${userDisplayedText}"`,
                 audioUrl: audioBlobUrl,
                 isRegenerating: false,
-                timestamp: msg.timestamp || Date.now() // Ensure timestamp exists
+                timestamp: msg.timestamp || Date.now() 
             } : msg));
              if (audioPlayerRef.current && audioBlobUrl) { 
                 handlePlayAudio(audioBlobUrl, aiMessageId);
@@ -1031,7 +1060,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         if (isImagenModelSelected) { 
             const imagenSettings = currentModelSpecificSettings as ImagenSettings;
             const result = await generateImageWithImagen({
-              prompt: originalUserPromptForAi, modelSettings: imagenSettings, modelName: actualModelIdentifier,
+              prompt: userDisplayedText, modelSettings: imagenSettings, modelName: actualModelIdentifier,
             });
 
             if (result.error) throw new Error(result.error);
@@ -1041,66 +1070,68 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
               setMessages((prev) =>
                 prev.map((msg) =>
                   msg.id === aiMessageId ? { 
-                    ...msg, text: `Generated ${imageUrls.length} image(s) for: "${originalUserPromptForAi}"`, 
-                    imagePreviews: imageUrls, imageMimeType: mimeType, originalPrompt: originalUserPromptForAi, isRegenerating: false,
+                    ...msg, text: `Generated ${imageUrls.length} image(s) for: "${userDisplayedText}"`, 
+                    imagePreviews: imageUrls, imageMimeType: mimeType, originalPrompt: userDisplayedText, isRegenerating: false,
                     timestamp: msg.timestamp || Date.now() 
                   } : msg
                 )
               );
             } else { throw new Error("Image generation failed to return any images. Check proxy logs and original API response for details."); }
-        } else { 
+        } else { // Gemini Chat (including AI Agent if it's Gemini-based)
             const geminiHistory: Content[] = [];
-            messages
-              .filter(m => m.id !== aiMessageId && m.id !== newUserMessage.id) 
-              .forEach(msg => {
-                const messageParts: Part[] = [];
-                if (msg.text && msg.text.trim()) {
-                  messageParts.push({ text: msg.text.trim() });
-                }
-
-                if (msg.sender === 'user' && msg.imagePreview) {
-                  try {
-                    const [header, base64Data] = msg.imagePreview.split(',');
-                    if (base64Data) {
-                      const mimeTypeMatch = header.match(/data:(image\/[a-zA-Z0-9-.+]+);base64/);
-                      if (mimeTypeMatch && mimeTypeMatch[1]) {
-                        messageParts.push({
-                          inlineData: {
-                            mimeType: mimeTypeMatch[1], 
-                            data: base64Data
-                          }
-                        });
-                      }
+            
+            if (!isAiAgentMode) { // AI Agent might have different history logic or rely solely on current prompt with context.
+                messages
+                .filter(m => m.id !== aiMessageId && m.id !== newUserMessage.id) 
+                .forEach(msg => {
+                    const messageParts: Part[] = [];
+                    if (msg.text && msg.text.trim()) {
+                        messageParts.push({ text: msg.text.trim() });
                     }
-                  } catch (e) { console.error("Error processing user imagePreview in history for Gemini:", e); }
-                }
-
-                if (msg.sender === 'ai' && msg.imagePreviews && msg.imagePreviews.length > 0) {
-                  msg.imagePreviews.forEach(imgPrev => {
+                    if (msg.sender === 'user' && msg.fileName && !msg.imagePreview && !TEXT_READABLE_EXTENSIONS.some(ext => msg.fileName?.toLowerCase().endsWith(ext))) {
+                         // For non-AI Agent Gemini, inform about non-readable file name in history
+                        messageParts.push({ text: `(System Note: User previously uploaded a file named '${msg.fileName}'. Its content was not directly available.)` });
+                    }
+                    if (msg.sender === 'user' && msg.imagePreview) {
                     try {
-                      const [header, base64Data] = imgPrev.split(',');
-                      if (base64Data) {
-                        const mimeType = msg.imageMimeType || (header.includes('/png') ? 'image/png' : 'image/jpeg');
-                        messageParts.push({ inlineData: { mimeType: mimeType, data: base64Data } });
-                      }
-                    } catch (e) { console.error("Error processing AI imagePreview in history for Gemini:", e); }
-                  });
-                }
-                
-                if (messageParts.length > 0) {
-                  geminiHistory.push({ role: msg.sender === 'user' ? 'user' : 'model', parts: messageParts });
-                }
-            });
+                        const [header, base64Data] = msg.imagePreview.split(',');
+                        if (base64Data) {
+                        const mimeTypeMatch = header.match(/data:(image\/[a-zA-Z0-9-.+]+);base64/);
+                        if (mimeTypeMatch && mimeTypeMatch[1]) {
+                            messageParts.push({
+                            inlineData: {
+                                mimeType: mimeTypeMatch[1], 
+                                data: base64Data
+                            }
+                            });
+                        }
+                        }
+                    } catch (e) { console.error("Error processing user imagePreview in history for Gemini:", e); }
+                    }
+                    // AI image previews in history might not be needed or useful for Gemini text chat
+                    // if (msg.sender === 'ai' && msg.imagePreviews && msg.imagePreviews.length > 0) { ... }
+                    
+                    if (messageParts.length > 0) {
+                        geminiHistory.push({ role: msg.sender === 'user' ? 'user' : 'model', parts: messageParts });
+                    }
+                });
+            }
+
 
             const currentUserParts: Part[] = [];
-            if (constructedMessageText.trim()) {
-                currentUserParts.push({ text: constructedMessageText.trim() });
+            if (textForApi.trim()) { 
+                currentUserParts.push({ text: textForApi.trim() });
             }
-            if (currentUploadedImage && currentImagePreview && !isImagenModelSelected && !isTextToSpeechModelSelected) {
+            // Add non-text/non-image file note for non-AI Agent Gemini models if not already in textForApi
+            if (!isAiAgentMode && currentUploadedTextFileName && !currentUploadedTextContent && !currentUploadedImageFile) {
+                currentUserParts.push({ text: fileContextNote });
+            }
+            
+            if (currentUploadedImageFile && currentImagePreviewDataUrl) { 
                 try {
-                    const base64Image = currentImagePreview.split(',')[1];
+                    const base64Image = currentImagePreviewDataUrl.split(',')[1];
                     if (base64Image) {
-                         currentUserParts.push({ inlineData: { mimeType: currentUploadedImage.type, data: base64Image } });
+                         currentUserParts.push({ inlineData: { mimeType: currentUploadedImageFile.type, data: base64Image } });
                     }
                 } catch(e) { console.error("Error processing current user uploaded image for Gemini:", e); }
             }
@@ -1115,7 +1146,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             const stream = sendGeminiMessageStream({
               historyContents: geminiHistory, 
               modelSettings: currentModelSpecificSettings as ModelSettings, 
-              enableGoogleSearch: isWebSearchEnabled,
+              enableGoogleSearch: isAiAgentMode || isWebSearchEnabled, 
               modelName: actualModelIdentifier, 
             });
 
@@ -1131,20 +1162,32 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         const history: ApiChatMessage[] = [{ role: 'system', content: currentModelSpecificSettings.systemInstruction }];
         messages.filter(m => m.id !== aiMessageId && m.id !== newUserMessage.id).forEach(msg => { 
             if (msg.sender === 'user') {
-                const userContent: any[] = [];
-                if (msg.text) userContent.push({ type: 'text', text: msg.text });
-                if (msg.imagePreview && !msg.isImageQuery) userContent.push({ type: 'image_url', image_url: { url: msg.imagePreview } });
-                if (userContent.length > 0) history.push({ role: 'user', content: userContent });
-                else if (msg.text === "") history.push({ role: 'user', content: " " });
-            } else if (msg.sender === 'ai') history.push({ role: 'assistant', content: msg.text });
+                let userContentText = msg.text || "";
+                if (msg.fileName && !msg.imagePreview && !TEXT_READABLE_EXTENSIONS.some(ext => msg.fileName?.toLowerCase().endsWith(ext))) {
+                    userContentText += `\n(System Note: User previously uploaded a file named '${msg.fileName}'. Its content was not directly available.)`;
+                }
+                const userContentParts: any[] = [];
+                if (userContentText.trim()) userContentParts.push({ type: 'text', text: userContentText.trim() });
+                if (msg.imagePreview && !msg.isImageQuery) userContentParts.push({ type: 'image_url', image_url: { url: msg.imagePreview } });
+                
+                if (userContentParts.length > 0) history.push({ role: 'user', content: userContentParts });
+                else if (msg.text === "") history.push({ role: 'user', content: " " }); // Handle empty string prompts
+            } else if (msg.sender === 'ai') {
+                 history.push({ role: 'assistant', content: msg.text || " " });
+            }
         });
         
+        let currentTurnTextForApi = textForApi.trim();
+        if (currentUploadedTextFileName && !currentUploadedTextContent && !currentUploadedImageFile) {
+            currentTurnTextForApi = `${currentTurnTextForApi}\n\n${fileContextNote}`;
+        }
+
         const currentUserContent: Array<{type: 'text', text: string} | {type: 'image_url', image_url: {url: string, detail?: "auto" | "low" | "high" }}> = [];
-        if (constructedMessageText.trim()) currentUserContent.push({ type: 'text', text: constructedMessageText.trim() });
-        if (currentUploadedImage && currentImagePreview) currentUserContent.push({ type: 'image_url', image_url: { url: currentImagePreview, detail: "auto" }});
+        if (currentTurnTextForApi.trim()) currentUserContent.push({ type: 'text', text: currentTurnTextForApi.trim() });
+        if (currentUploadedImageFile && currentImagePreviewDataUrl) currentUserContent.push({ type: 'image_url', image_url: { url: currentImagePreviewDataUrl, detail: "auto" }});
 
         if(currentUserContent.length > 0) history.push({ role: 'user', content: currentUserContent });
-        else if (originalUserPromptForAi === "" && !currentUploadedImage) history.push({ role: 'user', content: " " }); 
+        else if (userDisplayedText === "" && !currentUploadedImageFile && !currentUploadedTextFileName) history.push({ role: 'user', content: " " }); 
 
         const stream = sendOpenAIMessageStream({ 
             modelIdentifier: actualModelIdentifier, 
@@ -1162,10 +1205,19 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       } else if (selectedModel === Model.DEEPSEEK && !currentModelStatus.isMock) {
         const history: ApiChatMessage[] = [{ role: 'system', content: currentModelSpecificSettings.systemInstruction }];
          messages.filter(m => m.id !== aiMessageId && m.id !== newUserMessage.id).forEach(msg => {
-            if (msg.sender === 'user') history.push({ role: 'user', content: msg.text }); 
-            else if (msg.sender === 'ai') history.push({ role: 'assistant', content: msg.text });
+            let msgContent = msg.text || " ";
+            if (msg.sender === 'user' && msg.fileName && !msg.imagePreview && !TEXT_READABLE_EXTENSIONS.some(ext => msg.fileName?.toLowerCase().endsWith(ext))) {
+                msgContent += `\n(System Note: User previously uploaded a file named '${msg.fileName}'. Its content was not directly available.)`;
+            }
+            if (msg.sender === 'user') history.push({ role: 'user', content: msgContent }); 
+            else if (msg.sender === 'ai') history.push({ role: 'assistant', content: msgContent });
         });
-        history.push({ role: 'user', content: constructedMessageText.trim() || " " });
+        
+        let currentTurnTextForDeepseek = textForApi.trim();
+        if (currentUploadedTextFileName && !currentUploadedTextContent && !currentUploadedImageFile) {
+            currentTurnTextForDeepseek = `${currentTurnTextForDeepseek}\n\n${fileContextNote}`;
+        }
+        history.push({ role: 'user', content: currentTurnTextForDeepseek || " " }); 
 
         const stream = sendDeepseekMessageStream({ 
             modelIdentifier: actualModelIdentifier, 
@@ -1180,11 +1232,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
           if (chunk.isFinished) break;
         }
       
-      } else if (currentModelStatus?.isMock && !isRealTimeTranslationMode) { 
+      } else if (currentModelStatus?.isMock && !isRealTimeTranslationMode && !isAiAgentMode) { 
         const mockParts: Part[] = [];
-        if (constructedMessageText.trim()) mockParts.push({ text: constructedMessageText.trim() });
-        if (currentUploadedImage && currentImagePreview) {
-            mockParts.push({ inlineData: { mimeType: currentUploadedImage.type as 'image/jpeg' | 'image/png', data: currentImagePreview.split(',')[1] } });
+        if (textForApi.trim()) mockParts.push({ text: textForApi.trim() });
+        if (currentUploadedTextFileName && !currentUploadedTextContent && !currentUploadedImageFile) {
+            mockParts.push({ text: fileContextNote });
+        }
+        if (currentUploadedImageFile && currentImagePreviewDataUrl) { 
+            mockParts.push({ inlineData: { mimeType: currentUploadedImageFile.type as 'image/jpeg' | 'image/png', data: currentImagePreviewDataUrl.split(',')[1] } });
         }
         const stream = sendMockMessageStream(mockParts, selectedModel, currentModelSpecificSettings as ModelSettings); 
         let currentText = '';
@@ -1201,35 +1256,37 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       setError(errorMessage); 
       addNotification(`API Error: ${errorMessage}`, "error", e.stack); 
       const errorAiMessageId = aiMessageId || `error-${Date.now()}`;
-      setMessages((prev) => prev.filter(msg => msg.id !== aiMessageId)); // Remove placeholder if it exists
+      setMessages((prev) => prev.filter(msg => msg.id !== aiMessageId)); 
       setMessages((prev) => [...prev, {
         id: errorAiMessageId, 
         text: `Error: ${errorMessage}`, 
         sender: 'ai', 
         model: selectedModel, 
-        timestamp: Date.now(), // Timestamp for the error message
+        timestamp: Date.now(), 
         promptedByMessageId: userMessageId
       }]);
     }
 
     setIsLoading(false);
-    if (!isRegenerationOfAiMsgId && !isRealTimeTranslationMode) {
+    if (!isRegenerationOfAiMsgId && !isRealTimeTranslationMode) { 
         setInput(''); 
-        if (!isImagenModelSelected && !isTextToSpeechModelSelected) { 
-            setUploadedImage(null);
-            setImagePreview(null); 
-            setUploadedTextFileContent(null);
-            setUploadedTextFileName(null);
-        }
+        setUploadedImage(null);
+        setImagePreview(null); 
+        setUploadedTextFileContent(null);
+        setUploadedTextFileName(null);
     }
     clearSearch();
   };
 
   const handleSendMessage = async () => {
     if (isRealTimeTranslationMode || isListening) return; 
-    if (!input.trim() && !uploadedImage && !uploadedTextFileName && !isImagenModelSelected && !isTextToSpeechModelSelected) return;
-    if ((isImagenModelSelected || isTextToSpeechModelSelected) && !input.trim()) {
-        const errorMsg = isImagenModelSelected ? "Please enter a prompt for image generation." : "Please enter text for speech synthesis.";
+    if (!input.trim() && !uploadedImage && !uploadedTextFileName && !isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode) return;
+    if ((isImagenModelSelected || isTextToSpeechModelSelected || isAiAgentMode) && !input.trim() && !uploadedImage && !uploadedTextFileName) { 
+        let errorMsg = "";
+        if (isImagenModelSelected) errorMsg = "Please enter a prompt for image generation.";
+        else if (isTextToSpeechModelSelected) errorMsg = "Please enter text for speech synthesis.";
+        else if (isAiAgentMode) errorMsg = "Please enter a goal or upload a file for the AI Agent.";
+        
         setError(errorMsg);
         addNotification(errorMsg, "info");
         return;
@@ -1240,7 +1297,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   };
   
   const handleRegenerateResponse = async (aiMessageIdToRegenerate: string, promptedByMsgId: string) => {
-      if (isRealTimeTranslationMode) return;
+      if (isRealTimeTranslationMode || isAiAgentMode) return; 
       const userMessageForRegen = messages.find(m => m.id === promptedByMsgId && m.sender === 'user');
       const aiMessageToRegen = messages.find(m => m.id === aiMessageIdToRegenerate && m.sender === 'ai');
 
@@ -1259,10 +1316,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       setError(null);
       
       const regenInputText = userMessageForRegen.text;
-      const currentRegenImageFile = uploadedImage; 
-      const currentRegenImagePreview = imagePreview; 
-      const currentRegenUploadedTextContent = uploadedTextFileContent;
-      const currentRegenUploadedTextFileName = uploadedTextFileName;
+      let currentRegenImageFile: File | null = null; 
+      let currentRegenImagePreview: string | null = userMessageForRegen.imagePreview || null;
+      let currentRegenUploadedTextContent: string | null = null; // Need to retrieve this from history if possible
+      let currentRegenUploadedTextFileName: string | null = userMessageForRegen.fileName || null;
+
+      // Logic to re-fetch text file content for regeneration IF NEEDED.
+      // For now, assume it was part of the original userMessageForRegen.text or we can't re-fetch it.
+      // A more robust solution would be to store the text content on the userMessage object itself.
 
 
       setMessages(prev => prev.map(msg => {
@@ -1270,6 +1331,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
               let regeneratingText = 'Regenerating...';
               if (msg.model === Model.IMAGEN3) regeneratingText = 'Regenerating image(s)...';
               if (msg.model === Model.OPENAI_TTS) regeneratingText = 'Resynthesizing audio...';
+              
               return {
                   ...msg,
                   text: regeneratingText,
@@ -1277,7 +1339,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                   groundingSources: undefined, 
                   audioUrl: undefined, 
                   isRegenerating: true,
-                  // timestamp remains from original AI message placeholder or its update
               };
           }
           return msg;
@@ -1287,7 +1348,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
           regenInputText, 
           currentRegenImageFile, 
           currentRegenImagePreview, 
-          currentRegenUploadedTextContent,
+          currentRegenUploadedTextContent, // This will be null if not from original message text
           currentRegenUploadedTextFileName,
           aiMessageIdToRegenerate 
       );
@@ -1297,6 +1358,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   const handleImageUpload = (file: File | null) => {
     if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode) return; 
     setUploadedImage(file);
+    setUploadedTextFileContent(null); 
+    setUploadedTextFileName(null);
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => { setImagePreview(reader.result as string); };
@@ -1307,6 +1370,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
 
   const handleFileUpload = (file: File | null) => {
     if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode) return; 
+
+    setUploadedImage(null); 
+    setImagePreview(null);
 
     if (file) {
       const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
@@ -1322,7 +1388,16 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
           setUploadedTextFileContent(null); setUploadedTextFileName(null); 
         }
         reader.readAsText(file);
-      } else { setUploadedTextFileContent(null); }
+      } else { 
+        setUploadedTextFileContent(null); 
+        // For non-AI Agent models, they won't be explicitly told about the file yet.
+        // For AI Agent, it will be notified.
+        if (isAiAgentMode) {
+            addNotification(`File "${file.name}" content cannot be displayed/embedded. AI Agent will be notified of the filename.`, "info");
+        } else {
+            addNotification(`File "${file.name}" content cannot be displayed/embedded. This model might not process it.`, "info");
+        }
+      }
     } else { setUploadedTextFileContent(null); setUploadedTextFileName(null); }
     clearSearch();
   };
@@ -1404,12 +1479,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   const sidebarContent = (
     <>
         <div className="flex border-b border-secondary dark:border-neutral-darkest mb-4">
-            <button onClick={() => setActiveSidebarTab('settings')} disabled={isLoading && !isRealTimeTranslationMode}
+            <button onClick={() => setActiveSidebarTab('settings')} disabled={isLoading && !isRealTimeTranslationMode }
                 className={`flex-1 py-2 px-4 text-sm font-medium text-center rounded-t-lg focus:outline-none flex items-center justify-center ${activeSidebarTab === 'settings' ? 'bg-primary text-white dark:bg-primary-light dark:text-neutral-darker' : 'text-neutral-600 dark:text-neutral-300 hover:bg-secondary/50 dark:hover:bg-neutral-dark/50'}`}
                 aria-pressed={activeSidebarTab === 'settings'} >
                 <CogIcon className="w-5 h-5 mr-2"/> Settings
             </button>
-            <button onClick={() => setActiveSidebarTab('history')} disabled={isLoading && !isRealTimeTranslationMode}
+            <button onClick={() => setActiveSidebarTab('history')} disabled={isLoading && !isRealTimeTranslationMode }
                 className={`flex-1 py-2 px-4 text-sm font-medium text-center rounded-t-lg focus:outline-none flex items-center justify-center ${activeSidebarTab === 'history' ? 'bg-primary text-white dark:bg-primary-light dark:text-neutral-darker' : 'text-neutral-600 dark:text-neutral-300 hover:bg-secondary/50 dark:hover:bg-neutral-dark/50'}`}
                 aria-pressed={activeSidebarTab === 'history'} >
                 <HistoryIcon className="w-5 h-5 mr-2"/> History
@@ -1419,11 +1494,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             <SettingsPanel
                 selectedModel={selectedModel}
                 onModelChange={(model) => { 
-                    if (model !== Model.GPT4O) gpt41ModalInteractionFlagRef.current = false; // Reset flag if navigating away from GPT4O
+                    if (model !== Model.GPT4O) gpt41ModalInteractionFlagRef.current = false; 
                     setSelectedModel(model); 
                     clearSearch();
                 }} 
-                modelSettings={modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings} 
+                modelSettings={modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings} 
                 onModelSettingsChange={handleModelSettingsChange}
                 onImageUpload={handleImageUpload}
                 imagePreview={imagePreview}
@@ -1431,7 +1506,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                 uploadedTextFileName={uploadedTextFileName}
                 isWebSearchEnabled={isWebSearchEnabled}
                 onWebSearchToggle={setIsWebSearchEnabled}
-                disabled={(isLoading && !isRealTimeTranslationMode) || isGpt41AccessModalOpen}
+                disabled={(isLoading && !isRealTimeTranslationMode ) || isGpt41AccessModalOpen}
                 apiKeyStatuses={apiKeyStatuses}
                 personas={personas}
                 activePersonaId={activePersonaId}
@@ -1449,7 +1524,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                 onRenameSession={handleRenameSession}
                 onSaveCurrentChat={handleSaveCurrentChat}
                 onStartNewChat={handleStartNewChat}
-                isLoading={(isLoading && !isRealTimeTranslationMode) || isGpt41AccessModalOpen}
+                isLoading={(isLoading && !isRealTimeTranslationMode ) || isGpt41AccessModalOpen}
                 onTogglePinSession={handleTogglePinSession}
             />
         )}
@@ -1463,22 +1538,25 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   };
 
   const currentPromptPlaceholder = () => {
-    if (isListening && !isRealTimeTranslationMode) return "Đang nghe..."; // For chat input STT
+    if (isListening && !isRealTimeTranslationMode) return "Đang nghe..."; 
     if (isImagenModelSelected) return "Enter prompt for image generation...";
     if (isTextToSpeechModelSelected) return "Enter text to synthesize speech...";
     if (isRealTimeTranslationMode) return "Real-Time Translation Active. Use Microphone.";
+    if (isAiAgentMode) return "Enter main goal for AI Agent, or upload file...";
     return "Type your message or upload an image/file...";
   }
 
   const sendButtonLabel = () => {
     if (isImagenModelSelected) return "Generate Image";
     if (isTextToSpeechModelSelected) return "Synthesize Speech";
+    if (isAiAgentMode) return "Set Goal";
     return "Send message";
   }
 
   const sendButtonIcon = () => {
     if (isImagenModelSelected) return <PromptIcon className="w-6 h-6" />;
     if (isTextToSpeechModelSelected) return <SpeakerWaveIcon className="w-6 h-6" />;
+    if (isAiAgentMode) return <PaperAirplaneIcon className="w-6 h-6" />; 
     return <PaperAirplaneIcon className="w-6 h-6" />;
   }
 
@@ -1554,7 +1632,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                 </button>
                 <h2 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light truncate">
                     {isRealTimeTranslationMode ? <LanguageIcon className="w-5 h-5 inline-block mr-2 align-text-bottom"/> : <ChatBubbleLeftRightIcon className="w-5 h-5 inline-block mr-2 align-text-bottom"/>}
-                    {isRealTimeTranslationMode ? "Real-Time Translation" : (currentChatName || "New Chat")}
+                    {isRealTimeTranslationMode ? "Real-Time Translation" : (isAiAgentMode ? "AI Agent" : (currentChatName || "New Chat"))}
                 </h2>
             </div>
             {/* Search Bar - Hidden in Real-Time Translation Mode */}
@@ -1615,15 +1693,15 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                     <p className="whitespace-pre-wrap text-sm text-neutral-700 dark:text-neutral-200">{liveTranslationDisplay || "Translation will appear here..."}</p>
                 </div>
             </div>
-        ) : (
+        ) : ( /* Chat Messages or AI Agent UI */
           <div 
             ref={chatContainerRef}
-            className="flex-grow overflow-y-auto mb-4 pr-2 space-y-2 relative" // Added relative for button positioning
+            className="flex-grow overflow-y-auto mb-4 pr-2 space-y-2 relative" 
             style={chatAreaStyle}
           >
             {messages.map((msg, index) => {
                 const nextMessage = messages[index + 1];
-                // Show avatar if it's the last message OR the next message is from a different sender
+                
                 const showAvatar = !nextMessage || nextMessage.sender !== msg.sender;
                 return (
                     <div key={msg.id} ref={(el: HTMLDivElement | null) => { if(el) messageRefs.current[msg.id] = el; }}>
@@ -1631,7 +1709,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                             message={msg}
                             showAvatar={showAvatar}
                             onImageClick={msg.sender === 'ai' && msg.imagePreviews && msg.imagePreviews.length > 0 ? handleOpenImageModal : undefined}
-                            onRegenerate={msg.sender === 'ai' && msg.promptedByMessageId && !msg.isRegenerating ? handleRegenerateResponse : undefined}
+                            onRegenerate={msg.sender === 'ai' && msg.promptedByMessageId && !msg.isRegenerating && !isAiAgentMode ? handleRegenerateResponse : undefined}
                             isLoading={isLoading}
                             onPlayAudio={msg.audioUrl ? () => handlePlayAudio(msg.audioUrl!, msg.id) : undefined}
                             isAudioPlaying={currentPlayingMessageId === msg.id}
@@ -1642,14 +1720,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                 );
             })}
             {isLoading && messages.length > 0 && messages[messages.length-1]?.sender === 'user' && !messages[messages.length-1]?.isRegenerating && ( 
-              <MessageBubble key="loading" message={{id: 'loading', text: isImagenModelSelected ? 'Generating image(s)...' : (isTextToSpeechModelSelected ? 'Synthesizing audio...' : 'Thinking...'), sender: 'ai', model: selectedModel, timestamp: Date.now(), promptedByMessageId: messages[messages.length-1].id }} showAvatar={true} />
+              <MessageBubble key="loading" message={{id: 'loading', text: isImagenModelSelected ? 'Generating image(s)...' : (isTextToSpeechModelSelected ? 'Synthesizing audio...' : (isAiAgentMode ? 'AI Agent is processing your goal...' : 'Thinking...')), sender: 'ai', model: selectedModel, timestamp: Date.now(), promptedByMessageId: messages[messages.length-1].id }} showAvatar={true} />
             )}
             {isLoading && messages.length === 0 && ( 
-              <MessageBubble key="loading-initial" message={{id: 'loading-initial', text: isImagenModelSelected ? 'Generating image(s)...' : (isTextToSpeechModelSelected ? 'Synthesizing audio...' : 'Thinking...'), sender: 'ai', model: selectedModel, timestamp: Date.now(), promptedByMessageId: 'initial' }} showAvatar={true} />
+              <MessageBubble key="loading-initial" message={{id: 'loading-initial', text: isImagenModelSelected ? 'Generating image(s)...' : (isTextToSpeechModelSelected ? 'Synthesizing audio...' : (isAiAgentMode ? 'AI Agent is processing your goal...' : 'Thinking...')), sender: 'ai', model: selectedModel, timestamp: Date.now(), promptedByMessageId: 'initial' }} showAvatar={true} />
             )}
             <div ref={chatEndRef} />
             {/* Scroll to Bottom Button - Only shown if not in RTTM */}
-            {!isRealTimeTranslationMode && (
+            {!isRealTimeTranslationMode &&(
                 <button
                     onClick={scrollToBottomUiButton}
                     className={`
@@ -1686,7 +1764,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                 )}
                 {uploadedTextFileName && (
                      <div className="inline-block align-top text-sm text-neutral-darker dark:text-secondary-light mt-1">
-                        <span className="mr-2">File: {uploadedTextFileName}</span>
+                        <span className="mr-2">Attached File: {uploadedTextFileName}</span>
                         <button onClick={() => { handleFileUpload(null); }} className="text-red-500 hover:text-red-700 inline-flex items-center" aria-label="Remove file" >
                            <XMarkIcon className="w-4 h-4" />
                         </button>
@@ -1696,7 +1774,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             </div>
         )}
 
-        {/* Input Area: Standard Chat Input OR Real-Time Translation Controls */}
+        {/* Input Area: Standard Chat Input OR Real-Time Translation Controls OR AI Agent Input */}
         <div className="flex items-end border-t border-secondary dark:border-neutral-darkest pt-2 sm:pt-4">
           {isRealTimeTranslationMode ? (
             <div className="w-full flex justify-center">
@@ -1706,7 +1784,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                   className={`p-3 rounded-lg transition-colors self-stretch flex items-center justify-center text-xl ${
                     isListening 
                       ? 'bg-red-500 hover:bg-red-600 text-white' 
-                      : 'bg-green-500 hover:bg-green-600 text-white' // Use green for "Start Recording" in this mode
+                      : 'bg-green-500 hover:bg-green-600 text-white' 
                   } disabled:opacity-50 disabled:cursor-not-allowed`}
                   aria-label={isListening ? "Stop Real-Time Translation" : "Start Real-Time Translation"}
                   aria-pressed={isListening}
@@ -1717,7 +1795,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             </div>
           ) : (
             <>
-              {(!isImagenModelSelected && !isTextToSpeechModelSelected) && (
+              {(!isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode) && ( // Hide mic for AI Agent if not needed
                 <button
                   onClick={handleToggleListen}
                   disabled={isLoading || !isSpeechRecognitionSupported || isImagenModelSelected || isTextToSpeechModelSelected || isGpt41AccessModalOpen}
@@ -1744,7 +1822,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
               />
               <button
                 onClick={handleSendMessage}
-                disabled={isLoading || isListening || isGpt41AccessModalOpen || (!input.trim() && (!isImagenModelSelected && !isTextToSpeechModelSelected && !uploadedImage && !uploadedTextFileName))}
+                disabled={isLoading || isListening || isGpt41AccessModalOpen || ((!input.trim() && !uploadedImage && !uploadedTextFileName) && (isAiAgentMode ? (!uploadedImage && !uploadedTextFileName) : (!isImagenModelSelected && !isTextToSpeechModelSelected))) }
                 className="ml-2 p-3 bg-primary hover:bg-primary-dark dark:bg-primary-light dark:hover:bg-primary text-white rounded-lg disabled:opacity-50 transition-colors self-stretch flex items-center justify-center" 
                 aria-label={sendButtonLabel()} >
                 {sendButtonIcon()}

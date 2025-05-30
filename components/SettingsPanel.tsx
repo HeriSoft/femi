@@ -1,6 +1,7 @@
 
+
 import React, { useState } from 'react';
-import { Model, ModelSettings, SettingsPanelProps as LocalSettingsPanelProps, ApiKeyStatus, getActualModelIdentifier, ImagenSettings, Persona, OpenAITtsSettings, OpenAiTtsVoice, RealTimeTranslationSettings } from '../types.ts';
+import { Model, ModelSettings, SettingsPanelProps as LocalSettingsPanelProps, ApiKeyStatus, getActualModelIdentifier, ImagenSettings, Persona, OpenAITtsSettings, OpenAiTtsVoice, RealTimeTranslationSettings, AiAgentSettings } from '../types.ts';
 import { ArrowUpTrayIcon, PhotoIcon, XMarkIcon, MagnifyingGlassIcon, KeyIcon, InformationCircleIcon, UserCircleIcon, PlusCircleIcon, TrashIcon, PencilSquareIcon, SpeakerWaveIcon, LanguageIcon } from './Icons.tsx';
 import { TRANSLATION_TARGET_LANGUAGES } from '../constants.ts';
 
@@ -82,16 +83,25 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
 
   const models: Model[] = Object.values(Model) as Model[];
   const currentApiKeyStatus = apiKeyStatuses[selectedModel];
-  const isCurrentModelGeminiPlatformChat = currentApiKeyStatus?.isGeminiPlatform && !currentApiKeyStatus?.isMock && !currentApiKeyStatus?.isImageGeneration && !currentApiKeyStatus?.isRealTimeTranslation;
+  
+  const isCurrentModelGeminiPlatformChat = currentApiKeyStatus?.isGeminiPlatform && 
+                                         !currentApiKeyStatus?.isMock && 
+                                         !currentApiKeyStatus?.isImageGeneration && 
+                                         !currentApiKeyStatus?.isRealTimeTranslation &&
+                                         !currentApiKeyStatus?.isAiAgent; 
+
   const isImagenModel = selectedModel === Model.IMAGEN3 || currentApiKeyStatus?.isImageGeneration;
   const isTextToSpeechModel = selectedModel === Model.OPENAI_TTS || currentApiKeyStatus?.isTextToSpeech;
   const isRealTimeTranslationModel = selectedModel === Model.REAL_TIME_TRANSLATION || currentApiKeyStatus?.isRealTimeTranslation;
+  const isAiAgentModel = selectedModel === Model.AI_AGENT || currentApiKeyStatus?.isAiAgent; 
+
+
   const actualModelId = getActualModelIdentifier(selectedModel);
-  const isDeepseekChat = actualModelId === 'deepseek-chat';
+  const isDeepseekChat = actualModelId === 'deepseek-chat'; 
 
   const generalFileAcceptTypes = ".txt,.md,.json,.js,.ts,.jsx,.tsx,.py,.java,.c,.cpp,.h,.hpp,.cs,.go,.rs,.rb,.php,.html,.htm,.css,.scss,.less,.xml,.yaml,.yml,.ini,.sh,.bat,.ps1,.sql,.csv,.log,.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
-  const typedModelSettings = modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings; 
+  const typedModelSettings = modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings; 
 
   const aspectRatios: { value: string; label: string }[] = [
     { value: '1:1', label: '1:1 (Square)' },
@@ -144,7 +154,7 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
                     : 'bg-red-100 dark:bg-red-900 border-red-500 dark:border-red-400 text-red-700 dark:text-red-300'
             } border`}>
                 <p className="font-medium">
-                    {currentApiKeyStatus.modelName} ({currentApiKeyStatus.isMock ? "Mock" : (currentApiKeyStatus.isTextToSpeech ? "TTS API" : (currentApiKeyStatus.isRealTimeTranslation ? "Translation API" : "Live API Key"))})
+                    {currentApiKeyStatus.modelName} ({currentApiKeyStatus.isMock ? "Mock" : (currentApiKeyStatus.isTextToSpeech ? "TTS API" : (currentApiKeyStatus.isRealTimeTranslation ? "Translation API" : (currentApiKeyStatus.isAiAgent ? "AI Agent API" : "Live API Key")))})
                 </p>
                 <p>Env Variable: <code>process.env.{currentApiKeyStatus.envVarName}</code></p>
                 {currentApiKeyStatus.isSet ? (
@@ -170,8 +180,8 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
         )}
       </div>
 
-      {/* Persona Management Section - Hidden for Imagen, TTS, Real-Time Translation */}
-      {!isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && (
+      {/* Persona Management Section - Hidden for Imagen, TTS, Real-Time Translation, AI Agent */}
+      {!isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && (
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
           <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light mb-2 flex items-center">
             <UserCircleIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" />
@@ -241,7 +251,6 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
 
           {personas.length > 0 && !showPersonaForm && (
             <div className="mt-2 space-y-1 max-h-32 overflow-y-auto pr-1">
-              {/* List of personas for quick edit/delete - only if not actively adding/editing one */}
               {personas.map(p => (
                 <div key={p.id} className={`flex justify-between items-center p-1.5 rounded text-xs ${activePersonaId === p.id ? 'bg-primary-light/20 dark:bg-primary-dark/30' : 'hover:bg-secondary/30 dark:hover:bg-neutral-dark/30'}`}>
                   <span className="truncate flex-grow" title={p.name}>{p.name}</span>
@@ -257,8 +266,8 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
       )}
 
 
-      {/* Chat Model Settings - Hidden for Imagen, TTS, Real-Time Translation */}
-      {!isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && ( 
+      {/* Chat Model Settings - Hidden for Imagen, TTS, Real-Time Translation. AI Agent has its own section. */}
+      {!isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && ( 
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
           <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light">Model Settings (Chat)</h3>
           <div>
@@ -270,7 +279,7 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
               rows={3}
               value={effectiveSystemInstruction}
               onChange={(e) => onModelSettingsChange({ systemInstruction: e.target.value })}
-              disabled={disabled || !!currentActivePersona} // Disable if persona is active
+              disabled={disabled || !!currentActivePersona} 
               className={`w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none ${!!currentActivePersona ? 'opacity-70 cursor-not-allowed' : ''}`}
             />
              {!!currentActivePersona && <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">To edit, change persona to "Default / Custom Instruction" or edit the active persona.</p>}
@@ -465,13 +474,74 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
         </div>
       )}
 
-
-      {/* Attachments - Hidden for Imagen, TTS, Real-Time Translation */}
-      {!isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && ( 
+      {/* AI Agent Settings (Only Temperature, TopK, TopP relevant) */}
+      {isAiAgentModel && (
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
-          <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light">Attachments (Chat)</h3>
+          <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light">AI Agent Settings</h3>
+           <p className="text-xs text-neutral-500 dark:text-neutral-400">
+              AI Agent uses web search implicitly. System instruction is fixed. You can upload one image or text file for context.
+            </p>
+          <div>
+            <label htmlFor="temperature-agent" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Temperature: {typedModelSettings.temperature.toFixed(2)}
+            </label>
+            <input
+              type="range"
+              id="temperature-agent"
+              min="0"
+              max="1" 
+              step="0.01"
+              value={typedModelSettings.temperature}
+              onChange={(e) => onModelSettingsChange({ temperature: parseFloat(e.target.value) })}
+              disabled={disabled}
+              className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
+            />
+          </div>
+          <div>
+            <label htmlFor="top-k-agent" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Top K: {typedModelSettings.topK}
+            </label>
+            <input
+              type="range"
+              id="top-k-agent"
+              min="1"
+              max="100" 
+              step="1"
+              value={typedModelSettings.topK}
+              onChange={(e) => onModelSettingsChange({ topK: parseInt(e.target.value, 10) })}
+              disabled={disabled}
+              className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
+            />
+          </div>
+          <div> 
+            <label htmlFor="top-p-agent" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Top P: {typedModelSettings.topP.toFixed(2)}
+            </label>
+            <input
+              type="range"
+              id="top-p-agent"
+              min="0"
+              max="1"
+              step="0.01"
+              value={typedModelSettings.topP}
+              onChange={(e) => onModelSettingsChange({ topP: parseFloat(e.target.value) })}
+              disabled={disabled}
+              className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
+            />
+          </div>
+        </div>
+      )}
+
+
+      {/* Attachments - Hidden for Imagen, TTS, Real-Time Translation. AI Agent has its own logic for this. */}
+      {(!isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel) && ( 
+        <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
+          <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light">
+            Attachments {isAiAgentModel ? '(AI Agent Context)' : '(Chat)'}
+          </h3>
           
-          {selectedModel !== Model.CLAUDE && !isDeepseekChat && (
+          {/* Image Upload: Available for standard chat models and AI Agent */}
+          {(selectedModel !== Model.CLAUDE && !isDeepseekChat) && (
               <div>
                   <label htmlFor="image-upload" className={`flex items-center justify-center w-full px-4 py-2 border-2 border-dashed border-secondary dark:border-neutral-darkest rounded-md  ${disabled ? 'cursor-not-allowed opacity-50' :'cursor-pointer hover:bg-secondary/50 dark:hover:bg-neutral-dark/50'} transition-colors`}>
                       <PhotoIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light"/>
@@ -493,53 +563,58 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
                   )}
               </div>
           )}
-          {isDeepseekChat && (
+          {isDeepseekChat && !isAiAgentModel && (
               <p className="text-xs text-neutral-500 dark:text-neutral-400">Image uploads are not supported by the Deepseek-chat model.</p>
           )}
-          {selectedModel === Model.CLAUDE && (
+          {selectedModel === Model.CLAUDE && !isAiAgentModel && (
               <p className="text-xs text-neutral-500 dark:text-neutral-400">Image uploads are not applicable for the mock Claude model.</p>
           )}
 
-          <div> 
-              {(selectedModel !== Model.CLAUDE) && (
-                  <>
-                      <label htmlFor="file-upload" className={`flex items-center justify-center w-full px-4 py-2 border-2 border-dashed border-secondary dark:border-neutral-darkest rounded-md  ${disabled ? 'cursor-not-allowed opacity-50' :'cursor-pointer hover:bg-secondary/50 dark:hover:bg-neutral-dark/50'} transition-colors`}>
-                          <ArrowUpTrayIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light"/>
-                          <span className="text-sm text-neutral-darker dark:text-secondary-light">Upload File (Text-based)</span>
-                          <input id="file-upload" type="file" accept={generalFileAcceptTypes} className="hidden" onChange={(e) => handleFileChange(e, 'text')} disabled={disabled} />
-                      </label>
-                      {uploadedTextFileName && (
-                          <div className="mt-2 text-sm text-neutral-darker dark:text-secondary-light flex items-center">
-                              File: {uploadedTextFileName}
-                              <button
-                                  onClick={() => onFileUpload(null)}
-                                  className="ml-2 text-red-500 hover:text-red-700"
-                                  aria-label="Remove file"
-                                  disabled={disabled}
-                              >
-                                  <XMarkIcon className="w-4 h-4" />
-                              </button>
-                          </div>
-                      )}
-                  </>
-              )}
-                {selectedModel === Model.CLAUDE && (
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400">File uploads are not applicable for the mock Claude model.</p>
-              )}
-          </div>
+          {/* Text File Upload: Available for standard chat models and AI Agent */}
+          {(selectedModel !== Model.CLAUDE) && (
+              <div> 
+                  <label htmlFor="file-upload" className={`flex items-center justify-center w-full px-4 py-2 border-2 border-dashed border-secondary dark:border-neutral-darkest rounded-md  ${disabled ? 'cursor-not-allowed opacity-50' :'cursor-pointer hover:bg-secondary/50 dark:hover:bg-neutral-dark/50'} transition-colors`}>
+                      <ArrowUpTrayIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light"/>
+                      <span className="text-sm text-neutral-darker dark:text-secondary-light">Upload File (Text-based)</span>
+                      <input id="file-upload" type="file" accept={generalFileAcceptTypes} className="hidden" onChange={(e) => handleFileChange(e, 'text')} disabled={disabled} />
+                  </label>
+                  {uploadedTextFileName && (
+                      <div className="mt-2 text-sm text-neutral-darker dark:text-secondary-light flex items-center">
+                          File: {uploadedTextFileName}
+                          <button
+                              onClick={() => onFileUpload(null)}
+                              className="ml-2 text-red-500 hover:text-red-700"
+                              aria-label="Remove file"
+                              disabled={disabled}
+                          >
+                              <XMarkIcon className="w-4 h-4" />
+                          </button>
+                      </div>
+                  )}
+              </div>
+          )}
+          {selectedModel === Model.CLAUDE && !isAiAgentModel && (
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">File uploads are not applicable for the mock Claude model.</p>
+          )}
         </div>
       )}
       
-      {(isImagenModel || isTextToSpeechModel || isRealTimeTranslationModel) && (
+      {(isImagenModel || isTextToSpeechModel || isRealTimeTranslationModel) && !isAiAgentModel && (
          <p className="text-xs text-neutral-500 dark:text-neutral-400 border-t border-secondary dark:border-neutral-darkest pt-4">
             {isImagenModel && "Personas, Attachments, Web Search, and detailed Chat Model Settings are not applicable for Imagen3."}
             {isTextToSpeechModel && "Personas, Attachments, Web Search, and detailed Chat Model Settings are not applicable for OpenAI TTS."}
             {isRealTimeTranslationModel && "Personas, Chat Attachments, Web Search, and standard Chat Model Settings are not applicable for Real-Time Translation."}
         </p>
       )}
+       {isAiAgentModel && (
+         <p className="text-xs text-neutral-500 dark:text-neutral-400 border-t border-secondary dark:border-neutral-darkest pt-4">
+            Personas are not applicable for AI Agent. Web Search is always active. Use Model Settings above for temperature, TopK, TopP.
+        </p>
+      )}
 
-      {/* Web Search - Hidden for Imagen, TTS, Real-Time Translation */}
-      {isCurrentModelGeminiPlatformChat && !isTextToSpeechModel && !isRealTimeTranslationModel && ( 
+
+      {/* Web Search - Hidden for Imagen, TTS, Real-Time Translation, AI Agent */}
+      {isCurrentModelGeminiPlatformChat && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && ( 
         <div className="space-y-2 border-t border-secondary dark:border-neutral-darkest pt-4">
           <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light">Tools (Gemini Chat)</h3>
           <label htmlFor="web-search-toggle" className={`flex items-center ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
