@@ -203,7 +203,7 @@ export const ArrowDownTrayIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props
 export const AcademicCapIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
     <path d="M11.063 2.53L2.25 6.437v2.876l8.813 3.899L12 13.5l.937-.288 8.813-3.899V6.437L12.937 2.53A1.125 1.125 0 0012 2.25c-.413 0-.8.223-1.063.563z" />
-    <path d="M21.75 9.313l-8.813 3.899L12 13.5l-1.125-.469-8.813-3.899V12.11L12 16.5l10.125-4.549v.088a2.25 2.25 0 01-2.625 2.25H17.25a2.25 2.25 0 01-2.25-2.25V12.11L21.75 9.313zM4.125 13.5L12 17.25l7.875-3.75M12 21.75c3.036 0 5.5-1.683 5.5-3.75S15.036 14.25 12 14.25s-5.5 1.683-5.5 3.75S8.964 21.75 12 21.75z" />
+    <path d="M21.75 9.313l-8.813 3.899L12 13.5l-1.125-.469-8.813-3.899V12.11L12 16.5l10.125-4.549v.088a2.25 2.25 0 01-2.625 2.25H17.25a2.25 2.25 0 01-2.25-2.25V12.11L21.75 9.313zM4.125 13.5L12 17.25l7.875-3.75M12 21.75c3.036 0 5.5-1.683 5.5-3.75S15.036 14.25 12 14.25s-5.5 1.683 5.5 3.75S8.964 21.75 12 21.75z" />
   </svg>
 );
 
@@ -332,4 +332,10 @@ export const CameraIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
     </svg>
+);
+
+export const ChatBubbleLeftEllipsisIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-3.862 8.25-8.625 8.25S3.75 16.556 3.75 12 7.612 3.75 12.375 3.75 21 7.444 21 12zM12 8.25a.75.75 0 000 1.5h.008a.75.75 0 000-1.5H12z" />
+  </svg>
 );

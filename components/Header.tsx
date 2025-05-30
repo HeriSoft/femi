@@ -3,7 +3,7 @@
 import React, { useContext, useState, useRef, useEffect } from 'react';
 import { ThemeContext } from '../App.tsx';
 import { ThemeContextType, UserGlobalProfile, LoginDeviceLog } from '../types.ts'; // Removed LanguageLearningModalProps, Added LoginDeviceLog
-import { SunIcon, MoonIcon, BellIcon, UserCircleIcon as AvatarIcon, KeyIcon, XMarkIcon, AcademicCapIcon, PuzzlePieceIcon, UserCogIcon, ComputerDesktopIcon, IdentificationIcon } from './Icons.tsx'; // Renamed UserCircleIcon to AvatarIcon for clarity, Added IdentificationIcon
+import { SunIcon, MoonIcon, BellIcon, UserCircleIcon as AvatarIcon, KeyIcon, XMarkIcon, AcademicCapIcon, PuzzlePieceIcon, UserCogIcon, ComputerDesktopIcon, IdentificationIcon, ChatBubbleLeftEllipsisIcon } from './Icons.tsx'; // Renamed UserCircleIcon to AvatarIcon for clarity, Added IdentificationIcon, ChatBubbleLeftEllipsisIcon
 import { useNotification } from '../contexts/NotificationContext.tsx';
 import NotificationPanel from './NotificationPanel.tsx';
 import AccountSettingsModal from './AccountSettingsModal.tsx'; // Import AccountSettingsModal
@@ -23,6 +23,7 @@ interface HeaderProps {
   onLoginModalOpened?: () => void; 
   onToggleLanguageLearningModal: () => void; 
   onToggleGamesModal: () => void; 
+  onToggleVoiceAgentWidget: () => void; // Updated prop name
   // Props for Account Settings background feature
   chatBackgroundUrl: string | null;
   onChatBackgroundChange: (newUrl: string | null) => void;
@@ -55,6 +56,7 @@ const Header: React.FC<HeaderProps> = ({
   onLoginModalOpened,
   onToggleLanguageLearningModal,
   onToggleGamesModal, 
+  onToggleVoiceAgentWidget, // Updated prop
   chatBackgroundUrl,
   onChatBackgroundChange,
   userProfile,
@@ -241,6 +243,15 @@ const Header: React.FC<HeaderProps> = ({
             title="Mini Games Arcade"
           >
             <PuzzlePieceIcon className="w-6 h-6" />
+          </button>
+          <button
+            onClick={onToggleVoiceAgentWidget} // Updated onClick
+            disabled={!currentUser}
+            className="p-2 rounded-full hover:bg-secondary dark:hover:bg-neutral-darkest text-neutral-darker dark:text-secondary-light transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Open Voice Agent"
+            title="Voice Agent (Beta)"
+          >
+            <ChatBubbleLeftEllipsisIcon className="w-6 h-6" />
           </button>
           <div className="relative">
             <button
