@@ -8,6 +8,7 @@ import LanguageLearningModal from './components/LanguageLearningModal.tsx';
 import GamesModal from './components/GamesModal.tsx';
 import WebGamePlayerModal from './components/WebGamePlayerModal.tsx';
 import TienLenGameModal from './components/games/tienlen/TienLenGameModal.tsx'; // Import TienLenGameModal
+// VoiceAgentModal import removed
 import { NotificationProvider, useNotification } from './contexts/NotificationContext.tsx';
 import { KeyIcon } from './components/Icons.tsx';
 import { LOCAL_STORAGE_USER_PROFILE_KEY, DEFAULT_USER_LANGUAGE_PROFILE, EXP_MILESTONES_CONFIG, BADGES_CATALOG, LOCAL_STORAGE_CHAT_BACKGROUND_KEY } from './constants.ts';
@@ -27,8 +28,11 @@ interface AppContentProps {
   
   isGamesModalOpen: boolean;
   onToggleGamesModal: () => void;
+
+  isVoiceAgentWidgetActive: boolean; 
+  onToggleVoiceAgentWidget: () => void; 
   
-  userProfile: UserGlobalProfile; // Changed from UserGlobalProfile | null
+  userProfile: UserGlobalProfile; 
   onUpdateUserProfile: (updatedProfile: UserGlobalProfile) => void;
   onAddExpWithNotification: (language: LanguageOption, expPoints: number) => void;
 
@@ -38,8 +42,8 @@ interface AppContentProps {
   isWebGamePlayerModalOpen: boolean;
   onCloseWebGamePlayerModal: () => void;
   
-  isTienLenModalOpen: boolean; // Tien Len Modal State
-  onToggleTienLenModal: () => void; // Tien Len Modal Toggle
+  isTienLenModalOpen: boolean; 
+  onToggleTienLenModal: () => void; 
 
   chatBackgroundUrl: string | null;
   onChatBackgroundChange: (newUrl: string | null) => void;
@@ -52,9 +56,10 @@ const AppContent: React.FC<AppContentProps> = ({
   currentUser, onLogin, onLogout, isLoginModalInitiallyOpen, onLoginModalOpened,
   isLanguageLearningModalOpen, onToggleLanguageLearningModal,
   isGamesModalOpen, onToggleGamesModal,
+  isVoiceAgentWidgetActive, onToggleVoiceAgentWidget, 
   userProfile, onUpdateUserProfile, onAddExpWithNotification,
   activeWebGameType, onPlayWebGame, activeWebGameTitle, isWebGamePlayerModalOpen, onCloseWebGamePlayerModal,
-  isTienLenModalOpen, onToggleTienLenModal, // Tien Len props
+  isTienLenModalOpen, onToggleTienLenModal, 
   chatBackgroundUrl, onChatBackgroundChange,
   isAppReady
 }) => {
@@ -73,6 +78,8 @@ const AppContent: React.FC<AppContentProps> = ({
     );
   }
   
+  const elevenLabsAgentId = "agent_01jwhhnh4recyazyeabp4sa3ne";
+
   return (
     <div className="flex flex-col h-screen bg-secondary-light dark:bg-neutral-dark transition-colors duration-300">
       <Header
@@ -84,10 +91,11 @@ const AppContent: React.FC<AppContentProps> = ({
         onLoginModalOpened={onLoginModalOpened}
         onToggleLanguageLearningModal={onToggleLanguageLearningModal}
         onToggleGamesModal={onToggleGamesModal} 
+        onToggleVoiceAgentWidget={onToggleVoiceAgentWidget} 
         chatBackgroundUrl={chatBackgroundUrl}
         onChatBackgroundChange={onChatBackgroundChange}
-        userProfile={userProfile} // Pass userProfile
-        onUpdateUserProfile={onUpdateUserProfile} // Pass onUpdateUserProfile
+        userProfile={userProfile} 
+        onUpdateUserProfile={onUpdateUserProfile} 
       />
       <main className="flex-grow overflow-hidden">
         {currentUser ? ( 
@@ -118,7 +126,7 @@ const AppContent: React.FC<AppContentProps> = ({
             onClose={onToggleGamesModal} 
             onPlayWebGame={onPlayWebGame}
           />
-          {activeWebGameType !== 'tien-len' && activeWebGameType !== '8-ball-pool' && ( // Render WebGamePlayerModal only if not Tien Len or 8-Ball Pool
+          {activeWebGameType !== 'tien-len' && activeWebGameType !== '8-ball-pool' && ( 
             <WebGamePlayerModal
                 isOpen={isWebGamePlayerModalOpen}
                 onClose={onCloseWebGamePlayerModal}
@@ -126,20 +134,24 @@ const AppContent: React.FC<AppContentProps> = ({
                 gameTitle={activeWebGameTitle}
             />
           )}
-          {/* Specific modals for games that need full screen or special layout */}
+          
           {activeWebGameType === 'tien-len' && (
             <TienLenGameModal 
-                isOpen={isWebGamePlayerModalOpen} // Reuse isWebGamePlayerModalOpen for Tien Len
-                onClose={onCloseWebGamePlayerModal} // Reuse onCloseWebGamePlayerModal
+                isOpen={isWebGamePlayerModalOpen} 
+                onClose={onCloseWebGamePlayerModal} 
             />
           )}
            {activeWebGameType === '8-ball-pool' && (
-            <WebGamePlayerModal // 8-Ball pool can use the generic WebGamePlayerModal
+            <WebGamePlayerModal 
                 isOpen={isWebGamePlayerModalOpen}
                 onClose={onCloseWebGamePlayerModal}
                 gameType={activeWebGameType}
                 gameTitle={activeWebGameTitle}
             />
+          )}
+          {/* VoiceAgentModal removed, widget rendered below */}
+          {isVoiceAgentWidgetActive && (
+            <elevenlabs-convai agent-id={elevenLabsAgentId}></elevenlabs-convai>
           )}
         </>
       )}
@@ -158,15 +170,15 @@ const App: React.FC = () => {
   });
 
   const [currentUser, setCurrentUser] = useState<MockUser | null>(null);
-  const [userProfile, setUserProfile] = useState<UserGlobalProfile>({ languageProfiles: {}, aboutMe: '' }); // Initialize with aboutMe
+  const [userProfile, setUserProfile] = useState<UserGlobalProfile>({ languageProfiles: {}, aboutMe: '' }); 
   const [isLoginModalInitiallyOpen, setIsLoginModalInitiallyOpen] = useState(false);
   const [isAppReady, setIsAppReady] = useState(false); 
   const [isLanguageLearningModalOpen, setIsLanguageLearningModalOpen] = useState(false);
   const [isGamesModalOpen, setIsGamesModalOpen] = useState(false); 
+  const [isVoiceAgentWidgetActive, setIsVoiceAgentWidgetActive] = useState(false); 
   const [isWebGamePlayerModalOpen, setIsWebGamePlayerModalOpen] = useState(false);
   const [activeWebGameType, setActiveWebGameType] = useState<WebGameType>(null);
   const [activeWebGameTitle, setActiveWebGameTitle] = useState<string>('');
-  // const [isTienLenModalOpen, setIsTienLenModalOpen] = useState(false); // Tien Len state - managed by activeWebGameType now
   const [chatBackgroundUrl, setChatBackgroundUrl] = useState<string | null>(null);
   
   const notificationsHook = useNotification(); 
@@ -191,13 +203,13 @@ const App: React.FC = () => {
   useEffect(() => {
     if (currentUser) {
       setIsAppReady(false); 
-      let loadedProfile: UserGlobalProfile = { languageProfiles: {}, aboutMe: '' }; // Ensure aboutMe is part of default
+      let loadedProfile: UserGlobalProfile = { languageProfiles: {}, aboutMe: '' }; 
       try {
         const storedProfileString = localStorage.getItem(LOCAL_STORAGE_USER_PROFILE_KEY);
         if (storedProfileString) {
           const parsedProfile = JSON.parse(storedProfileString);
           if (parsedProfile && typeof parsedProfile === 'object' && 'languageProfiles' in parsedProfile) {
-            loadedProfile = { ...loadedProfile, ...parsedProfile }; // Merge with default to ensure aboutMe exists
+            loadedProfile = { ...loadedProfile, ...parsedProfile }; 
           }
         }
       } catch (error) {
@@ -211,14 +223,14 @@ const App: React.FC = () => {
       setIsLoginModalInitiallyOpen(true); 
       setIsLanguageLearningModalOpen(false); 
       setIsGamesModalOpen(false); 
+      setIsVoiceAgentWidgetActive(false); 
       setIsWebGamePlayerModalOpen(false);
-      // setIsTienLenModalOpen(false); // Close Tien Len modal on logout
       setActiveWebGameType(null);
     }
   }, [currentUser]);
 
   useEffect(() => {
-    if (currentUser && isAppReady) { // Only save if app is ready and user is logged in
+    if (currentUser && isAppReady) { 
       try {
         localStorage.setItem(LOCAL_STORAGE_USER_PROFILE_KEY, JSON.stringify(userProfile));
       } catch (error) {
@@ -302,13 +314,19 @@ const App: React.FC = () => {
     }
   }, [currentUser]);
 
-  // Combined logic for playing any web game (including Tien Len or 8-ball pool which use WebGamePlayerModal)
+  const onToggleVoiceAgentWidget = useCallback(() => { 
+    if (currentUser) {
+        setIsVoiceAgentWidgetActive(prev => !prev);
+    }
+  }, [currentUser]);
+
+
   const onPlayWebGame = useCallback((gameType: WebGameType, gameTitle: string) => {
     if (gameType) {
       setActiveWebGameType(gameType);
       setActiveWebGameTitle(gameTitle);
-      setIsWebGamePlayerModalOpen(true); // Open the generic (or specific if handled by type) player modal
-      setIsGamesModalOpen(false); // Close the main games selection modal
+      setIsWebGamePlayerModalOpen(true); 
+      setIsGamesModalOpen(false); 
     }
   }, []);
 
@@ -318,15 +336,6 @@ const App: React.FC = () => {
     setActiveWebGameTitle('');
   }, []);
   
-  // Remove onToggleTienLenModal as it's now covered by general game playing logic
-  // const onToggleTienLenModal = useCallback(() => {
-  //   if (currentUser) {
-  //       // This might need to be reworked if TienLen uses a different modal flag
-  //       setActiveWebGameType(prev => prev === 'tien-len' ? null : 'tien-len');
-  //       setIsWebGamePlayerModalOpen(prev => !prev); // Example: toggle general game player modal
-  //   }
-  // }, [currentUser]);
-
 
   const themeContextValue = useMemo(() => ({ theme, toggleTheme }), [theme, toggleTheme]);
 
@@ -344,6 +353,9 @@ const App: React.FC = () => {
         
         isGamesModalOpen={isGamesModalOpen}
         onToggleGamesModal={onToggleGamesModal}
+
+        isVoiceAgentWidgetActive={isVoiceAgentWidgetActive} 
+        onToggleVoiceAgentWidget={onToggleVoiceAgentWidget}
         
         userProfile={userProfile}
         onUpdateUserProfile={handleUpdateUserProfile}
@@ -355,8 +367,8 @@ const App: React.FC = () => {
         isWebGamePlayerModalOpen={isWebGamePlayerModalOpen}
         onCloseWebGamePlayerModal={onCloseWebGamePlayerModal}
         
-        isTienLenModalOpen={activeWebGameType === 'tien-len' && isWebGamePlayerModalOpen} // Derived state
-        onToggleTienLenModal={() => { /* Handled by onPlayWebGame and onCloseWebGamePlayerModal */ }} // Simplified
+        isTienLenModalOpen={activeWebGameType === 'tien-len' && isWebGamePlayerModalOpen} 
+        onToggleTienLenModal={() => { /* Handled by onPlayWebGame and onCloseWebGamePlayerModal */ }} 
 
         chatBackgroundUrl={chatBackgroundUrl}
         onChatBackgroundChange={handleChatBackgroundChange}

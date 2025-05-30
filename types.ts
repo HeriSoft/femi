@@ -1,6 +1,7 @@
 
 
 import { Chat } from '@google/genai'; // Updated import
+import React from 'react'; // Added for React.DetailedHTMLProps
 
 export enum Model {
   GEMINI = 'Gemini (gemini-2.5-flash-preview-05-20)', // Updated model identifier
@@ -432,3 +433,6 @@ export interface HandwritingCanvasProps {
   canvasRef: React.RefObject<HTMLCanvasElement>; // Pass ref from parent to allow parent to access canvas data
   disabled?: boolean;
 }
+
+// Removed global declaration for 'elevenlabs-convai' from here
+// It will be moved to global.d.ts
