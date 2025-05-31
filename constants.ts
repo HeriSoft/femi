@@ -1,5 +1,4 @@
 
-
 import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank, AiAgentSettings } from './types.ts'; // Update to .ts
 
 export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
@@ -33,10 +32,11 @@ export const DEFAULT_AI_AGENT_SETTINGS: AiAgentSettings = {
 
 FILE HANDLING:
 - TEXT FILES and IMAGE FILES: If the user uploads a text file (e.g., .txt, .md, .js) or an image file (e.g., .png, .jpg), its content WILL BE EMBEDDED directly within the 'user' turn of the prompt you are currently processing. You will see this embedded content, often marked (e.g., "Content from uploaded file [filename]: ..."). This embedded content IS the file's content. You MUST analyze and incorporate this provided, embedded information from the text/image file into your response. DO NOT state you cannot access it.
-- OTHER FILE TYPES (e.g., PDF, DOCX, ZIP): If the user mentions uploading a file type like PDF, DOCX, etc., you will likely only receive the FILENAME, NOT ITS CONTENT. In this case:
-    1. Politely inform the user that you cannot directly access or process the internal content of that specific file type (e.g., "I cannot directly read the content of PDF files.").
-    2. Suggest alternatives: Ask the user to paste relevant text from the file, summarize the file's content, or ask specific questions about it if they want you to work with its information.
-    3. You CAN use the filename as context if the user's goal involves tasks like searching the web for information related to the file's topic (e.g., "Find reviews for the document named 'product_specs.pdf'").
+- OTHER FILE TYPES (e.g., PDF, DOCX, ZIP): If the user mentions uploading a file type like PDF, DOCX, etc., you will likely only receive the FILENAME, NOT ITS CONTENT. The user's message will include a system note like "(System Note: User uploaded a file named '[filename]'. Its content is not directly available to you...)". In this case:
+    1. Acknowledge the user's file by its name.
+    2. Politely inform the user that you cannot directly access or process the internal content of that specific file type (e.g., "I see you've uploaded '[filename]', but I cannot directly read the content of PDF files.").
+    3. Suggest alternatives: Ask the user to paste relevant text from the file, summarize the file's content, or ask specific questions about it if they want you to work with its information.
+    4. You CAN use the filename as context if the user's goal involves tasks like searching the web for information related to the file's topic (e.g., "Find reviews for the document named 'product_specs.pdf'").
 
 WEB SEARCH AND CITATION:
 To achieve user goals, you WILL use web search capabilities to gather necessary information, find relevant data, or identify useful resources IF the user's goal AND THE PROVIDED EMBEDDED FILE CONTENT (IF ANY, for text/images) are insufficient for a complete answer.
@@ -49,13 +49,23 @@ Your goal is to act as an autonomous assistant that takes a complex request, pot
 };
 
 
+const GENERIC_FILE_HANDLING_INSTRUCTION = `
+FILE HANDLING:
+- If the user's message includes a system note like "(System Note: User uploaded a file named '[filename]'. Its content is not directly available to you...)", it means the user attached a file (e.g., PDF, DOCX) whose content cannot be read by you directly.
+- In this situation:
+    1. Acknowledge the file by its name if relevant to the conversation.
+    2. Politely explain that you cannot access or process the internal content of such files.
+    3. Suggest that the user copy and paste the text from the file, summarize it, or ask specific questions about it if they want you to work with its information.
+- If the user uploads a plain text file (like .txt, .md) or an image, its content *may* be directly included in their message for you to process. Use this embedded content if available.
+`;
+
 export const ALL_MODEL_DEFAULT_SETTINGS: AllModelSettings = {
-  [Model.GEMINI]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: 'You are a helpful and creative AI assistant powered by Gemini Flash.' },
-  [Model.GEMINI_ADVANCED]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: 'You are Gemini Advanced, a powerful multimodal AI by Google.' },
-  [Model.GPT4O]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: 'You are ChatGPT (gpt-4.1), a powerful AI by OpenAI.' }, 
-  [Model.GPT4O_MINI]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: 'You are ChatGPT (gpt-4.1-mini), an efficient AI by OpenAI.' }, // Updated
-  [Model.DEEPSEEK]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: 'You are Deepseek Coder, an AI specialized in coding and chat, powered by the deepseek-chat model.' },
-  [Model.CLAUDE]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: 'You are Claude, a helpful AI assistant by Anthropic.' },
+  [Model.GEMINI]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: `You are a helpful and creative AI assistant powered by Gemini Flash.${GENERIC_FILE_HANDLING_INSTRUCTION}` },
+  [Model.GEMINI_ADVANCED]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: `You are Gemini Advanced, a powerful multimodal AI by Google.${GENERIC_FILE_HANDLING_INSTRUCTION}` },
+  [Model.GPT4O]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: `You are ChatGPT (gpt-4.1), a powerful AI by OpenAI.${GENERIC_FILE_HANDLING_INSTRUCTION}` }, 
+  [Model.GPT4O_MINI]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: `You are ChatGPT (gpt-4.1-mini), an efficient AI by OpenAI.${GENERIC_FILE_HANDLING_INSTRUCTION}` }, // Updated
+  [Model.DEEPSEEK]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: `You are Deepseek Coder, an AI specialized in coding and chat, powered by the deepseek-chat model.${GENERIC_FILE_HANDLING_INSTRUCTION}` },
+  [Model.CLAUDE]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: `You are Claude, a helpful AI assistant by Anthropic. ${GENERIC_FILE_HANDLING_INSTRUCTION}` }, // Mock, but good to have consistent instruction pattern
   [Model.IMAGEN3]: { 
     ...DEFAULT_MODEL_SETTINGS, 
     ...DEFAULT_IMAGEN_SETTINGS, 
@@ -82,6 +92,7 @@ export const MAX_NOTIFICATIONS = 50; // Max notifications to store
 export const LOCAL_STORAGE_DEVICE_LOGS_KEY = 'femiAiDeviceLogs';
 export const MAX_DEVICE_LOGS = 5;
 export const LOCAL_STORAGE_CHAT_BACKGROUND_KEY = 'femiAiChatBackgroundUrl';
+export const MAX_SAVED_CHAT_SESSIONS = 15; // Max number of chat sessions to store
 
 
 // Language Learning Constants
