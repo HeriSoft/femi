@@ -181,10 +181,12 @@ export interface HistoryPanelProps {
   onLoadSession: (sessionId: string) => void;
   onDeleteSession: (sessionId: string) => void;
   onRenameSession: (sessionId: string, newName: string) => void;
-  onSaveCurrentChat: () => void;
+  onSaveCurrentChat: () => void; // Saves to LocalStorage
   onStartNewChat: () => void;
   isLoading: boolean; // To disable actions while chat is processing
   onTogglePinSession: (sessionId: string) => void;
+  onSaveChatToDevice: () => void; // New: Saves current chat to a device file
+  onLoadChatFromDevice: (file: File) => Promise<void>; // New: Loads a chat from a device file
 }
 
 // Notification System Types

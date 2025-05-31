@@ -1,4 +1,4 @@
-// Ensures global augmentation without module context.
+// Ensures global augmentation when this file is treated as a module.
 // Relies on @types/react providing global React and JSX types.
 declare global {
   namespace JSX {
@@ -8,5 +8,4 @@ declare global {
   }
 }
 
-// Removed 'export {};' to ensure this file is treated as a global script augmenting JSX.IntrinsicElements
-// This can sometimes help with discoverability of the augmentation by the TypeScript compiler.
+export {}; // Make this file an external module.
