@@ -4,7 +4,7 @@ import { XMarkIcon, ArrowDownTrayIcon } from './Icons.tsx';
 interface ImageModalProps {
   isOpen: boolean;
   onClose: () => void;
-  imageBase64: string; // Changed from imagesBase64 to imageBase64 (single image)
+  imageBase64: string; 
   prompt: string;
   mimeType: 'image/jpeg' | 'image/png';
 }
@@ -12,11 +12,19 @@ interface ImageModalProps {
 const ImageModal: React.FC<ImageModalProps> = ({ isOpen, onClose, imageBase64, prompt, mimeType }) => {
   if (!isOpen) return null;
 
+  const generateRandomAlphanumeric = (length: number): string => {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < length; i++) {
+      result += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+    return result;
+  };
+
   const downloadImage = (base64Data: string) => {
     const extension = mimeType === 'image/jpeg' ? 'jpg' : 'png';
-    // Sanitize prompt for filename: replace non-alphanumeric with underscore, truncate
-    const safePrompt = prompt.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, 50);
-    const fileName = `imagen_${safePrompt}.${extension}`; // Index removed as it's a single image view
+    const randomChars = generateRandomAlphanumeric(4);
+    const fileName = `imagen3_${randomChars}.${extension}`;
 
     const link = document.createElement('a');
     link.href = `data:${mimeType};base64,${base64Data}`;
