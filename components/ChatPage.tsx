@@ -1511,17 +1511,27 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
 
   const handleSendMessage = async () => {
     if (isRealTimeTranslationMode || isListening) return; 
-    if (!input.trim() && !uploadedImage && !uploadedTextFileName && !isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode) return;
-    if ((isImagenModelSelected || isTextToSpeechModelSelected || isAiAgentMode) && !input.trim() && !uploadedImage && !uploadedTextFileName) { 
-        let errorMsg = "";
-        if (isImagenModelSelected) errorMsg = "Please enter a prompt for image generation.";
-        else if (isTextToSpeechModelSelected) errorMsg = "Please enter text for speech synthesis.";
-        else if (isAiAgentMode) errorMsg = "Please enter a goal or upload a file for the AI Agent.";
-        
-        setError(errorMsg);
-        addNotification(errorMsg, "info");
+    
+    if (isImagenModelSelected && !input.trim()) { // Specific check for Imagen prompt
+        setError("Please enter a prompt for image generation.");
+        addNotification("Please enter a prompt for image generation.", "info");
         return;
     }
+    if (isTextToSpeechModelSelected && !input.trim()) {
+        setError("Please enter text for speech synthesis.");
+        addNotification("Please enter text for speech synthesis.", "info");
+        return;
+    }
+    if (isAiAgentMode && !input.trim() && !uploadedImage && !uploadedTextFileName) {
+        setError("Please enter a goal or upload a file for the AI Agent.");
+        addNotification("Please enter a goal or upload a file for the AI Agent.", "info");
+        return;
+    }
+    // General check for other models if input and attachments are empty
+    if (!isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode && !input.trim() && !uploadedImage && !uploadedTextFileName) {
+        return; // Do nothing if everything is empty for standard chat models
+    }
+
     setIsLoading(true);
     setError(null);
     await internalSendMessage(input, uploadedImage, imagePreview, uploadedTextFileContent, uploadedTextFileName);
@@ -2028,7 +2038,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             </div>
           ) : (
             <>
-              {(!isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode) && ( // Hide mic for AI Agent if not needed
+              {(!isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode) && ( 
                 <button
                   onClick={handleToggleListen}
                   disabled={isLoading || !isSpeechRecognitionSupported || isImagenModelSelected || isTextToSpeechModelSelected || isGpt41AccessModalOpen}
@@ -2043,19 +2053,32 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                   {isListening ? <StopCircleIcon className="w-6 h-6" /> : <MicrophoneIcon className="w-6 h-6" />}
                 </button>
               )}
-              <textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey && !isLoading && !isListening) { e.preventDefault(); handleSendMessage(); }}}
-                placeholder={currentPromptPlaceholder()}
-                className="flex-grow p-3 border border-secondary dark:border-neutral-darkest rounded-lg focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:border-transparent outline-none resize-none bg-neutral-light dark:bg-neutral-darker text-neutral-darker dark:text-secondary-light"
-                rows={calculateTextareaRows()}
-                disabled={isLoading || isListening || isGpt41AccessModalOpen}
-                aria-label="Chat input"
-              />
+              <div className="flex-grow relative">
+                <textarea
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey && !isLoading && !isListening) { e.preventDefault(); handleSendMessage(); }}}
+                  placeholder={currentPromptPlaceholder()}
+                  className="w-full p-3 border border-secondary dark:border-neutral-darkest rounded-lg focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:border-transparent outline-none resize-none bg-neutral-light dark:bg-neutral-darker text-neutral-darker dark:text-secondary-light"
+                  style={{paddingRight: isImagenModelSelected && input.trim() && !isLoading && !isListening ? '2.5rem' : '0.75rem' }}
+                  rows={calculateTextareaRows()}
+                  disabled={isLoading || isListening || isGpt41AccessModalOpen}
+                  aria-label="Chat input"
+                />
+                {isImagenModelSelected && input.trim() && !isLoading && !isListening && (
+                  <button
+                    onClick={() => setInput('')}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1.5 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 rounded-full hover:bg-secondary/70 dark:hover:bg-neutral-dark/70 focus:outline-none focus:ring-1 focus:ring-neutral-400 dark:focus:ring-neutral-500"
+                    aria-label="Clear image prompt"
+                    title="Clear image prompt"
+                  >
+                    <XMarkIcon className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
               <button
                 onClick={handleSendMessage}
-                disabled={isLoading || isListening || isGpt41AccessModalOpen || ((!input.trim() && !uploadedImage && !uploadedTextFileName) && (isAiAgentMode ? (!uploadedImage && !uploadedTextFileName) : (!isImagenModelSelected && !isTextToSpeechModelSelected))) }
+                disabled={isLoading || isListening || isGpt41AccessModalOpen || (isImagenModelSelected && !input.trim()) || ((!input.trim() && !uploadedImage && !uploadedTextFileName) && (isAiAgentMode ? (!uploadedImage && !uploadedTextFileName) : (!isImagenModelSelected && !isTextToSpeechModelSelected))) }
                 className="ml-2 p-3 bg-primary hover:bg-primary-dark dark:bg-primary-light dark:hover:bg-primary text-white rounded-lg disabled:opacity-50 transition-colors self-stretch flex items-center justify-center" 
                 aria-label={sendButtonLabel()} >
                 {sendButtonIcon()}
