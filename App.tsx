@@ -1,7 +1,7 @@
-
+/// <reference path="../global.d.ts" />
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { ThemeContextType, Model, UserGlobalProfile, LanguageOption, UserLanguageProfile, WebGameType, NotificationType as AppNotificationType, TienLenGameModalProps } from './types.ts';
+import { ThemeContextType, Model, UserGlobalProfile, LanguageOption, UserLanguageProfile, WebGameType, NotificationType as AppNotificationType, TienLenGameModalProps } from '../types.ts';
 import ChatPage from './components/ChatPage.tsx';
 import Header, { MockUser } from './components/Header.tsx';
 import LanguageLearningModal from './components/LanguageLearningModal.tsx';
@@ -11,7 +11,7 @@ import TienLenGameModal from './components/games/tienlen/TienLenGameModal.tsx'; 
 // VoiceAgentModal import removed
 import { NotificationProvider, useNotification } from './contexts/NotificationContext.tsx';
 import { KeyIcon } from './components/Icons.tsx';
-import { LOCAL_STORAGE_USER_PROFILE_KEY, DEFAULT_USER_LANGUAGE_PROFILE, EXP_MILESTONES_CONFIG, BADGES_CATALOG, LOCAL_STORAGE_CHAT_BACKGROUND_KEY } from './constants.ts';
+import { LOCAL_STORAGE_USER_PROFILE_KEY, DEFAULT_USER_LANGUAGE_PROFILE, EXP_MILESTONES_CONFIG, BADGES_CATALOG, LOCAL_STORAGE_CHAT_BACKGROUND_KEY } from '../constants.ts';
 
 export const ThemeContext = React.createContext<ThemeContextType | undefined>(undefined);
 
