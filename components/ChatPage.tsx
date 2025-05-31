@@ -772,7 +772,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             return prunedSessions.sort((a, b) => b.timestamp - a.timestamp);
         });
         setCurrentChatName(savedSessions.find(s => s.id === activeSessionId)?.name || sessionName);
-        addNotification(`Chat "${currentChatName}" updated.`, "success");
+        addNotification(`Chat "${currentChatName}" updated in browser.`, "success");
     } else { // Saving a new chat
         const newSessionId = `session-${sessionTimestamp}`;
         const newSession: ChatSession = {
@@ -792,16 +792,16 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             if (numPruned > 0) {
                 const removedSession = prev.find(s => !s.isPinned && !prunedSessions.some(ps => ps.id === s.id && s.id !== newSession.id));
                  if (removedSession && newSession.id !== removedSession.id) { // Ensure we don't announce removal of the session just saved if it was part of a complex prune
-                    addNotification(`Storage limit: Oldest unpinned chat "${removedSession.name}" removed to make space.`, "info");
+                    addNotification(`Storage limit: Oldest unpinned chat "${removedSession.name}" removed from browser to make space.`, "info");
                 } else if (numPruned > 0) { // Generic if specific removed session not easily identifiable or it was the new one (should not happen)
-                    addNotification(`Storage limit: ${numPruned} oldest unpinned chat(s) removed to save new chat.`, "info");
+                    addNotification(`Storage limit: ${numPruned} oldest unpinned chat(s) removed from browser to save new chat.`, "info");
                 }
             }
             return prunedSessions.sort((a, b) => b.timestamp - a.timestamp);
         });
         setActiveSessionId(newSessionId);
         setCurrentChatName(sessionName);
-        addNotification(`Chat "${sessionName}" saved.`, "success");
+        addNotification(`Chat "${sessionName}" saved to browser.`, "success");
     }
     clearSearch();
   }, [messages, selectedModel, modelSettings, activeSessionId, savedSessions, activePersonaId, addNotification, currentChatName, isRealTimeTranslationMode, isAiAgentMode, pruneChatSessions]);
@@ -834,10 +834,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       setIsWebSearchEnabled(false); 
       setError(null);
       setIsSidebarOpen(false); 
-      addNotification(`Loaded chat: "${sessionToLoad.name}".`, "info");
+      addNotification(`Loaded chat from browser: "${sessionToLoad.name}".`, "info");
       clearSearch();
     } else {
-      addNotification("Failed to load chat session.", "error");
+      addNotification("Failed to load chat session from browser.", "error");
     }
   }, [savedSessions, addNotification]);
 
@@ -894,7 +894,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       handleStartNewChat(); 
     }
     if (sessionToDelete) {
-      addNotification(`Deleted chat: "${sessionToDelete.name}".`, "info");
+      addNotification(`Deleted chat from browser: "${sessionToDelete.name}".`, "info");
     }
   }, [activeSessionId, handleStartNewChat, savedSessions, addNotification, pruneChatSessions]); 
   
@@ -907,7 +907,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     if (activeSessionId === sessionId) {
         setCurrentChatName(newName);
     }
-    addNotification(`Chat renamed to "${newName}".`, "info");
+    addNotification(`Chat renamed to "${newName}" in browser.`, "info");
   }, [activeSessionId, addNotification]);
 
   const handleTogglePinSession = useCallback((sessionId: string) => {
@@ -925,7 +925,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         // Re-apply pruning after pinning/unpinning as it might affect which sessions are kept
         const { prunedSessions, numPruned } = pruneChatSessions(newSessions, MAX_SAVED_CHAT_SESSIONS);
         if (numPruned > 0) {
-            addNotification(`Storage limit: ${numPruned} oldest unpinned chat(s) removed due to pinning changes.`, "info");
+            addNotification(`Storage limit: ${numPruned} oldest unpinned chat(s) removed from browser due to pinning changes.`, "info");
         }
         return prunedSessions.sort((a, b) => { // Ensure pinned come first, then by time
             if (a.isPinned && !b.isPinned) return -1;
@@ -934,9 +934,128 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         });
     });
     if (sessionName) {
-      addNotification(isNowPinned ? `Pinned "${sessionName}".` : `Unpinned "${sessionName}".`, "info");
+      addNotification(isNowPinned ? `Pinned "${sessionName}" in browser.` : `Unpinned "${sessionName}" in browser.`, "info");
     }
   }, [addNotification, pruneChatSessions]);
+
+  const handleSaveChatToDevice = useCallback(() => {
+    if (isRealTimeTranslationMode || isAiAgentMode) {
+      addNotification(`Cannot save chat to device in ${isRealTimeTranslationMode ? 'Real-Time Translation' : 'AI Agent'} mode.`, "info");
+      return;
+    }
+    if (messages.length === 0) {
+      addNotification("Cannot save an empty chat to device.", "info");
+      return;
+    }
+    
+    const sessionTimestamp = Date.now();
+    let sessionName = currentChatName === "New Chat" ? `Chat-${sessionTimestamp}` : currentChatName;
+    
+    // Ensure a name if it's still "New Chat" or empty
+    if (currentChatName === "New Chat" || !currentChatName.trim()) {
+        const firstUserMessage = messages.find(m => m.sender === 'user');
+        if (firstUserMessage) {
+            if (firstUserMessage.text) sessionName = firstUserMessage.text.substring(0, 30);
+            else if (firstUserMessage.imagePreview) sessionName = "Chat_with_Image";
+            else if (firstUserMessage.fileName) sessionName = `Chat_with_File_${firstUserMessage.fileName.substring(0,20)}`;
+        }
+        if (!sessionName || sessionName === "New Chat") sessionName = `Chat-${sessionTimestamp}`;
+    }
+
+
+    const sessionToSave: ChatSession = {
+      id: activeSessionId || `device-session-${sessionTimestamp}`, // Use existing ID if available, or generate one
+      name: sessionName,
+      timestamp: sessionTimestamp,
+      model: selectedModel,
+      messages: [...messages],
+      modelSettingsSnapshot: { ...modelSettings },
+      isPinned: savedSessions.find(s => s.id === activeSessionId)?.isPinned || false,
+      activePersonaIdSnapshot: activePersonaId,
+    };
+
+    try {
+      const jsonString = JSON.stringify(sessionToSave, null, 2);
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = href;
+      const safeFileName = sessionName.replace(/[^a-z0-9_.-]/gi, '_').substring(0, 50);
+      link.download = `${safeFileName || 'chat_session'}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(href);
+      addNotification(`Chat "${sessionName}" is being saved to your device.`, "success");
+    } catch (e: any) {
+      console.error("Error saving chat to device:", e);
+      addNotification("Failed to save chat to device.", "error", e.message);
+    }
+  }, [messages, selectedModel, modelSettings, activeSessionId, currentChatName, activePersonaId, addNotification, isRealTimeTranslationMode, isAiAgentMode, savedSessions]);
+
+
+  const handleLoadChatFromDevice = useCallback(async (file: File) => {
+    if (!file) return;
+    if (!file.name.endsWith('.json')) {
+        addNotification("Invalid file type. Please select a .json chat file.", "error");
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        try {
+            const result = event.target?.result;
+            if (typeof result !== 'string') {
+                throw new Error("Failed to read file content as string.");
+            }
+            const sessionToLoad = JSON.parse(result) as ChatSession;
+
+            // Validate crucial fields
+            if (!sessionToLoad.messages || !sessionToLoad.model || !sessionToLoad.modelSettingsSnapshot || !sessionToLoad.name || !sessionToLoad.timestamp) {
+                throw new Error("File is not a valid chat session format. Missing required fields.");
+            }
+            if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT) {
+                addNotification(`Cannot load ${sessionToLoad.model === Model.REAL_TIME_TRANSLATION ? 'Real-Time Translation' : 'AI Agent'} sessions from file.`, "info");
+                return;
+            }
+
+            setMessages([...sessionToLoad.messages]);
+            setSelectedModel(sessionToLoad.model);
+            setActivePersonaId(sessionToLoad.activePersonaIdSnapshot || null);
+            
+            setAllSettings(prevAllSettings => ({
+                ...prevAllSettings,
+                [sessionToLoad.model]: {
+                  ...(prevAllSettings[sessionToLoad.model] || ALL_MODEL_DEFAULT_SETTINGS[sessionToLoad.model]!), 
+                  ...sessionToLoad.modelSettingsSnapshot 
+                }
+            }));
+            
+            // This chat is loaded but NOT yet saved to localStorage, so activeSessionId is null.
+            // User can choose to "Save to Browser" later if they wish.
+            setActiveSessionId(null); 
+            setCurrentChatName(sessionToLoad.name + " (from device)"); // Indicate it's from device
+
+            setUploadedImage(null);
+            setImagePreview(null);
+            setUploadedTextFileContent(null);
+            setUploadedTextFileName(null);
+            setIsWebSearchEnabled(false); 
+            setError(null);
+            setIsSidebarOpen(false); 
+            addNotification(`Loaded chat from device: "${sessionToLoad.name}".`, "info");
+            clearSearch();
+
+        } catch (e: any) {
+            console.error("Error loading chat from device:", e);
+            addNotification("Failed to load chat from device. The file might be corrupted or not a valid chat session.", "error", e.message);
+        }
+    };
+    reader.onerror = () => {
+        addNotification("Error reading the selected file.", "error");
+    };
+    reader.readAsText(file);
+  }, [addNotification]);
 
 
   const handleOpenImageModal = useCallback((imageB64: string, promptText: string, mime: 'image/jpeg' | 'image/png') => {
@@ -1634,10 +1753,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                 onLoadSession={handleLoadSession}
                 onDeleteSession={handleDeleteSession}
                 onRenameSession={handleRenameSession}
-                onSaveCurrentChat={handleSaveCurrentChat}
+                onSaveCurrentChat={handleSaveCurrentChat} // Saves to LocalStorage
                 onStartNewChat={handleStartNewChat}
                 isLoading={(isLoading && !isRealTimeTranslationMode ) || isGpt41AccessModalOpen}
                 onTogglePinSession={handleTogglePinSession}
+                onSaveChatToDevice={handleSaveChatToDevice} // New prop for saving to device
+                onLoadChatFromDevice={handleLoadChatFromDevice} // New prop for loading from device
             />
         )}
     </>

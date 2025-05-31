@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { ChatSession, HistoryPanelProps, Model } from '../types.ts';
-import { ArchiveBoxIcon, DocumentPlusIcon, PencilSquareIcon, TrashIcon, FolderOpenIcon, ClockIcon, StarIcon } from './Icons.tsx';
+import { ArchiveBoxIcon, DocumentPlusIcon, PencilSquareIcon, TrashIcon, FolderOpenIcon, ClockIcon, StarIcon, ArrowDownTrayIcon, ArrowUpTrayIcon as UploadIcon } from './Icons.tsx'; // Added ArrowDownTrayIcon and UploadIcon
 
 const HistoryPanel: React.FC<HistoryPanelProps> = ({
   savedSessions,
@@ -13,9 +13,13 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
   onStartNewChat,
   isLoading,
   onTogglePinSession,
+  // Add new props for file operations
+  onSaveChatToDevice,
+  onLoadChatFromDevice,
 }) => {
   const [sessionToRename, setSessionToRename] = useState<string | null>(null);
   const [newSessionName, setNewSessionName] = useState('');
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleRenameClick = (session: ChatSession) => {
     setSessionToRename(session.id);
@@ -53,10 +57,33 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
     return b.timestamp - a.timestamp;
   });
 
+  const handleLoadFileClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      await onLoadChatFromDevice(file);
+    }
+    // Reset file input value so the same file can be loaded again if needed
+    if (event.target) {
+        event.target.value = '';
+    }
+  };
+
+
   return (
     <div className="space-y-4 p-1 flex flex-col h-full">
       <h2 className="text-xl font-semibold text-neutral-darker dark:text-secondary-light mb-3">Chat History</h2>
-
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept=".json"
+        className="hidden"
+        onChange={handleFileSelected}
+        aria-label="Load chat from device"
+      />
       <div className="space-y-2 mb-4">
         <button
           onClick={onSaveCurrentChat}
@@ -64,7 +91,23 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
           className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark dark:bg-primary-light dark:text-neutral-darker dark:hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-dark disabled:opacity-50"
         >
           <ArchiveBoxIcon className="w-5 h-5 mr-2" />
-          Save Current Chat
+          Save to Browser
+        </button>
+        <button
+          onClick={onSaveChatToDevice}
+          disabled={isLoading}
+          className="w-full flex items-center justify-center px-4 py-2 border border-secondary dark:border-neutral-darkest rounded-md shadow-sm text-sm font-medium text-neutral-darker dark:text-secondary-light hover:bg-secondary/50 dark:hover:bg-neutral-dark/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-secondary-dark disabled:opacity-50"
+        >
+          <ArrowDownTrayIcon className="w-5 h-5 mr-2" />
+          Save to Device
+        </button>
+        <button
+          onClick={handleLoadFileClick}
+          disabled={isLoading}
+          className="w-full flex items-center justify-center px-4 py-2 border border-secondary dark:border-neutral-darkest rounded-md shadow-sm text-sm font-medium text-neutral-darker dark:text-secondary-light hover:bg-secondary/50 dark:hover:bg-neutral-dark/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-secondary-dark disabled:opacity-50"
+        >
+          <UploadIcon className="w-5 h-5 mr-2" />
+          Load from Device
         </button>
         <button
           onClick={onStartNewChat}
@@ -77,7 +120,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
       </div>
 
       {sortedSessions.length === 0 && (
-        <p className="text-sm text-neutral-500 dark:text-neutral-400 text-center py-4">No saved chats yet.</p>
+        <p className="text-sm text-neutral-500 dark:text-neutral-400 text-center py-4">No chats saved in browser.</p>
       )}
 
       <div className="flex-grow overflow-y-auto space-y-2 pr-1">
