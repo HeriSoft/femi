@@ -92,7 +92,7 @@ export const MAX_NOTIFICATIONS = 50; // Max notifications to store
 export const LOCAL_STORAGE_DEVICE_LOGS_KEY = 'femiAiDeviceLogs';
 export const MAX_DEVICE_LOGS = 5;
 export const LOCAL_STORAGE_CHAT_BACKGROUND_KEY = 'femiAiChatBackgroundUrl';
-export const MAX_SAVED_CHAT_SESSIONS = 15; // Max number of chat sessions to store
+export const MAX_SAVED_CHAT_SESSIONS = 10; // Max number of chat sessions to store
 
 
 // Language Learning Constants
