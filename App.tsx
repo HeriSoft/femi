@@ -148,6 +148,7 @@ const AppContent: React.FC<AppContentProps> = ({
                 gameTitle={activeWebGameTitle}
             />
           )}
+          {/* VoiceAgentModal removed, widget rendered below */}
           {isVoiceAgentWidgetActive && (
             <elevenlabs-convai agent-id={elevenLabsAgentId}></elevenlabs-convai>
           )}
@@ -268,14 +269,14 @@ const App: React.FC = () => {
     setUserProfile(prevProfile => {
       const newProfile: UserGlobalProfile = JSON.parse(JSON.stringify(prevProfile)); // Deep clone
       
-      if (!newProfile.languageProfiles) {
+      if (!newProfile.languageProfiles) { // Initialize if undefined
         newProfile.languageProfiles = {};
       }
       if (!newProfile.languageProfiles[language]) {
         newProfile.languageProfiles[language] = { ...DEFAULT_USER_LANGUAGE_PROFILE };
       }
 
-      const langProfile = newProfile.languageProfiles[language] as UserLanguageProfile; // Assert type after ensuring existence
+      const langProfile = newProfile.languageProfiles[language] as UserLanguageProfile; 
       const oldExp = langProfile.exp;
       langProfile.exp += expPoints;
 
@@ -294,9 +295,9 @@ const App: React.FC = () => {
           }
         }
       });
-      return newProfile;
+      return newProfile; // Return the modified profile
     });
-  }, [addAppNotification]); // Include addAppNotification from context if it's used as a default
+  }, [addAppNotification]); 
   
   const handleAddExpWithNotification = useCallback((language: LanguageOption, expPoints: number) => {
     handleAddExp(language, expPoints, addAppNotification);
@@ -383,7 +384,7 @@ const App: React.FC = () => {
   );
 };
 
-const RootAppWrapper: React.FC = () => { // RootAppWrapper is a React.FC
+const RootAppWrapper: React.FC = () => {
   return (
     <NotificationProvider>
       <App />
@@ -391,4 +392,4 @@ const RootAppWrapper: React.FC = () => { // RootAppWrapper is a React.FC
   );
 };
 
-export default RootAppWrapper; // Ensure RootAppWrapper is the default export
+export default RootAppWrapper;
