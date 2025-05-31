@@ -1,10 +1,11 @@
+
 // Fix: Remove triple-slash directive for 'vite/client' as its types are not found and import.meta.env is manually typed.
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo, useContext } from 'react';
 // Update to .ts/.tsx extensions
 import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType, UserGlobalProfile, AiAgentSettings } from '../types.ts';
 import type { Content } from '@google/genai'; // For constructing Gemini history
-import { ALL_MODEL_DEFAULT_SETTINGS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY, TRANSLATION_TARGET_LANGUAGES } from '../constants.ts';
+import { ALL_MODEL_DEFAULT_SETTINGS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY, TRANSLATION_TARGET_LANGUAGES, MAX_SAVED_CHAT_SESSIONS } from '../constants.ts';
 import MessageBubble from './MessageBubble.tsx';
 import SettingsPanel from './SettingsPanel.tsx';
 import HistoryPanel from './HistoryPanel.tsx'; // Import HistoryPanel
@@ -253,18 +254,82 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   const isRealTimeTranslationMode = selectedModel === Model.REAL_TIME_TRANSLATION;
   const isAiAgentMode = selectedModel === Model.AI_AGENT;
 
+  const pruneChatSessions = useCallback((sessions: ChatSession[], maxSessions: number): { prunedSessions: ChatSession[], numPruned: number } => {
+    if (sessions.length <= maxSessions) {
+      return { prunedSessions: sessions, numPruned: 0 };
+    }
+
+    const originalLength = sessions.length;
+    const pinned = sessions.filter(s => s.isPinned).sort((a, b) => b.timestamp - a.timestamp); // newest pinned first
+    const unpinned = sessions.filter(s => !s.isPinned).sort((a, b) => b.timestamp - a.timestamp); // newest unpinned first
+    let finalSessions: ChatSession[];
+
+    if (pinned.length >= maxSessions) {
+      // Keep only the most recent 'maxSessions' pinned ones
+      finalSessions = pinned.slice(0, maxSessions);
+    } else {
+      // Keep all pinned, and fill the rest with the newest unpinned ones
+      const numUnpinnedToKeep = maxSessions - pinned.length;
+      const keptUnpinned = unpinned.slice(0, numUnpinnedToKeep);
+      finalSessions = [...pinned, ...keptUnpinned];
+    }
+    
+    // Re-sort the final list to ensure pinned items come first, then by timestamp for overall display consistency.
+    finalSessions.sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      return b.timestamp - a.timestamp;
+    });
+    
+    const numPruned = originalLength - finalSessions.length;
+    return { prunedSessions: finalSessions, numPruned };
+  }, []);
+
 
   const [savedSessions, setSavedSessions] = useState<ChatSession[]>(() => {
     try {
       const storedHistory = localStorage.getItem(LOCAL_STORAGE_HISTORY_KEY);
       if (storedHistory) {
-        return JSON.parse(storedHistory);
+        let sessions: ChatSession[] = JSON.parse(storedHistory);
+        const { prunedSessions: initiallyPrunedSessions, numPruned } = pruneChatSessions(sessions, MAX_SAVED_CHAT_SESSIONS);
+        if (numPruned > 0) {
+          // Notification will be handled by a useEffect after initial render
+          console.warn(`[ChatPage Init] Pruned ${numPruned} session(s) on load to meet storage limit.`);
+        }
+        return initiallyPrunedSessions;
       }
     } catch (error: any) {
-      console.error("Error loading chat history from localStorage during init:", error);
+      console.error("Error loading/pruning chat history from localStorage during init:", error);
     }
     return []; 
   });
+
+  useEffect(() => {
+    // This effect runs once after initial mount to check if pruning happened during useState initialization
+    // and shows a notification if necessary. This avoids calling addNotification from within useState initializer.
+    const checkInitialPruning = () => {
+        try {
+            const storedHistory = localStorage.getItem(LOCAL_STORAGE_HISTORY_KEY);
+            if (storedHistory) {
+                const sessionsInStorage: ChatSession[] = JSON.parse(storedHistory);
+                 // Calculate how many *would have been* pruned if logic ran on raw storage.
+                const numThatWouldBePruned = sessionsInStorage.length - pruneChatSessions(sessionsInStorage, MAX_SAVED_CHAT_SESSIONS).prunedSessions.length;
+                if (numThatWouldBePruned > 0) {
+                     addNotification(
+                        `Chat history was extensive. ${numThatWouldBePruned} older unpinned chat(s) were not loaded to manage storage. Review saved chats.`,
+                        "info"
+                    );
+                }
+            }
+        } catch (e) {
+            console.error("Error checking initial pruning state:", e);
+        }
+    };
+    checkInitialPruning();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array ensures this runs only once on mount
+
+
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [currentChatName, setCurrentChatName] = useState<string>("New Chat");
 
@@ -345,11 +410,17 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   }, [allSettings, addNotification]);
 
   useEffect(() => {
+    // The `savedSessions` state is already pruned by operations that modify it.
+    // This useEffect just handles writing the current state to localStorage.
     try {
       localStorage.setItem(LOCAL_STORAGE_HISTORY_KEY, JSON.stringify(savedSessions));
     } catch (error: any) {
       console.error("Error saving chat history to localStorage:", error);
-      addNotification("Failed to save chat history.", "error", error.message);
+      if (error.name === 'QuotaExceededError') {
+        addNotification("Failed to save chat history: Storage quota exceeded. Please delete some older or unpinned chats.", "error", "Try removing unpinned chats or chats with large content like images.");
+      } else {
+        addNotification("Failed to save chat history.", "error", error.message);
+      }
     }
   }, [savedSessions, addNotification]);
 
@@ -685,36 +756,55 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
 
 
     if (activeSessionId) {
-      setSavedSessions(prev => prev.map(s => s.id === activeSessionId ? {
-        ...s,
-        name: s.name, 
-        messages: [...messages],
-        model: selectedModel,
-        modelSettingsSnapshot: {...modelSettings}, 
-        timestamp: sessionTimestamp,
-        activePersonaIdSnapshot: activePersonaId, 
-      } : s));
-      setCurrentChatName(savedSessions.find(s => s.id === activeSessionId)?.name || sessionName);
-      addNotification(`Chat "${currentChatName}" updated.`, "success");
-    } else {
-      const newSessionId = `session-${sessionTimestamp}`;
-      const newSession: ChatSession = {
-        id: newSessionId,
-        name: sessionName,
-        timestamp: sessionTimestamp,
-        model: selectedModel,
-        messages: [...messages],
-        modelSettingsSnapshot: {...modelSettings}, 
-        isPinned: false,
-        activePersonaIdSnapshot: activePersonaId,
-      };
-      setSavedSessions(prev => [...prev, newSession]);
-      setActiveSessionId(newSessionId);
-      setCurrentChatName(sessionName);
-      addNotification(`Chat "${sessionName}" saved.`, "success");
+        setSavedSessions(prev => {
+            const updatedSession = {
+                ...prev.find(s => s.id === activeSessionId)!,
+                name: prev.find(s => s.id === activeSessionId)?.name || sessionName, // Keep existing name on update unless it's new
+                messages: [...messages],
+                model: selectedModel,
+                modelSettingsSnapshot: {...modelSettings}, 
+                timestamp: sessionTimestamp, // Update timestamp on save
+                activePersonaIdSnapshot: activePersonaId, 
+            };
+            const otherSessions = prev.filter(s => s.id !== activeSessionId);
+            const { prunedSessions } = pruneChatSessions([updatedSession, ...otherSessions], MAX_SAVED_CHAT_SESSIONS);
+             // No specific notification for pruning on update, as it's less direct.
+            return prunedSessions.sort((a, b) => b.timestamp - a.timestamp);
+        });
+        setCurrentChatName(savedSessions.find(s => s.id === activeSessionId)?.name || sessionName);
+        addNotification(`Chat "${currentChatName}" updated.`, "success");
+    } else { // Saving a new chat
+        const newSessionId = `session-${sessionTimestamp}`;
+        const newSession: ChatSession = {
+            id: newSessionId,
+            name: sessionName,
+            timestamp: sessionTimestamp,
+            model: selectedModel,
+            messages: [...messages],
+            modelSettingsSnapshot: {...modelSettings}, 
+            isPinned: false,
+            activePersonaIdSnapshot: activePersonaId,
+        };
+
+        setSavedSessions(prev => {
+            const updatedSessions = [...prev, newSession];
+            const { prunedSessions, numPruned } = pruneChatSessions(updatedSessions, MAX_SAVED_CHAT_SESSIONS);
+            if (numPruned > 0) {
+                const removedSession = prev.find(s => !s.isPinned && !prunedSessions.some(ps => ps.id === s.id && s.id !== newSession.id));
+                 if (removedSession && newSession.id !== removedSession.id) { // Ensure we don't announce removal of the session just saved if it was part of a complex prune
+                    addNotification(`Storage limit: Oldest unpinned chat "${removedSession.name}" removed to make space.`, "info");
+                } else if (numPruned > 0) { // Generic if specific removed session not easily identifiable or it was the new one (should not happen)
+                    addNotification(`Storage limit: ${numPruned} oldest unpinned chat(s) removed to save new chat.`, "info");
+                }
+            }
+            return prunedSessions.sort((a, b) => b.timestamp - a.timestamp);
+        });
+        setActiveSessionId(newSessionId);
+        setCurrentChatName(sessionName);
+        addNotification(`Chat "${sessionName}" saved.`, "success");
     }
     clearSearch();
-  }, [messages, selectedModel, modelSettings, activeSessionId, savedSessions, activePersonaId, addNotification, currentChatName, isRealTimeTranslationMode, isAiAgentMode]);
+  }, [messages, selectedModel, modelSettings, activeSessionId, savedSessions, activePersonaId, addNotification, currentChatName, isRealTimeTranslationMode, isAiAgentMode, pruneChatSessions]);
 
   const handleLoadSession = useCallback((sessionId: string) => {
     const sessionToLoad = savedSessions.find(s => s.id === sessionId);
@@ -793,17 +883,27 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
 
   const handleDeleteSession = useCallback((sessionId: string) => {
     const sessionToDelete = savedSessions.find(s => s.id === sessionId);
-    setSavedSessions(prev => prev.filter(s => s.id !== sessionId));
+    setSavedSessions(prev => {
+        const updatedSessions = prev.filter(s => s.id !== sessionId);
+        // Pruning is not strictly necessary on delete unless we have a complex min-sessions rule.
+        // But, for consistency, we can re-apply. The prune function handles cases where length <= max.
+        const { prunedSessions } = pruneChatSessions(updatedSessions, MAX_SAVED_CHAT_SESSIONS);
+        return prunedSessions;
+    });
     if (activeSessionId === sessionId) {
       handleStartNewChat(); 
     }
     if (sessionToDelete) {
       addNotification(`Deleted chat: "${sessionToDelete.name}".`, "info");
     }
-  }, [activeSessionId, handleStartNewChat, savedSessions, addNotification]); 
+  }, [activeSessionId, handleStartNewChat, savedSessions, addNotification, pruneChatSessions]); 
   
   const handleRenameSession = useCallback((sessionId: string, newName: string) => {
-    setSavedSessions(prev => prev.map(s => s.id === sessionId ? { ...s, name: newName } : s));
+    setSavedSessions(prev => {
+        const updatedSessions = prev.map(s => s.id === sessionId ? { ...s, name: newName } : s);
+        // No pruning needed on rename itself as count doesn't change.
+        return updatedSessions;
+    });
     if (activeSessionId === sessionId) {
         setCurrentChatName(newName);
     }
@@ -813,18 +913,30 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   const handleTogglePinSession = useCallback((sessionId: string) => {
     let sessionName = "";
     let isNowPinned = false;
-    setSavedSessions(prev => prev.map(s => {
-      if (s.id === sessionId) {
-        sessionName = s.name;
-        isNowPinned = !s.isPinned;
-        return { ...s, isPinned: !s.isPinned };
-      }
-      return s;
-    }));
+    setSavedSessions(prev => {
+        let newSessions = prev.map(s => {
+            if (s.id === sessionId) {
+                sessionName = s.name;
+                isNowPinned = !s.isPinned;
+                return { ...s, isPinned: !s.isPinned };
+            }
+            return s;
+        });
+        // Re-apply pruning after pinning/unpinning as it might affect which sessions are kept
+        const { prunedSessions, numPruned } = pruneChatSessions(newSessions, MAX_SAVED_CHAT_SESSIONS);
+        if (numPruned > 0) {
+            addNotification(`Storage limit: ${numPruned} oldest unpinned chat(s) removed due to pinning changes.`, "info");
+        }
+        return prunedSessions.sort((a, b) => { // Ensure pinned come first, then by time
+            if (a.isPinned && !b.isPinned) return -1;
+            if (!a.isPinned && b.isPinned) return 1;
+            return b.timestamp - a.timestamp;
+        });
+    });
     if (sessionName) {
       addNotification(isNowPinned ? `Pinned "${sessionName}".` : `Unpinned "${sessionName}".`, "info");
     }
-  }, [addNotification]);
+  }, [addNotification, pruneChatSessions]);
 
 
   const handleOpenImageModal = useCallback((imageB64: string, promptText: string, mime: 'image/jpeg' | 'image/png') => {
