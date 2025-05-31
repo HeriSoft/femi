@@ -1,17 +1,16 @@
-/// <reference path="../global.d.ts" />
+/// <reference path="./global.d.ts" />
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { ThemeContextType, Model, UserGlobalProfile, LanguageOption, UserLanguageProfile, WebGameType, NotificationType as AppNotificationType, TienLenGameModalProps } from '../types.ts';
+import { ThemeContextType, Model, UserGlobalProfile, LanguageOption, UserLanguageProfile, WebGameType, NotificationType as AppNotificationType, TienLenGameModalProps } from './types.ts';
 import ChatPage from './components/ChatPage.tsx';
 import Header, { MockUser } from './components/Header.tsx';
 import LanguageLearningModal from './components/LanguageLearningModal.tsx';
 import GamesModal from './components/GamesModal.tsx';
 import WebGamePlayerModal from './components/WebGamePlayerModal.tsx';
-import TienLenGameModal from './components/games/tienlen/TienLenGameModal.tsx'; // Import TienLenGameModal
-// VoiceAgentModal import removed
+import TienLenGameModal from './components/games/tienlen/TienLenGameModal.tsx';
 import { NotificationProvider, useNotification } from './contexts/NotificationContext.tsx';
 import { KeyIcon } from './components/Icons.tsx';
-import { LOCAL_STORAGE_USER_PROFILE_KEY, DEFAULT_USER_LANGUAGE_PROFILE, EXP_MILESTONES_CONFIG, BADGES_CATALOG, LOCAL_STORAGE_CHAT_BACKGROUND_KEY } from '../constants.ts';
+import { LOCAL_STORAGE_USER_PROFILE_KEY, DEFAULT_USER_LANGUAGE_PROFILE, EXP_MILESTONES_CONFIG, BADGES_CATALOG, LOCAL_STORAGE_CHAT_BACKGROUND_KEY } from './constants.ts';
 
 export const ThemeContext = React.createContext<ThemeContextType | undefined>(undefined);
 
@@ -149,7 +148,6 @@ const AppContent: React.FC<AppContentProps> = ({
                 gameTitle={activeWebGameTitle}
             />
           )}
-          {/* VoiceAgentModal removed, widget rendered below */}
           {isVoiceAgentWidgetActive && (
             <elevenlabs-convai agent-id={elevenLabsAgentId}></elevenlabs-convai>
           )}
@@ -266,33 +264,39 @@ const App: React.FC = () => {
   }, []);
 
   const handleAddExp = useCallback((language: LanguageOption, expPoints: number, boundAddAppNotification?: (message: string, type: AppNotificationType, details?: string) => void) => {
+    const effectiveAddNotification = boundAddAppNotification || addAppNotification;
     setUserProfile(prevProfile => {
-      const newProfile = JSON.parse(JSON.stringify(prevProfile)) as UserGlobalProfile;
+      const newProfile: UserGlobalProfile = JSON.parse(JSON.stringify(prevProfile)); // Deep clone
+      
+      if (!newProfile.languageProfiles) {
+        newProfile.languageProfiles = {};
+      }
       if (!newProfile.languageProfiles[language]) {
         newProfile.languageProfiles[language] = { ...DEFAULT_USER_LANGUAGE_PROFILE };
       }
-      const langProfile = newProfile.languageProfiles[language] as UserLanguageProfile;
+
+      const langProfile = newProfile.languageProfiles[language] as UserLanguageProfile; // Assert type after ensuring existence
       const oldExp = langProfile.exp;
       langProfile.exp += expPoints;
 
       EXP_MILESTONES_CONFIG.forEach(milestone => {
         if (oldExp < milestone.exp && langProfile.exp >= milestone.exp) {
           langProfile.exp += milestone.bonus;
-          if (boundAddAppNotification) { 
-            boundAddAppNotification(`Milestone Reached! +${milestone.bonus} bonus EXP for ${language.toUpperCase()}!`, 'success');
+          if (effectiveAddNotification) { 
+            effectiveAddNotification(`Milestone Reached! +${milestone.bonus} bonus EXP for ${language.toUpperCase()}!`, 'success');
           }
           if (milestone.badgeId && !langProfile.earnedBadgeIds.includes(milestone.badgeId)) {
             langProfile.earnedBadgeIds.push(milestone.badgeId);
             const badge = BADGES_CATALOG[milestone.badgeId];
-            if (badge && boundAddAppNotification) {
-              boundAddAppNotification(`Badge Unlocked: ${badge.name} (${badge.icon}) for ${language.toUpperCase()}!`, 'success', badge.description);
+            if (badge && effectiveAddNotification) {
+              effectiveAddNotification(`Badge Unlocked: ${badge.name} (${badge.icon}) for ${language.toUpperCase()}!`, 'success', badge.description);
             }
           }
         }
       });
       return newProfile;
     });
-  }, []);
+  }, [addAppNotification]); // Include addAppNotification from context if it's used as a default
   
   const handleAddExpWithNotification = useCallback((language: LanguageOption, expPoints: number) => {
     handleAddExp(language, expPoints, addAppNotification);
@@ -379,7 +383,7 @@ const App: React.FC = () => {
   );
 };
 
-const RootAppWrapper: React.FC = () => {
+const RootAppWrapper: React.FC = () => { // RootAppWrapper is a React.FC
   return (
     <NotificationProvider>
       <App />
@@ -387,4 +391,4 @@ const RootAppWrapper: React.FC = () => {
   );
 };
 
-export default RootAppWrapper;
+export default RootAppWrapper; // Ensure RootAppWrapper is the default export

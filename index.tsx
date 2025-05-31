@@ -1,7 +1,6 @@
-
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import RootAppWrapper from './App.tsx'; // Update to .tsx and RootAppWrapper
+import RootAppWrapper from './App.tsx'; // Corrected path assuming App.tsx is at the root
 
 console.log("[index.tsx] Script start. React version available:", React.version);
 console.log("[index.tsx] ReactDOM available:", ReactDOM);
