@@ -1,5 +1,5 @@
 
-import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank, AiAgentSettings } from './types.ts'; // Update to .ts
+import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank, AiAgentSettings, CreditPackage } from './types.ts'; // Update to .ts
 
 export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
   temperature: 0.7,
@@ -173,11 +173,12 @@ export const getNextMilestone = (currentExp: number): { milestoneExp: number, re
 
 // Account Settings Constants
 export const ACCOUNT_MENU_ITEMS: Array<{ id: AccountTabType; label: string; status?: 'coming_soon' }> = [
-  { id: 'profile', label: 'My Profile' }, // Added "My Profile" tab
+  { id: 'profile', label: 'My Profile' },
+  { id: 'credits', label: 'Credits & Billing'}, // New Credits tab
   { id: 'devices', label: 'Devices' },
   { id: 'background', label: 'Background' },
   { id: 'avatar', label: 'Avatar', status: 'coming_soon' },
-  { id: 'payment', label: 'Payment', status: 'coming_soon' },
+  // { id: 'payment', label: 'Payment Methods', status: 'coming_soon' }, // "Payment" can be part of "Credits" now
 ];
 
 export const DEMO_BACKGROUNDS: BackgroundOption[] = [
@@ -200,6 +201,13 @@ export const DEMO_BACKGROUNDS: BackgroundOption[] = [
     imageUrl: 'https://i.ibb.co/mp8DJtd/v882-sasi-34-e.jpg', 
     thumbnailUrl: 'https://i.ibb.co/mp8DJtd/v882-sasi-34-e.jpg' 
   },
+];
+
+export const DEMO_CREDIT_PACKAGES: CreditPackage[] = [
+  { id: 'pkg_starter', name: 'Starter Pack', description: 'Great for trying things out.', price: 5.00, currency: 'USD', creditsAwarded: 500 },
+  { id: 'pkg_basic', name: 'Basic Pack', description: 'Perfect for regular use.', price: 10.00, currency: 'USD', creditsAwarded: 1100 },
+  { id: 'pkg_plus', name: 'Plus Pack', description: 'More credits, better value.', price: 20.00, currency: 'USD', creditsAwarded: 2500 },
+  { id: 'pkg_pro', name: 'Pro Pack', description: 'For heavy users and projects.', price: 50.00, currency: 'USD', creditsAwarded: 6500 },
 ];
 
 // Tien Len Game Constants

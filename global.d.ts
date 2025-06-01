@@ -7,5 +7,3 @@ declare global {
     }
   }
 }
-
-export {}; // Make this a module

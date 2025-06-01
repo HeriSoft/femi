@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import RootAppWrapper from './App.tsx'; // Corrected path assuming App.tsx is at the root
+import RootAppWrapper from './App'; // Corrected path assuming App.tsx is at the root and extension resolution is handled
 
 console.log("[index.tsx] Script start. React version available:", React.version);
 console.log("[index.tsx] ReactDOM available:", ReactDOM);
