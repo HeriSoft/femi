@@ -7,7 +7,7 @@
 
 ## ✨ Core Features
 
-*   Chat with Gemini, GPT-4o, Deepseek, Imagen3 (images), OpenAI TTS.
+*   Chat with Gemini, GPT-4.1, Deepseek, Imagen3 (Generate super-real images), OpenAI TTS.
 *   Image & text file uploads for chat.
 *   Web search grounding (Gemini).
 *   Chat history, personas, and theme customization.
@@ -17,6 +17,9 @@
 *   Voice translation in real-time
 *   Change Theme, Avatar
 *   Optimize UI chat like Telegram
+*   AI agent with Voice ( New Updated )
+*   Online multiple chat with friends ( coming soon )
+*   Studio Video generator VEO-3 ( coming soon )
 
 ## 🛠️ Tech Stack
 
