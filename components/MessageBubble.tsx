@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState, useContext } from 'react';
 import hljs from 'https://esm.sh/highlight.js@11.9.0'; 
 import { ChatMessage, ThemeContextType } from '../types.ts';
@@ -244,6 +245,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const themeContext = useContext(ThemeContext);
   const currentTheme = themeContext?.theme || 'light';
   const { addNotification } = useNotification();
+  const [isTextCopied, setIsTextCopied] = useState(false);
 
   let bubbleBackgroundColor = '';
   let bubbleTextColor = '';
@@ -307,23 +309,28 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const displayText = message.text;
   const taskGoalPrefix = message.isTaskGoal ? "🎯 **Goal:** " : "";
-  const taskPlanPrefix = message.isTaskPlan ? "📝 **Agent Response:** " : ""; // Changed prefix for AI Agent response
+  const taskPlanPrefix = message.isTaskPlan ? "📝 **Agent Response:** " : ""; 
   const finalDisplayText = `${taskGoalPrefix}${taskPlanPrefix}${displayText}`;
+
+  const handleCopyText = () => {
+    if (!finalDisplayText.trim()) return;
+    navigator.clipboard.writeText(finalDisplayText.trim())
+      .then(() => {
+        setIsTextCopied(true);
+        addNotification("Message copied to clipboard.", "success");
+        setTimeout(() => setIsTextCopied(false), 2000);
+      })
+      .catch(err => {
+        console.error("Failed to copy message text:", err);
+        addNotification("Failed to copy message.", "error", (err as Error).message);
+      });
+  };
 
   const handleDownloadResponse = () => {
     if (!message.text || !message.promptedByMessageId) return;
-
-    // Find the user message that prompted this AI plan to get goal text for filename
-    // This part assumes 'messages' array is accessible here or passed down.
-    // For now, let's use a generic name or pass user's goal text.
-    // A better approach would be to have user's goal text available in `message` object itself or passed to this bubble.
-    // Let's assume for now we get promptedByMessageId which contains the original goal.
-    // This is a simplification; a robust solution might require looking up the original message.
     const goalText = message.originalPrompt || message.promptedByMessageId || "ai_agent_plan";
-    
     const sanitizedGoalText = goalText.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, 30);
     const fileName = `${sanitizedGoalText}_${new Date().toISOString().split('T')[0]}.txt`;
-
     const blob = new Blob([message.text], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -335,6 +342,38 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     URL.revokeObjectURL(url);
     addNotification("Agent response downloaded.", "success");
   };
+
+  const ActionButton: React.FC<{
+    onClick?: () => void;
+    disabled?: boolean;
+    title: string;
+    ariaLabel: string;
+    children: React.ReactNode;
+    className?: string;
+  }> = ({ onClick, disabled, title, ariaLabel, children, className }) => (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 disabled:opacity-30 ml-1.5 flex-shrink-0 ${className}`}
+      style={{
+        color: bubbleTextColor === '#FFFFFF' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)',
+      }}
+      onMouseEnter={e => {
+        const target = e.currentTarget as HTMLButtonElement;
+        target.style.backgroundColor = bubbleTextColor === '#FFFFFF' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)';
+        target.style.color = bubbleTextColor === '#FFFFFF' ? 'white' : 'black';
+      }}
+      onMouseLeave={e => {
+        const target = e.currentTarget as HTMLButtonElement;
+        target.style.backgroundColor = 'transparent';
+        target.style.color = bubbleTextColor === '#FFFFFF' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)';
+      }}
+      aria-label={ariaLabel}
+      title={title}
+    >
+      {children}
+    </button>
+  );
 
 
   return (
@@ -363,61 +402,43 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         ></div>
         
         <div className={bubbleContentClasses} style={bubbleStyle}>
-          <div className="flex justify-between items-start mb-1"> {/* Adjusted for button alignment */}
-            {!isUser && (
-                <span className="font-semibold text-sm flex-grow" style={{ color: bubbleTextColor }}>
-                {message.model || 'AI'}
-                {message.isRegenerating && <span className="italic text-xs"> (Regenerating...)</span>}
-                </span>
-            )}
-             {!isUser && onRegenerate && message.promptedByMessageId && !message.isRegenerating && !message.isTaskPlan && ( // Hide regenerate for AI Agent plan
-                <button
-                onClick={() => onRegenerate(message.id, message.promptedByMessageId!)}
-                disabled={isLoading}
-                className="p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 disabled:opacity-30 ml-2 flex-shrink-0"
-                style={{ 
-                    color: bubbleTextColor === '#FFFFFF' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)',
-                }}
-                onMouseEnter={e => {
-                    const target = e.currentTarget as HTMLButtonElement;
-                    target.style.backgroundColor = bubbleTextColor === '#FFFFFF' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)';
-                    target.style.color = bubbleTextColor === '#FFFFFF' ? 'white' : 'black';
-                }}
-                onMouseLeave={e => {
-                    const target = e.currentTarget as HTMLButtonElement;
-                    target.style.backgroundColor = 'transparent';
-                    target.style.color = bubbleTextColor === '#FFFFFF' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)';
-                }}
-                aria-label="Regenerate response"
-                title="Regenerate response"
-                >
-                <ArrowPathIcon className="w-4 h-4" />
-                </button>
-            )}
-             {!isUser && message.isTaskPlan && (
-                <button
-                    onClick={handleDownloadResponse}
-                    disabled={isLoading || !message.text}
-                    className="p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 disabled:opacity-30 ml-2 flex-shrink-0"
-                    style={{ 
-                        color: bubbleTextColor === '#FFFFFF' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)',
-                    }}
-                    onMouseEnter={e => {
-                        const target = e.currentTarget as HTMLButtonElement;
-                        target.style.backgroundColor = bubbleTextColor === '#FFFFFF' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)';
-                        target.style.color = bubbleTextColor === '#FFFFFF' ? 'white' : 'black';
-                    }}
-                    onMouseLeave={e => {
-                        const target = e.currentTarget as HTMLButtonElement;
-                        target.style.backgroundColor = 'transparent';
-                        target.style.color = bubbleTextColor === '#FFFFFF' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)';
-                    }}
-                    aria-label="Download AI Agent Response"
-                    title="Download AI Agent Response"
-                >
-                    <ArrowDownTrayIcon className="w-4 h-4" />
-                </button>
-            )}
+          <div className="flex justify-between items-start mb-1">
+            <span className="font-semibold text-sm flex-grow" style={{ color: bubbleTextColor }}>
+              {isUser ? 'You' : (message.model || 'AI')}
+              {message.isRegenerating && <span className="italic text-xs"> (Regenerating...)</span>}
+            </span>
+            <div className="flex items-center">
+                {finalDisplayText.trim() && (
+                    <ActionButton
+                        onClick={handleCopyText}
+                        disabled={isLoading}
+                        title={isTextCopied ? "Copied!" : "Copy message"}
+                        ariaLabel={isTextCopied ? "Message copied" : "Copy message text"}
+                    >
+                        {isTextCopied ? <CheckIcon className="w-4 h-4" /> : <ClipboardIcon className="w-4 h-4" />}
+                    </ActionButton>
+                )}
+                {!isUser && onRegenerate && message.promptedByMessageId && !message.isRegenerating && !message.isTaskPlan && (
+                    <ActionButton
+                        onClick={() => onRegenerate(message.id, message.promptedByMessageId!)}
+                        disabled={isLoading}
+                        title="Regenerate response"
+                        ariaLabel="Regenerate AI response"
+                    >
+                        <ArrowPathIcon className="w-4 h-4" />
+                    </ActionButton>
+                )}
+                {!isUser && message.isTaskPlan && (
+                    <ActionButton
+                        onClick={handleDownloadResponse}
+                        disabled={isLoading || !message.text}
+                        title="Download AI Agent Response"
+                        ariaLabel="Download AI Agent Response"
+                    >
+                        <ArrowDownTrayIcon className="w-4 h-4" />
+                    </ActionButton>
+                )}
+            </div>
           </div>
 
           {message.imagePreview && isUser && !message.isImageQuery && (
