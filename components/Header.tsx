@@ -1,14 +1,13 @@
 
-
 import React, { useContext, useState, useRef, useEffect } from 'react';
 import { ThemeContext } from '../App.tsx';
-import { ThemeContextType, UserGlobalProfile, LoginDeviceLog } from '../types.ts'; // Removed LanguageLearningModalProps, Added LoginDeviceLog
-import { SunIcon, MoonIcon, BellIcon, UserCircleIcon as AvatarIcon, KeyIcon, XMarkIcon, AcademicCapIcon, PuzzlePieceIcon, UserCogIcon, ComputerDesktopIcon, IdentificationIcon, ChatBubbleLeftEllipsisIcon } from './Icons.tsx'; // Renamed UserCircleIcon to AvatarIcon for clarity, Added IdentificationIcon, ChatBubbleLeftEllipsisIcon
+import { ThemeContextType, UserGlobalProfile, LoginDeviceLog, CreditPackage } from '../types.ts'; // Added CreditPackage
+import { SunIcon, MoonIcon, BellIcon, UserCircleIcon as AvatarIcon, KeyIcon, XMarkIcon, AcademicCapIcon, PuzzlePieceIcon, UserCogIcon, ComputerDesktopIcon, IdentificationIcon, ChatBubbleLeftEllipsisIcon } from './Icons.tsx';
 import { useNotification } from '../contexts/NotificationContext.tsx';
 import NotificationPanel from './NotificationPanel.tsx';
-import AccountSettingsModal from './AccountSettingsModal.tsx'; // Import AccountSettingsModal
+import AccountSettingsModal from './AccountSettingsModal.tsx';
 import { LOCAL_STORAGE_DEVICE_LOGS_KEY, MAX_DEVICE_LOGS } from '../constants.ts';
-// LanguageLearningModal import removed as it's now handled by App.tsx
+
 
 export interface MockUser {
   name: string;
@@ -23,16 +22,19 @@ interface HeaderProps {
   onLoginModalOpened?: () => void; 
   onToggleLanguageLearningModal: () => void; 
   onToggleGamesModal: () => void; 
-  onToggleVoiceAgentWidget: () => void; // Updated prop name
+  onToggleVoiceAgentWidget: () => void;
   // Props for Account Settings background feature
   chatBackgroundUrl: string | null;
   onChatBackgroundChange: (newUrl: string | null) => void;
-  // Props for Account Settings "About Me" feature
+  // Props for Account Settings "About Me" feature & Credits
   userProfile: UserGlobalProfile | null;
   onUpdateUserProfile: (updatedProfile: UserGlobalProfile) => void;
+  currentUserCredits: number;
+  onPurchaseCredits: (packageId: string, paymentMethod: 'paypal' | 'stripe' | 'vietqr') => void;
+  paypalEmail: string | undefined;
+  onSavePayPalEmail: (email: string) => void;
 }
 
-// Helper to parse User Agent for basic OS info
 const getDeviceType = (): string => {
   const ua = navigator.userAgent;
   const platform = (navigator as any).userAgentData?.platform || navigator.platform || "Unknown";
@@ -42,7 +44,7 @@ const getDeviceType = (): string => {
   if (/\bWindows/i.test(ua) || /Win/i.test(platform)) return "Windows";
   if (/\bMac/i.test(ua) || /Mac/i.test(platform)) return "Mac OS";
   if (/\bLinux/i.test(ua) || /Linux/i.test(platform)) return "Linux";
-  if (/\bCrOS/i.test(ua)) return "Chrome OS"; // Chromebooks
+  if (/\bCrOS/i.test(ua)) return "Chrome OS";
   
   return "Unknown Device";
 };
@@ -56,11 +58,15 @@ const Header: React.FC<HeaderProps> = ({
   onLoginModalOpened,
   onToggleLanguageLearningModal,
   onToggleGamesModal, 
-  onToggleVoiceAgentWidget, // Updated prop
+  onToggleVoiceAgentWidget,
   chatBackgroundUrl,
   onChatBackgroundChange,
   userProfile,
   onUpdateUserProfile,
+  currentUserCredits,
+  onPurchaseCredits,
+  paypalEmail,
+  onSavePayPalEmail,
 }) => {
   const themeContext = useContext(ThemeContext);
   const { unreadCount, markAllAsRead, addNotification } = useNotification();
@@ -79,9 +85,6 @@ const Header: React.FC<HeaderProps> = ({
   const [isLoginLoading, setIsLoginLoading] = useState(false);
 
   const [isAccountSettingsModalOpen, setIsAccountSettingsModalOpen] = useState(false);
-
-
-  // isLanguageLearningModalOpen state removed
 
   useEffect(() => {
     if (openLoginModalInitially && !currentUser && !isLoginModalOpen) {
@@ -123,8 +126,8 @@ const Header: React.FC<HeaderProps> = ({
         timestamp: Date.now(),
       };
 
-      deviceLogs.unshift(newLog); // Add to the beginning
-      deviceLogs = deviceLogs.slice(0, MAX_DEVICE_LOGS); // Keep only the N most recent
+      deviceLogs.unshift(newLog); 
+      deviceLogs = deviceLogs.slice(0, MAX_DEVICE_LOGS); 
 
       localStorage.setItem(LOCAL_STORAGE_DEVICE_LOGS_KEY, JSON.stringify(deviceLogs));
     } catch (error) {
@@ -154,7 +157,7 @@ const Header: React.FC<HeaderProps> = ({
         onLogin({ name: "Authenticated User" });
         addNotification("Login successful!", "success");
         setIsLoginModalOpen(false);
-        recordLoginDevice(); // Record device on successful login
+        recordLoginDevice(); 
       } else {
         addNotification(data.message || "Invalid login code or server error.", "error");
         setLoginCodeInput(''); 
@@ -245,7 +248,7 @@ const Header: React.FC<HeaderProps> = ({
             <PuzzlePieceIcon className="w-6 h-6" />
           </button>
           <button
-            onClick={onToggleVoiceAgentWidget} // Updated onClick
+            onClick={onToggleVoiceAgentWidget}
             disabled={!currentUser}
             className="p-2 rounded-full hover:bg-secondary dark:hover:bg-neutral-darkest text-neutral-darker dark:text-secondary-light transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Open Voice Agent"
@@ -386,18 +389,21 @@ const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
         )}
+        {isAccountSettingsModalOpen && (
+          <AccountSettingsModal
+            isOpen={isAccountSettingsModalOpen}
+            onClose={() => setIsAccountSettingsModalOpen(false)}
+            onChatBackgroundChange={onChatBackgroundChange}
+            currentChatBackground={chatBackgroundUrl}
+            userProfile={userProfile}
+            onUpdateUserProfile={onUpdateUserProfile}
+            currentUserCredits={currentUserCredits}
+            onPurchaseCredits={onPurchaseCredits}
+            paypalEmail={paypalEmail}
+            onSavePayPalEmail={onSavePayPalEmail}
+          />
+        )}
       </header>
-      
-      {currentUser && isAccountSettingsModalOpen && (
-        <AccountSettingsModal
-          isOpen={isAccountSettingsModalOpen}
-          onClose={() => setIsAccountSettingsModalOpen(false)}
-          onChatBackgroundChange={onChatBackgroundChange}
-          currentChatBackground={chatBackgroundUrl}
-          userProfile={userProfile}
-          onUpdateUserProfile={onUpdateUserProfile}
-        />
-      )}
     </>
   );
 };

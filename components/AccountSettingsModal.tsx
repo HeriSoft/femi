@@ -1,9 +1,10 @@
 
 
+
 import React, { useState, useEffect, useRef } from 'react';
-import { LoginDeviceLog, AccountSettingsModalProps as LocalAccountSettingsModalProps, AccountTabType, BackgroundOption, UserGlobalProfile } from '../types.ts';
-import { XMarkIcon, ComputerDesktopIcon, ClockIcon, PhotoIcon, UserCircleIcon as AvatarIcon, CreditCardIcon, CheckCircleIcon, UserCogIcon, ArrowUpTrayIcon, IdentificationIcon } from './Icons.tsx';
-import { LOCAL_STORAGE_DEVICE_LOGS_KEY, ACCOUNT_MENU_ITEMS, DEMO_BACKGROUNDS } from '../constants.ts';
+import { LoginDeviceLog, AccountSettingsModalProps as LocalAccountSettingsModalProps, AccountTabType, BackgroundOption, UserGlobalProfile, CreditPackage } from '../types.ts';
+import { XMarkIcon, ComputerDesktopIcon, ClockIcon, PhotoIcon, UserCircleIcon as AvatarIcon, CreditCardIcon, CheckCircleIcon, UserCogIcon, ArrowUpTrayIcon, IdentificationIcon, BanknotesIcon as CreditsCoinIcon, PayPalIcon, StripeIcon, QrCodeIcon, BuildingStorefrontIcon, BillingIcon } from './Icons.tsx';
+import { LOCAL_STORAGE_DEVICE_LOGS_KEY, ACCOUNT_MENU_ITEMS, DEMO_BACKGROUNDS, DEMO_CREDIT_PACKAGES } from '../constants.ts';
 import { useNotification } from '../contexts/NotificationContext.tsx';
 
 
@@ -12,10 +13,14 @@ const AccountSettingsModal: React.FC<LocalAccountSettingsModalProps> = ({
     onClose,
     onChatBackgroundChange,
     currentChatBackground,
-    userProfile, // Added
-    onUpdateUserProfile // Added
+    userProfile,
+    onUpdateUserProfile,
+    currentUserCredits,
+    onPurchaseCredits,
+    paypalEmail: initialPayPalEmail, // Renamed to avoid conflict with local state
+    onSavePayPalEmail,
 }) => {
-  const [activeTab, setActiveTab] = useState<AccountTabType>(ACCOUNT_MENU_ITEMS[0].id); // Default to first item
+  const [activeTab, setActiveTab] = useState<AccountTabType>(ACCOUNT_MENU_ITEMS[0].id);
   const [deviceLogs, setDeviceLogs] = useState<LoginDeviceLog[]>([]);
   const { addNotification } = useNotification();
   
@@ -27,20 +32,21 @@ const AccountSettingsModal: React.FC<LocalAccountSettingsModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [aboutMeText, setAboutMeText] = useState(userProfile?.aboutMe || '');
+  const [currentPaypalEmailInput, setCurrentPaypalEmailInput] = useState(initialPayPalEmail || '');
+
 
   useEffect(() => {
     if (isOpen) {
-      // Initialize selectedBackgroundId and custom preview based on currentChatBackground
       const demoOption = DEMO_BACKGROUNDS.find(bg => bg.imageUrl === currentChatBackground);
       if (demoOption) {
         setSelectedBackgroundId(demoOption.id);
         setCustomBackgroundFile(null);
         setCustomBackgroundPreviewUrl(null);
-      } else if (currentChatBackground) { // It's a custom URL
+      } else if (currentChatBackground) {
         setSelectedBackgroundId('custom_upload');
         setCustomBackgroundPreviewUrl(currentChatBackground);
-        setCustomBackgroundFile(null); // Don't have the file object, just the URL
-      } else { // No background set (default)
+        setCustomBackgroundFile(null);
+      } else {
         setSelectedBackgroundId(DEMO_BACKGROUNDS[0].id);
         setCustomBackgroundFile(null);
         setCustomBackgroundPreviewUrl(null);
@@ -49,13 +55,10 @@ const AccountSettingsModal: React.FC<LocalAccountSettingsModalProps> = ({
       if (activeTab === 'devices') {
         try {
           const storedLogs = localStorage.getItem(LOCAL_STORAGE_DEVICE_LOGS_KEY);
-          if (storedLogs) {
-            setDeviceLogs(JSON.parse(storedLogs));
-          } else {
-            setDeviceLogs([]);
-          }
+          if (storedLogs) setDeviceLogs(JSON.parse(storedLogs));
+          else setDeviceLogs([]);
         } catch (error) {
-          console.error("Error loading device logs from localStorage:", error);
+          console.error("Error loading device logs:", error);
           setDeviceLogs([]);
           addNotification("Failed to load device logs.", "error");
         }
@@ -63,8 +66,11 @@ const AccountSettingsModal: React.FC<LocalAccountSettingsModalProps> = ({
       if (activeTab === 'profile') {
         setAboutMeText(userProfile?.aboutMe || '');
       }
+      if (activeTab === 'credits') {
+        setCurrentPaypalEmailInput(initialPayPalEmail || '');
+      }
     }
-  }, [isOpen, activeTab, currentChatBackground, userProfile, addNotification]);
+  }, [isOpen, activeTab, currentChatBackground, userProfile, addNotification, initialPayPalEmail]);
 
   const formatTimestamp = (timestamp: number) => {
     return new Date(timestamp).toLocaleString(undefined, {
@@ -76,7 +82,7 @@ const AccountSettingsModal: React.FC<LocalAccountSettingsModalProps> = ({
   const handleCustomBackgroundUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      if (file.size > 5 * 1024 * 1024) {
         addNotification("Image file is too large. Max 5MB allowed.", "error");
         return;
       }
@@ -88,11 +94,11 @@ const AccountSettingsModal: React.FC<LocalAccountSettingsModalProps> = ({
       const reader = new FileReader();
       reader.onloadend = () => {
         setCustomBackgroundPreviewUrl(reader.result as string);
-        setSelectedBackgroundId('custom_upload'); // Mark custom as selected
+        setSelectedBackgroundId('custom_upload');
       };
       reader.readAsDataURL(file);
     }
-    event.target.value = ''; // Reset file input
+    event.target.value = '';
   };
 
   const handleSaveBackground = () => {
@@ -124,9 +130,20 @@ const AccountSettingsModal: React.FC<LocalAccountSettingsModalProps> = ({
     }
   };
 
+  const handleSavePayPalEmailLocal = () => {
+    // Basic email validation (can be improved)
+    if (!currentPaypalEmailInput.trim() || !/\S+@\S+\.\S+/.test(currentPaypalEmailInput.trim())) {
+        addNotification("Please enter a valid PayPal email address.", "error");
+        return;
+    }
+    onSavePayPalEmail(currentPaypalEmailInput.trim());
+    addNotification("PayPal email updated for quick checkout.", "success");
+  };
+
   const getIconForTab = (tabId: AccountTabType) => {
     switch(tabId) {
         case 'profile': return <IdentificationIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3" />;
+        case 'credits': return <CreditsCoinIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3" />;
         case 'devices': return <ComputerDesktopIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3" />;
         case 'background': return <PhotoIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3" />;
         case 'avatar': return <AvatarIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3" />;
@@ -163,6 +180,86 @@ const AccountSettingsModal: React.FC<LocalAccountSettingsModalProps> = ({
               Save Profile
             </button>
           </section>
+        );
+      case 'credits':
+        return (
+            <section className="space-y-6">
+                <div>
+                    <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light mb-2 flex items-center">
+                        <CreditsCoinIcon className="w-6 h-6 mr-2 text-yellow-500" /> Your Current Balance
+                    </h3>
+                    <p className="text-3xl font-bold text-primary dark:text-primary-light">
+                        🪙 {currentUserCredits.toLocaleString()} Credits
+                    </p>
+                </div>
+
+                <div className="pt-4 border-t border-secondary dark:border-neutral-darkest">
+                    <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light mb-3 flex items-center">
+                        <BuildingStorefrontIcon className="w-6 h-6 mr-2 text-green-500" /> Purchase Credits
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {DEMO_CREDIT_PACKAGES.map((pkg) => (
+                            <div key={pkg.id} className="p-4 border border-secondary dark:border-neutral-darkest rounded-lg bg-neutral-light dark:bg-neutral-dark shadow-sm flex flex-col justify-between">
+                                <div>
+                                    <h4 className="text-md font-semibold text-neutral-darker dark:text-secondary-light">{pkg.name}</h4>
+                                    <p className="text-2xl font-bold text-accent dark:text-accent-light my-1">
+                                        {pkg.creditsAwarded.toLocaleString()} <span className="text-sm">Credits</span>
+                                    </p>
+                                    <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-1">
+                                        Price: ${pkg.price.toFixed(2)} {pkg.currency}
+                                    </p>
+                                    {pkg.description && <p className="text-xs text-neutral-500 dark:text-neutral-500 mb-3">{pkg.description}</p>}
+                                </div>
+                                <div className="space-y-2 mt-auto">
+                                    <button onClick={() => onPurchaseCredits(pkg.id, 'paypal')} className="w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-white bg-[#0070BA] hover:bg-[#005EA6] rounded-md transition-colors">
+                                        <PayPalIcon className="w-5 h-5 mr-2" /> Buy with PayPal
+                                    </button>
+                                    <button onClick={() => onPurchaseCredits(pkg.id, 'stripe')} className="w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-white bg-[#635BFF] hover:bg-[#534ACC] rounded-md transition-colors">
+                                        <StripeIcon className="w-5 h-5 mr-2" /> Pay with Card
+                                    </button>
+                                    <button onClick={() => onPurchaseCredits(pkg.id, 'vietqr')} className="w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-neutral-darker dark:text-secondary-light bg-secondary dark:bg-neutral-darkest hover:bg-secondary-dark dark:hover:bg-neutral-dark rounded-md transition-colors">
+                                        <QrCodeIcon className="w-5 h-5 mr-2" /> VietQR
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                
+                <div className="pt-4 border-t border-secondary dark:border-neutral-darkest">
+                    <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light mb-3 flex items-center">
+                        <CreditCardIcon className="w-6 h-6 mr-2 text-blue-500" /> Payment Settings
+                    </h3>
+                    <div className="space-y-4">
+                        <div>
+                            <label htmlFor="paypal-email" className="block text-sm font-medium text-neutral-600 dark:text-neutral-300 mb-1">PayPal Email for Quick Checkout</label>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="email"
+                                    id="paypal-email"
+                                    value={currentPaypalEmailInput}
+                                    onChange={(e) => setCurrentPaypalEmailInput(e.target.value)}
+                                    placeholder="your.paypal.email@example.com"
+                                    className="flex-grow p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none text-sm"
+                                />
+                                <button onClick={handleSavePayPalEmailLocal} className="px-4 py-2 text-sm text-white bg-primary hover:bg-primary-dark rounded-md">Save</button>
+                            </div>
+                        </div>
+                        <div>
+                            <button onClick={() => addNotification("Manage Stripe Cards: Feature coming soon!", "info")} className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-neutral-darker dark:text-secondary-light bg-secondary dark:bg-neutral-darkest hover:bg-secondary-dark dark:hover:bg-neutral-dark rounded-md transition-colors">
+                                Manage Payment Cards (Stripe)
+                            </button>
+                             <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">Full card management via Stripe integration coming soon.</p>
+                        </div>
+                         <div>
+                            <button onClick={() => addNotification("View Billing History: Feature coming soon!", "info")} className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-neutral-darker dark:text-secondary-light bg-secondary dark:bg-neutral-darkest hover:bg-secondary-dark dark:hover:bg-neutral-dark rounded-md transition-colors flex items-center">
+                               <BillingIcon className="w-5 h-5 mr-2"/> View Billing History
+                            </button>
+                             <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">Access your invoices and payment history (coming soon).</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
         );
       case 'devices':
         return (
@@ -233,7 +330,6 @@ const AccountSettingsModal: React.FC<LocalAccountSettingsModalProps> = ({
                   )}
                 </button>
               ))}
-              {/* Custom Upload Thumbnail */}
               {customBackgroundPreviewUrl && (
                  <button 
                   onClick={() => setSelectedBackgroundId('custom_upload')}
@@ -291,13 +387,13 @@ const AccountSettingsModal: React.FC<LocalAccountSettingsModalProps> = ({
             <p className="text-neutral-600 dark:text-neutral-400">Avatar customization options will be available here soon.</p>
           </section>
         );
-      case 'payment':
+      case 'payment': // This case is now part of 'credits' but kept if direct navigation is ever desired
         return (
           <section>
             <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light mb-3">
               Payment Information
             </h3>
-            <p className="text-neutral-600 dark:text-neutral-400">Manage your subscription and payment methods here in the future.</p>
+            <p className="text-neutral-600 dark:text-neutral-400">Manage your subscription and payment methods here in the future. (This section is currently combined with Credits)</p>
           </section>
         );
       default:
@@ -331,7 +427,6 @@ const AccountSettingsModal: React.FC<LocalAccountSettingsModalProps> = ({
         </div>
 
         <div className="flex flex-col md:flex-row flex-grow overflow-hidden">
-          {/* Navigation Menu: Tabs on mobile, Sidebar on desktop */}
           <nav className="flex-shrink-0 md:w-48 lg:w-56 md:border-r border-secondary dark:border-neutral-darkest p-2 sm:p-3 md:p-4 md:space-y-1 overflow-x-auto md:overflow-y-auto whitespace-nowrap md:whitespace-normal">
             <div className="flex flex-row md:flex-col space-x-1 md:space-x-0 md:space-y-1">
               {ACCOUNT_MENU_ITEMS.map(item => (
@@ -344,7 +439,7 @@ const AccountSettingsModal: React.FC<LocalAccountSettingsModalProps> = ({
                                   ? 'bg-primary text-white dark:bg-primary-light dark:text-neutral-darker font-medium' 
                                   : 'text-neutral-600 dark:text-neutral-300 hover:bg-secondary/70 dark:hover:bg-neutral-dark/70'}
                               ${item.status === 'coming_soon' ? 'opacity-50 cursor-not-allowed' : ''}
-                              md:mb-1`} // mb-1 for mobile horizontal spacing
+                              md:mb-1`}
                   aria-current={activeTab === item.id ? 'page' : undefined}
                 >
                   {getIconForTab(item.id)}
@@ -357,7 +452,6 @@ const AccountSettingsModal: React.FC<LocalAccountSettingsModalProps> = ({
             </div>
           </nav>
 
-          {/* Content Area */}
           <main className="flex-grow p-3 sm:p-4 md:p-6 overflow-y-auto">
             {renderTabContent()}
           </main>
