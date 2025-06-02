@@ -246,7 +246,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>('settings');
 
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const chatContainerRef = useRef<HTMLDivElement>(null); // For scroll button
+  const chatContainerRef = useRef<HTMLDivElement>(null); 
   const [showScrollToBottomButton, setShowScrollToBottomButton] = useState(false);
 
   const isImagenModelSelected = selectedModel === Model.IMAGEN3;
@@ -433,20 +433,26 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     }
   }, [personas, addNotification]);
 
-  // Scroll to bottom when new messages arrive, or show button if user scrolled up
+  // Scroll to bottom for new messages OR show "scroll to bottom" button
   useEffect(() => {
     const chatDiv = chatContainerRef.current;
-    if (chatDiv && !isSearchActive && !isRealTimeTranslationMode) {
-      const isNearBottom = chatDiv.scrollHeight - chatDiv.clientHeight <= chatDiv.scrollTop + 30;
+    if (chatDiv && !isSearchActive && !isRealTimeTranslationMode && messages.length > 0) {
+        const lastMessage = messages[messages.length - 1];
+        const isUserMessage = lastMessage.sender === 'user';
+        
+        // Heuristic: if the scrollbar is not significantly far from bottom, auto-scroll.
+        // This helps if AI message makes content taller but user was near bottom.
+        const nearBottomThreshold = chatDiv.clientHeight * 0.3; // e.g., if within 30% of viewport from bottom
+        const isNearBottom = (chatDiv.scrollHeight - chatDiv.scrollTop - chatDiv.clientHeight) < nearBottomThreshold;
 
-      if (isNearBottom && messages.length > 0) {
-        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        if (showScrollToBottomButton) setShowScrollToBottomButton(false);
-      } else if (messages.length > 0) {
-        if (!showScrollToBottomButton) setShowScrollToBottomButton(true);
-      }
+        if (isUserMessage || isNearBottom) {
+            chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            // The scroll event from scrollIntoView will trigger handleScroll, which typically hides the button.
+        }
+        // If user is scrolled up significantly, DO NOTHING to scroll.
+        // `handleScroll` will ensure the button is visible if they are not at the bottom.
     }
-  }, [messages, isSearchActive, isRealTimeTranslationMode, showScrollToBottomButton]);
+  }, [messages, isSearchActive, isRealTimeTranslationMode]);
   
   // Effect for model selection changes, including GPT-4.1 access modal
   useEffect(() => {
@@ -1707,16 +1713,16 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   const handleScroll = useCallback(() => {
     if (chatContainerRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
-      // Show button if scrolled up more than 100px (approx 1-2 messages) from the bottom
-      // And there is enough content to actually scroll
-      if (scrollHeight > clientHeight && scrollHeight - scrollTop - clientHeight > 100) {
-        if (!showScrollToBottomButton) { // Performance: only set state if it's changing
-          setShowScrollToBottomButton(true);
-        }
+      const atBottomThreshold = 1; // px, effectively any scroll makes it "not at bottom"
+      const isAtBottom = scrollHeight - scrollTop <= clientHeight + atBottomThreshold;
+  
+      if (isAtBottom) {
+        if (showScrollToBottomButton) setShowScrollToBottomButton(false);
+      } else {
+        if (!showScrollToBottomButton) setShowScrollToBottomButton(true);
       }
-      // DO NOT hide it here if user scrolls down manually, only on click or auto-scroll by new message
     }
-  }, [showScrollToBottomButton]); // Added showScrollToBottomButton
+  }, [showScrollToBottomButton]);
 
   useEffect(() => {
     const chatDiv = chatContainerRef.current;
@@ -1882,7 +1888,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         )}
 
       <div className="flex-1 flex flex-col p-2 sm:p-4 overflow-hidden">
-        <div className={`flex items-center justify-between sticky top-0 z-10 bg-secondary-light dark:bg-neutral-dark pb-2 sm:pb-4 mb-2 sm:mb-0`}> {/* Added sticky, z-index, bg, and adjusted margin -> padding */}
+        <div className={`flex items-center justify-between sticky top-0 z-30 bg-secondary-light dark:bg-neutral-dark pb-2 sm:pb-4 mb-2 sm:mb-0`}> {/* Added sticky, z-index, bg, and adjusted margin -> padding */}
             <div className="flex items-center">
                 <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 mr-2 rounded-md text-neutral-darker dark:text-secondary-light hover:bg-secondary dark:hover:bg-neutral-darkest" aria-label="Open sidebar">
                     <Bars3Icon className="w-6 h-6" />
@@ -1988,7 +1994,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                 <button
                     onClick={scrollToBottomUiButton}
                     className={`
-                        absolute bottom-4 right-4 z-20 p-2.5 
+                        fixed bottom-20 right-6 sm:bottom-24 sm:right-10 z-20 p-2.5 
                         bg-primary dark:bg-primary-light text-white 
                         rounded-full shadow-lg 
                         hover:bg-primary-dark dark:hover:bg-primary 
