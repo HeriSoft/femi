@@ -16,10 +16,10 @@
 *   Mini entertainment games
 *   Voice translation in real-time
 *   Change Theme, Avatar
-*   Optimize UI chat like Telegram
-*   AI agent with Voice ( New Updated )
-*   Online multiple chat with friends ( coming soon )
-*   Studio Video generator VEO-3 ( coming soon )
+*   Optimize UX/UI design for good experience on Windows / Mobile
+*   AI agent with Voice chat by Elevenlabs
+*   Payment & Credit system
+*   Online multiple chat with friends **( coming soon )**
 
 ## 🛠️ Tech Stack
 
