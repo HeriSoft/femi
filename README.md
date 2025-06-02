@@ -18,6 +18,7 @@
 *   Change Theme, Avatar
 *   Optimize UX/UI design for good experience on Windows / Mobile
 *   AI agent with Voice chat by Elevenlabs
+*   AI agent sets a plan for an individual plan, work on request, advice ... etc
 *   Payment & Credit system
 *   Online multiple chat with friends **( coming soon )**
 *   Login with Google / Connect to MySQL user database **( coming soon )**
