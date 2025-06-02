@@ -1,0 +1,5 @@
+npm install @paypal/checkout-server-sdk
+npm install stripe
+npm install vietqr
+
+#move app.js và server.js ra ./src
