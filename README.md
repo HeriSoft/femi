@@ -20,7 +20,7 @@
 *   AI agent with Voice chat by Elevenlabs
 *   Payment & Credit system
 *   Online multiple chat with friends **( coming soon )**
-*   Login with Google / kết nối với cơ sở dữ liệu người dùng MySQL **( coming soon )**
+*   Login with Google / Connect to MySQL user database **( coming soon )**
 
 ## 🛠️ Tech Stack
 
