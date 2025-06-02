@@ -477,7 +477,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           )}
           
           {finalDisplayText && finalDisplayText.trim().length > 0 && (
-            <div className="text-sm whitespace-pre-wrap break-words" style={{ color: bubbleTextColor }}>
+            <div className="text-sm whitespace-pre-wrap break-words overflow-x-hidden" style={{ color: bubbleTextColor }}>
               <EnhancedMessageContent text={finalDisplayText} searchQuery={searchQuery} />
             </div>
           )}

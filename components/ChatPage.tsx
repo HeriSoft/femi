@@ -433,10 +433,18 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     }
   }, [personas, addNotification]);
 
-
+  // Scroll to bottom when new messages arrive, or show button if user scrolled up
   useEffect(() => {
-    if (!isSearchActive && !isRealTimeTranslationMode && !showScrollToBottomButton) { 
+    const chatDiv = chatContainerRef.current;
+    if (chatDiv && !isSearchActive && !isRealTimeTranslationMode) {
+      const isNearBottom = chatDiv.scrollHeight - chatDiv.clientHeight <= chatDiv.scrollTop + 30;
+
+      if (isNearBottom && messages.length > 0) {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (showScrollToBottomButton) setShowScrollToBottomButton(false);
+      } else if (messages.length > 0) {
+        if (!showScrollToBottomButton) setShowScrollToBottomButton(true);
+      }
     }
   }, [messages, isSearchActive, isRealTimeTranslationMode, showScrollToBottomButton]);
   
@@ -1699,10 +1707,16 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   const handleScroll = useCallback(() => {
     if (chatContainerRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
-      // Show button if scrolled up more than 40px from the bottom
-      setShowScrollToBottomButton(scrollHeight - scrollTop - clientHeight > 40);
+      // Show button if scrolled up more than 100px (approx 1-2 messages) from the bottom
+      // And there is enough content to actually scroll
+      if (scrollHeight > clientHeight && scrollHeight - scrollTop - clientHeight > 100) {
+        if (!showScrollToBottomButton) { // Performance: only set state if it's changing
+          setShowScrollToBottomButton(true);
+        }
+      }
+      // DO NOT hide it here if user scrolls down manually, only on click or auto-scroll by new message
     }
-  }, []);
+  }, [showScrollToBottomButton]); // Added showScrollToBottomButton
 
   useEffect(() => {
     const chatDiv = chatContainerRef.current;
@@ -1868,7 +1882,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         )}
 
       <div className="flex-1 flex flex-col p-2 sm:p-4 overflow-hidden">
-        <div className="flex items-center justify-between mb-2 sm:mb-4">
+        <div className={`flex items-center justify-between sticky top-0 z-10 bg-secondary-light dark:bg-neutral-dark pb-2 sm:pb-4 mb-2 sm:mb-0`}> {/* Added sticky, z-index, bg, and adjusted margin -> padding */}
             <div className="flex items-center">
                 <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 mr-2 rounded-md text-neutral-darker dark:text-secondary-light hover:bg-secondary dark:hover:bg-neutral-darkest" aria-label="Open sidebar">
                     <Bars3Icon className="w-6 h-6" />
