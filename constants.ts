@@ -1,5 +1,5 @@
 
-import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank, AiAgentSettings, CreditPackage } from './types.ts'; // Update to .ts
+import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank, AiAgentSettings, CreditPackage, PrivateModeSettings } from './types.ts'; // Update to .ts
 
 export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
   temperature: 0.7,
@@ -48,6 +48,13 @@ Present your findings and the plan in a clear, structured format (e.g., using ma
 Your goal is to act as an autonomous assistant that takes a complex request, potentially including embedded file context for text/images or filename context for other types, and returns a complete, actionable result. Be thorough and proactive.`,
 };
 
+export const DEFAULT_PRIVATE_MODE_SETTINGS: PrivateModeSettings & Pick<ModelSettings, 'temperature' | 'topK' | 'topP' | 'systemInstruction'> = {
+  systemInstruction: 'Local data storage mode. No AI interaction.',
+  temperature: 0, // Not applicable
+  topK: 0, // Not applicable
+  topP: 0, // Not applicable
+};
+
 
 const GENERIC_FILE_HANDLING_INSTRUCTION = `
 FILE HANDLING:
@@ -82,6 +89,7 @@ export const ALL_MODEL_DEFAULT_SETTINGS: AllModelSettings = {
     systemInstruction: 'Translate the given text accurately.', // Placeholder system instruction
   },
   [Model.AI_AGENT]: { ...DEFAULT_AI_AGENT_SETTINGS },
+  [Model.PRIVATE]: { ...DEFAULT_PRIVATE_MODE_SETTINGS },
 };
  
 export const LOCAL_STORAGE_SETTINGS_KEY = 'femiAiChatSettings';
@@ -93,6 +101,7 @@ export const LOCAL_STORAGE_DEVICE_LOGS_KEY = 'femiAiDeviceLogs';
 export const MAX_DEVICE_LOGS = 5;
 export const LOCAL_STORAGE_CHAT_BACKGROUND_KEY = 'femiAiChatBackgroundUrl';
 export const MAX_SAVED_CHAT_SESSIONS = 10; // Max number of chat sessions to store
+export const OPENAI_TTS_MAX_INPUT_LENGTH = 20000; // Max character limit for OpenAI TTS service
 
 
 // Language Learning Constants
