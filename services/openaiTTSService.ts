@@ -10,20 +10,19 @@ export interface ProxiedOpenAITtsParams {
   responseFormat?: 'mp3' | 'opus' | 'aac' | 'flac'; // Default is mp3
 }
 
-export async function generateOpenAITTS(
-  params: ProxiedOpenAITtsParams // Updated params type
+const MAX_TTS_CHUNK_LENGTH = 4000; // OpenAI's limit is 4096, use a slightly smaller value for safety.
+const MAX_TOTAL_LENGTH = 20000; // User requested limit
+
+async function fetchAudioChunk(
+  params: Omit<ProxiedOpenAITtsParams, 'textInput'> & { textInputChunk: string }
 ): Promise<{ audioBlob?: Blob; error?: string }> {
   const {
     modelIdentifier,
-    textInput,
+    textInputChunk,
     voice,
     speed,
     responseFormat = 'mp3',
   } = params;
-
-  if (!textInput.trim()) {
-    return { error: "Text input cannot be empty for TTS." };
-  }
 
   try {
     const response = await fetch('/api/openai/tts/generate', {
@@ -33,7 +32,7 @@ export async function generateOpenAITTS(
       },
       body: JSON.stringify({
         modelIdentifier,
-        textInput,
+        textInput: textInputChunk,
         voice,
         speed,
         responseFormat,
@@ -43,31 +42,89 @@ export async function generateOpenAITTS(
     if (!response.ok) {
       let errorDetail = `Error: ${response.status} ${response.statusText}`;
       try {
-        // Try to parse error from proxy, which should forward OpenAI's error structure
         const errorData = await response.json();
-        errorDetail = errorData.error || errorDetail;
+        errorDetail = errorData.error?.message || errorData.error || errorDetail; // Prefer OpenAI's error message
       } catch (e) {
         // Failed to parse JSON error, use status text
       }
-      return { error: `OpenAI TTS Proxy Error: ${errorDetail}` };
+      return { error: `OpenAI TTS Proxy Error for chunk: ${errorDetail}` };
     }
 
     const audioBlob = await response.blob();
-     // Check if the blob is actually JSON, indicating an error was returned with a 200 OK by mistake
     if (audioBlob.type.startsWith('application/json')) {
-        try {
-            const errorText = await audioBlob.text();
-            const errorData = JSON.parse(errorText);
-            return { error: `OpenAI TTS API Error (via proxy, unexpected JSON): ${errorData.error?.message || errorText}` };
-        } catch (e) {
-            return { error: `OpenAI TTS API Error (via proxy): Received JSON error, but failed to parse it.` };
-        }
+      try {
+        const errorText = await audioBlob.text();
+        const errorData = JSON.parse(errorText);
+        return { error: `OpenAI TTS API Error (via proxy, unexpected JSON): ${errorData.error?.message || errorText}` };
+      } catch (e) {
+        return { error: `OpenAI TTS API Error (via proxy): Received JSON error, but failed to parse it.` };
+      }
     }
-
     return { audioBlob };
-
   } catch (error: any) {
-    console.error('OpenAI TTS Proxy Service Fetch Error:', error);
-    return { error: `Fetch error for OpenAI TTS via proxy: ${error.message || 'Unknown fetch error'}` };
+    console.error('OpenAI TTS Proxy Service Fetch Error for chunk:', error);
+    return { error: `Fetch error for OpenAI TTS chunk via proxy: ${error.message || 'Unknown fetch error'}` };
   }
+}
+
+export async function generateOpenAITTS(
+  params: ProxiedOpenAITtsParams
+): Promise<{ audioBlob?: Blob; error?: string }> {
+  const { textInput, ...commonParams } = params;
+
+  if (!textInput.trim()) {
+    return { error: "Text input cannot be empty for TTS." };
+  }
+
+  if (textInput.length > MAX_TOTAL_LENGTH) {
+    return { error: `Text input exceeds maximum allowed length of ${MAX_TOTAL_LENGTH} characters.` };
+  }
+
+  if (textInput.length <= MAX_TTS_CHUNK_LENGTH) {
+    // If text is short enough, process as a single chunk
+    return fetchAudioChunk({ ...commonParams, textInputChunk: textInput });
+  }
+
+  // Split text into chunks
+  const chunks: string[] = [];
+  let currentPosition = 0;
+  while (currentPosition < textInput.length) {
+    let endPosition = currentPosition + MAX_TTS_CHUNK_LENGTH;
+    if (endPosition < textInput.length) {
+      // Try to find a sentence break near the limit
+      let sentenceBreak = textInput.lastIndexOf('.', endPosition);
+      if (sentenceBreak < currentPosition) sentenceBreak = textInput.lastIndexOf('?', endPosition);
+      if (sentenceBreak < currentPosition) sentenceBreak = textInput.lastIndexOf('!', endPosition);
+      if (sentenceBreak < currentPosition) sentenceBreak = textInput.lastIndexOf('\n', endPosition);
+      
+      // If a good break is found within reasonable distance, use it
+      if (sentenceBreak > currentPosition && sentenceBreak < endPosition) {
+        endPosition = sentenceBreak + 1;
+      }
+    }
+    chunks.push(textInput.substring(currentPosition, Math.min(endPosition, textInput.length)));
+    currentPosition = Math.min(endPosition, textInput.length);
+  }
+
+  const audioBlobs: Blob[] = [];
+  for (const chunk of chunks) {
+    if (!chunk.trim()) continue; // Skip empty chunks if any
+
+    const result = await fetchAudioChunk({ ...commonParams, textInputChunk: chunk });
+    if (result.error || !result.audioBlob) {
+      return { error: result.error || "Failed to generate audio for a part of the text." };
+    }
+    audioBlobs.push(result.audioBlob);
+  }
+
+  if (audioBlobs.length === 0) {
+    return { error: "No audio data generated from chunks." };
+  }
+
+  // Concatenate blobs
+  // Ensure all blobs have a type, default to the first blob's type or 'audio/mpeg'
+  const mimeType = audioBlobs[0]?.type || (params.responseFormat === 'mp3' ? 'audio/mpeg' : `audio/${params.responseFormat || 'mpeg'}`);
+  const combinedBlob = new Blob(audioBlobs, { type: mimeType });
+
+  return { audioBlob: combinedBlob };
 }
