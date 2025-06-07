@@ -1,6 +1,3 @@
-
-
-
 import { Chat } from '@google/genai'; // Updated import
 import React from 'react'; // Added for React.DetailedHTMLProps
 
@@ -15,6 +12,7 @@ export enum Model {
   OPENAI_TTS = 'OpenAI (TTS)', // New TTS Model
   REAL_TIME_TRANSLATION = 'Real-Time Translation (Gemini)', // New Real-Time Translation Model
   AI_AGENT = 'AI Agent (gemini-2.5-flash-preview-04-17)', // Renamed from AI_TASK_ORCHESTRATOR and updated model ID
+  PRIVATE = 'Private (Local Data Storage)', // New Private Mode
 }
 
 export interface ChatMessage {
@@ -28,6 +26,7 @@ export interface ChatMessage {
   imageMimeType?: 'image/jpeg' | 'image/png'; // For AI generated images
   originalPrompt?: string; // For AI generated images, to store the original user prompt
   fileName?: string; // For user messages with files
+  fileContent?: string; // For storing text file content
   groundingSources?: GroundingSource[];
   isImageQuery?: boolean; // To flag user messages that are image generation prompts
   isRegenerating?: boolean; // Flag for AI messages that are being regenerated
@@ -37,6 +36,11 @@ export interface ChatMessage {
   // Fields for AI Agent (previously Task Orchestrator)
   isTaskGoal?: boolean; // Flags if this user message defines a main task goal for the AI Agent
   isTaskPlan?: boolean; // Flags if this AI message contains a task plan/response from the AI Agent
+  // Fields for Private Mode
+  videoFile?: File; // Transient: actual File object for current session for video
+  videoFileName?: string; // Persisted: name of the video
+  videoMimeType?: string; // Persisted: mime type of the video
+  isNote?: boolean; // For private mode text-only entries
 }
 
 export interface GroundingSource {
@@ -72,9 +76,14 @@ export interface RealTimeTranslationSettings {
 // Settings for AI Agent (previously Task Orchestrator)
 export interface AiAgentSettings extends ModelSettings {}
 
+// Placeholder for Private mode settings, likely none needed.
+export interface PrivateModeSettings extends Pick<ModelSettings, 'systemInstruction'> { // Only systemInstruction is relevant from ModelSettings for display
+    // Private mode doesn't use temperature, topK, topP for generation
+}
+
 
 export type AllModelSettings = {
-  [key in Model]?: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings>;
+  [key in Model]?: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings>;
 };
 
 export interface ThemeContextType {
@@ -110,6 +119,7 @@ export interface ApiKeyStatus {
   isTextToSpeech?: boolean; // Flag for TTS models
   isRealTimeTranslation?: boolean; // Flag for real-time translation model
   isAiAgent?: boolean; // Flag for AI Agent model (renamed from isTaskOrchestrator)
+  isPrivateMode?: boolean; // Flag for Private (Local Data Storage) mode
 }
 
 export interface Persona {
@@ -121,12 +131,13 @@ export interface Persona {
 export interface SettingsPanelProps {
   selectedModel: Model;
   onModelChange: (model: Model) => void;
-  modelSettings: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings>; 
-  onModelSettingsChange: (settings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings>) => void;
+  modelSettings: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings>; 
+  onModelSettingsChange: (settings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings>) => void;
   onImageUpload: (file: File | null) => void;
   imagePreview: string | null; // For user uploaded image preview
-  onFileUpload: (file: File | null) => void;
-  uploadedTextFileName: string | null;
+  onFileUpload: (file: File | null) => void; // Handles general files including text and video
+  uploadedTextFileName: string | null; // For text files or generic files
+  uploadedVideoFileName?: string | null; // Specific for video files
   isWebSearchEnabled: boolean;
   onWebSearchToggle: (enabled: boolean) => void;
   disabled?: boolean;
@@ -171,7 +182,7 @@ export interface ChatSession {
   timestamp: number;
   model: Model; // The primary model used for this session
   messages: ChatMessage[];
-  modelSettingsSnapshot: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings>; 
+  modelSettingsSnapshot: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings>; 
   isPinned?: boolean; // For pinning important chats
   activePersonaIdSnapshot?: string | null; // Snapshot of active persona
 }
@@ -186,8 +197,9 @@ export interface HistoryPanelProps {
   onStartNewChat: () => void;
   isLoading: boolean; // To disable actions while chat is processing
   onTogglePinSession: (sessionId: string) => void;
-  onSaveChatToDevice: () => void; // New: Saves current chat to a device file
-  onLoadChatFromDevice: (file: File) => Promise<void>; // New: Loads a chat from a device file
+  onSaveChatToDevice: () => void; 
+  onLoadChatFromDevice: (file: File) => Promise<void>; 
+  onExportChatWithMediaData: () => void; // New: Exports chat with all media to JSON
 }
 
 // Notification System Types
@@ -453,6 +465,15 @@ export interface HandwritingCanvasProps {
   penThickness?: number;
   canvasRef: React.RefObject<HTMLCanvasElement>; // Pass ref from parent to allow parent to access canvas data
   disabled?: boolean;
+}
+
+// Added VideoModalProps
+export interface VideoModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  videoSrc: string | null;
+  title?: string;
+  mimeType?: string;
 }
 
 // Removed global declaration for 'elevenlabs-convai' from here
