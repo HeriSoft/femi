@@ -1,5 +1,6 @@
 
 import { OpenAITtsSettings, OpenAiTtsVoice } from '../types.ts';
+import { OPENAI_TTS_MAX_INPUT_LENGTH } from '../constants.ts'; // Import the constant
 
 // OpenAITtsParams will no longer include apiKey
 export interface ProxiedOpenAITtsParams {
@@ -11,7 +12,7 @@ export interface ProxiedOpenAITtsParams {
 }
 
 const MAX_TTS_CHUNK_LENGTH = 4000; // OpenAI's limit is 4096, use a slightly smaller value for safety.
-const MAX_TOTAL_LENGTH = 20000; // User requested limit
+const MAX_TOTAL_LENGTH = OPENAI_TTS_MAX_INPUT_LENGTH; // Use imported constant
 
 async function fetchAudioChunk(
   params: Omit<ProxiedOpenAITtsParams, 'textInput'> & { textInputChunk: string }
