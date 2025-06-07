@@ -1,9 +1,8 @@
-
 // Fix: Remove triple-slash directive for 'vite/client' as its types are not found and import.meta.env is manually typed.
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo, useContext } from 'react';
 // Update to .ts/.tsx extensions
-import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType, UserGlobalProfile, AiAgentSettings } from '../types.ts';
+import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType, UserGlobalProfile, AiAgentSettings, PrivateModeSettings } from '../types.ts';
 import type { Content } from '@google/genai'; // For constructing Gemini history
 import { ALL_MODEL_DEFAULT_SETTINGS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY, TRANSLATION_TARGET_LANGUAGES, MAX_SAVED_CHAT_SESSIONS } from '../constants.ts';
 import MessageBubble from './MessageBubble.tsx';
@@ -213,7 +212,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     const activePersona = activePersonaId ? personas.find(p => p.id === activePersonaId) : null;
 
     // For non-special models, construct system instruction with About Me and Persona
-    if (selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS && selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.AI_AGENT) {
+    if (selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS && selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.AI_AGENT && selectedModel !== Model.PRIVATE) {
         let finalSystemInstruction = baseSettings.systemInstruction;
 
         if (activePersona) {
@@ -228,7 +227,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         // If neither persona nor aboutMeText, finalSystemInstruction remains baseSettings.systemInstruction
         return { ...baseSettings, systemInstruction: finalSystemInstruction };
     }
-    // For special models (Imagen, TTS, RTTM, AiAgent), just return base settings for that model
+    // For special models (Imagen, TTS, RTTM, AiAgent, Private), just return base settings for that model
     return baseSettings;
   }, [allSettings, selectedModel, activePersonaId, personas, userProfile]);
 
@@ -253,6 +252,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   const isTextToSpeechModelSelected = selectedModel === Model.OPENAI_TTS;
   const isRealTimeTranslationMode = selectedModel === Model.REAL_TIME_TRANSLATION;
   const isAiAgentMode = selectedModel === Model.AI_AGENT;
+  const isPrivateModeSelected = selectedModel === Model.PRIVATE;
 
   const pruneChatSessions = useCallback((sessions: ChatSession[], maxSessions: number): { prunedSessions: ChatSession[], numPruned: number } => {
     if (sessions.length <= maxSessions) {
@@ -396,6 +396,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         isGeminiPlatform: true, 
         isAiAgent: true,
       },
+      [Model.PRIVATE]: {
+        isSet: true,
+        envVarName: 'N/A (Local)',
+        modelName: 'Private (Local Data Storage)',
+        isMock: true, 
+        isGeminiPlatform: false,
+        isPrivateMode: true,
+      },
     };
   }, []);
 
@@ -458,16 +466,16 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   useEffect(() => {
     const currentModelStatus = apiKeyStatuses[selectedModel];
     // Disable web search if current model is not Gemini platform chat or if AI Agent (which handles its own search)
-    if ((!currentModelStatus?.isGeminiPlatform || currentModelStatus?.isImageGeneration || currentModelStatus?.isTextToSpeech || currentModelStatus?.isRealTimeTranslation || currentModelStatus?.isAiAgent) && isWebSearchEnabled) {
+    if ((!currentModelStatus?.isGeminiPlatform || currentModelStatus?.isImageGeneration || currentModelStatus?.isTextToSpeech || currentModelStatus?.isRealTimeTranslation || currentModelStatus?.isAiAgent || currentModelStatus?.isPrivateMode) && isWebSearchEnabled) {
         setIsWebSearchEnabled(false);
     }
     
-    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode ) { // AI Agent can have attachments
+    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected ) { // AI Agent can have attachments
         setUploadedImage(null);
         setImagePreview(null); 
         setUploadedTextFileContent(null);
         setUploadedTextFileName(null);
-        if (!isAiAgentMode) setActivePersonaId(null); // AI Agent doesn't use personas, but other special models do clear it
+        if (!isAiAgentMode && !isPrivateModeSelected) setActivePersonaId(null); // AI Agent & Private Mode don't use personas, but other special models do clear it
         if (isListening && !isRealTimeTranslationMode) { // Stop chat STT if switching to special mode
             recognitionRef.current?.stop();
         }
@@ -687,7 +695,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   };
 
 
-  const handleModelSettingsChange = useCallback((newSettings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings>) => {
+  const handleModelSettingsChange = useCallback((newSettings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings>) => {
     setAllSettings(prev => {
       const baseModelSettings = prev[selectedModel] || ALL_MODEL_DEFAULT_SETTINGS[selectedModel]!;
       let processedNewSettings = { ...newSettings };
@@ -700,7 +708,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       }
       
       const activeP = activePersonaId ? personas.find(p => p.id === activePersonaId) : null;
-      if (activeP && 'systemInstruction' in processedNewSettings && selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS && selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.AI_AGENT) {
+      if (activeP && 'systemInstruction' in processedNewSettings && selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS && selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.AI_AGENT && selectedModel !== Model.PRIVATE) {
           delete processedNewSettings.systemInstruction;
       }
 
@@ -741,8 +749,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   };
 
   const handleSaveCurrentChat = useCallback(() => {
-    if (isRealTimeTranslationMode || isAiAgentMode) {
-        addNotification(`Cannot save chat in ${isRealTimeTranslationMode ? 'Real-Time Translation' : 'AI Agent'} mode.`, "info");
+    if (isRealTimeTranslationMode || isAiAgentMode || isPrivateModeSelected) {
+        addNotification(`Cannot save chat in ${isRealTimeTranslationMode ? 'Real-Time Translation' : (isAiAgentMode ? 'AI Agent' : 'Private')} mode.`, "info");
         return;
     }
     if (messages.length === 0) {
@@ -759,6 +767,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             sessionName = `Image: ${firstUserMessage.text.substring(0, 30)}${firstUserMessage.text.length > 30 ? '...' : ''}`;
         } else if (firstUserMessage.isTaskGoal && firstUserMessage.text) { 
             sessionName = `Agent Goal: ${firstUserMessage.text.substring(0, 30)}${firstUserMessage.text.length > 30 ? '...' : ''}`;
+        } else if (firstUserMessage.isNote && firstUserMessage.text) {
+            sessionName = `Note: ${firstUserMessage.text.substring(0, 30)}${firstUserMessage.text.length > 30 ? '...' : ''}`;
         } else if (firstUserMessage.text) {
             sessionName = firstUserMessage.text.substring(0, 40) + (firstUserMessage.text.length > 40 ? '...' : '');
         } else if (firstUserMessage.imagePreview) {
@@ -818,13 +828,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         addNotification(`Chat "${sessionName}" saved to browser.`, "success");
     }
     clearSearch();
-  }, [messages, selectedModel, modelSettings, activeSessionId, savedSessions, activePersonaId, addNotification, currentChatName, isRealTimeTranslationMode, isAiAgentMode, pruneChatSessions]);
+  }, [messages, selectedModel, modelSettings, activeSessionId, savedSessions, activePersonaId, addNotification, currentChatName, isRealTimeTranslationMode, isAiAgentMode, isPrivateModeSelected, pruneChatSessions]);
 
   const handleLoadSession = useCallback((sessionId: string) => {
     const sessionToLoad = savedSessions.find(s => s.id === sessionId);
     if (sessionToLoad) {
-      if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT) {
-          addNotification(`Cannot load ${sessionToLoad.model === Model.REAL_TIME_TRANSLATION ? 'Real-Time Translation' : 'AI Agent'} sessions directly. Please start a new one if needed.`, "info");
+      if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT || sessionToLoad.model === Model.PRIVATE) {
+          addNotification(`Cannot load "${sessionToLoad.model}" sessions directly. Please start a new one if needed.`, "info");
           return;
       }
       setMessages([...sessionToLoad.messages]);
@@ -865,7 +875,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     setUploadedTextFileName(null);
     setIsWebSearchEnabled(false);
     
-    if (selectedModel !== Model.REAL_TIME_TRANSLATION && !(selectedModel === Model.GPT4O && !isGpt41Unlocked)) { // AI Agent settings reset normally
+    if (selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.PRIVATE && !(selectedModel === Model.GPT4O && !isGpt41Unlocked)) { // AI Agent & Private mode settings reset normally
         setAllSettings(prev => ({
             ...prev,
             [selectedModel]: { ...(ALL_MODEL_DEFAULT_SETTINGS[selectedModel] || ALL_MODEL_DEFAULT_SETTINGS[Model.GEMINI]!) }
@@ -877,7 +887,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         }));
     }
 
-    if (!isAiAgentMode) setActivePersonaId(null); // AI Agent doesn't use personas, so don't clear if it's the active model
+    if (!isAiAgentMode && !isPrivateModeSelected) setActivePersonaId(null); // AI Agent & Private Mode don't use personas, so don't clear if it's the active model
     setError(null);
     setIsSidebarOpen(false); 
     addNotification("Started new chat.", "info");
@@ -893,7 +903,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             setIsSpeakingLiveTranslation(false);
         }
     }
-  }, [selectedModel, addNotification, isRealTimeTranslationMode, isSpeakingLiveTranslation, isGpt41Unlocked, isAiAgentMode]);
+  }, [selectedModel, addNotification, isRealTimeTranslationMode, isSpeakingLiveTranslation, isGpt41Unlocked, isAiAgentMode, isPrivateModeSelected]);
 
   const handleDeleteSession = useCallback((sessionId: string) => {
     const sessionToDelete = savedSessions.find(s => s.id === sessionId);
@@ -953,8 +963,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   }, [addNotification, pruneChatSessions]);
 
   const handleSaveChatToDevice = useCallback(() => {
-    if (isRealTimeTranslationMode || isAiAgentMode) {
-      addNotification(`Cannot save chat to device in ${isRealTimeTranslationMode ? 'Real-Time Translation' : 'AI Agent'} mode.`, "info");
+    if (isRealTimeTranslationMode || isAiAgentMode || isPrivateModeSelected) {
+      addNotification(`Cannot save chat to device in ${isRealTimeTranslationMode ? 'Real-Time Translation' : (isAiAgentMode ? 'AI Agent' : 'Private')} mode.`, "info");
       return;
     }
     if (messages.length === 0) {
@@ -1005,7 +1015,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       console.error("Error saving chat to device:", e);
       addNotification("Failed to save chat to device.", "error", e.message);
     }
-  }, [messages, selectedModel, modelSettings, activeSessionId, currentChatName, activePersonaId, addNotification, isRealTimeTranslationMode, isAiAgentMode, savedSessions]);
+  }, [messages, selectedModel, modelSettings, activeSessionId, currentChatName, activePersonaId, addNotification, isRealTimeTranslationMode, isAiAgentMode, isPrivateModeSelected, savedSessions]);
 
 
   const handleLoadChatFromDevice = useCallback(async (file: File) => {
@@ -1028,8 +1038,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             if (!sessionToLoad.messages || !sessionToLoad.model || !sessionToLoad.modelSettingsSnapshot || !sessionToLoad.name || !sessionToLoad.timestamp) {
                 throw new Error("File is not a valid chat session format. Missing required fields.");
             }
-            if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT) {
-                addNotification(`Cannot load ${sessionToLoad.model === Model.REAL_TIME_TRANSLATION ? 'Real-Time Translation' : 'AI Agent'} sessions from file.`, "info");
+            if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT || sessionToLoad.model === Model.PRIVATE) {
+                addNotification(`Cannot load "${sessionToLoad.model}" sessions from file.`, "info");
                 return;
             }
 
@@ -1235,6 +1245,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         fileName: currentUploadedTextFileName || undefined,
         isImageQuery: isImagenModelSelected,
         isTaskGoal: isAiAgentMode, 
+        isNote: isPrivateModeSelected && (!currentImagePreviewDataUrl && !currentUploadedTextFileName),
+        model: isPrivateModeSelected ? Model.PRIVATE : undefined,
     };
 
     if (!isRegenerationOfAiMsgId) {
@@ -1249,6 +1261,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         if (isImagenModelSelected) aiPlaceholderText = 'Generating image(s)...';
         else if (isTextToSpeechModelSelected) aiPlaceholderText = 'Synthesizing audio...';
         else if (isAiAgentMode) aiPlaceholderText = 'AI Agent is processing your goal...';
+        else if (isPrivateModeSelected) aiPlaceholderText = 'Data logged locally. No AI response.';
         else aiPlaceholderText = 'Thinking...';
     }
 
@@ -1265,6 +1278,18 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         originalPrompt: userDisplayedText, 
     };
 
+    if (isPrivateModeSelected) { // Private mode doesn't generate an AI response, just logs user message
+        setMessages(prev => prev.map(msg => msg.id === userMessageId ? {...msg, model: Model.PRIVATE} : msg)); // Add model to user message
+        setIsLoading(false);
+        setInput('');
+        setUploadedImage(null);
+        setImagePreview(null);
+        setUploadedTextFileContent(null);
+        setUploadedTextFileName(null);
+        addNotification("Entry logged locally. AI features disabled in Private Mode.", "info");
+        return;
+    }
+
     if (isRegenerationOfAiMsgId) {
         setMessages(prev => prev.map(msg => msg.id === aiMessageId ? {...aiMessagePlaceholder, timestamp: msg.timestamp || aiMessageTimestamp } : msg));
     } else {
@@ -1272,7 +1297,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     }
     
     try {
-      const currentModelSpecificSettings = modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings;
+      const currentModelSpecificSettings = modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings;
       const currentModelStatus = apiKeyStatuses[selectedModel];
       const actualModelIdentifier = getActualModelIdentifier(selectedModel);
 
@@ -1301,7 +1326,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             throw new Error("TTS generation failed to return audio.");
         }
 
-      } else if (currentModelStatus?.isGeminiPlatform && !currentModelStatus.isMock && !isRealTimeTranslationMode) { 
+      } else if (currentModelStatus?.isGeminiPlatform && !currentModelStatus.isMock && !isRealTimeTranslationMode && !isPrivateModeSelected) { 
         if (isImagenModelSelected) { 
             const imagenSettings = currentModelSpecificSettings as ImagenSettings;
             const result = await generateImageWithImagen({
@@ -1477,7 +1502,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
           if (chunk.isFinished) break;
         }
       
-      } else if (currentModelStatus?.isMock && !isRealTimeTranslationMode && !isAiAgentMode) { 
+      } else if (currentModelStatus?.isMock && !isRealTimeTranslationMode && !isAiAgentMode && !isPrivateModeSelected) { 
         const mockParts: Part[] = [];
         if (textForApi.trim()) mockParts.push({ text: textForApi.trim() });
         if (currentUploadedTextFileName && !currentUploadedTextContent && !currentUploadedImageFile) {
@@ -1492,7 +1517,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
           currentText += chunk;
           setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? { ...msg, text: currentText, isRegenerating: false } : msg));
         }
-      } else if (!isRealTimeTranslationMode) { 
+      } else if (!isRealTimeTranslationMode && !isPrivateModeSelected) { 
           throw new Error(`API integration for ${selectedModel} is not implemented or API key/Vertex config is missing and it's not a mock model.`); 
       }
     } catch (e: any) {
@@ -1513,7 +1538,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     }
 
     setIsLoading(false);
-    if (!isRegenerationOfAiMsgId && !isRealTimeTranslationMode) { 
+    if (!isRegenerationOfAiMsgId && !isRealTimeTranslationMode && !isPrivateModeSelected) { 
         setInput(''); 
         setUploadedImage(null);
         setImagePreview(null); 
@@ -1541,8 +1566,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         addNotification("Please enter a goal or upload a file for the AI Agent.", "info");
         return;
     }
+     if (isPrivateModeSelected && !input.trim() && !uploadedImage && !uploadedTextFileName) {
+        setError("Please enter text, or upload an image/file to log in Private Mode.");
+        addNotification("Please enter text, or upload an image/file to log in Private Mode.", "info");
+        return;
+    }
     // General check for other models if input and attachments are empty
-    if (!isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode && !input.trim() && !uploadedImage && !uploadedTextFileName) {
+    if (!isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode && !isPrivateModeSelected && !input.trim() && !uploadedImage && !uploadedTextFileName) {
         return; // Do nothing if everything is empty for standard chat models
     }
 
@@ -1552,7 +1582,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   };
   
   const handleRegenerateResponse = async (aiMessageIdToRegenerate: string, promptedByMsgId: string) => {
-      if (isRealTimeTranslationMode || isAiAgentMode) return; 
+      if (isRealTimeTranslationMode || isAiAgentMode || isPrivateModeSelected) return; 
       const userMessageForRegen = messages.find(m => m.id === promptedByMsgId && m.sender === 'user');
       const aiMessageToRegen = messages.find(m => m.id === aiMessageIdToRegenerate && m.sender === 'ai');
 
@@ -1611,7 +1641,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
 
 
   const handleImageUpload = (file: File | null) => {
-    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode) return; 
+    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected) return; 
     setUploadedImage(file);
     setUploadedTextFileContent(null); 
     setUploadedTextFileName(null);
@@ -1624,7 +1654,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   };
 
   const handleFileUpload = (file: File | null) => {
-    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode) return; 
+    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode) return; // Private mode handles files differently via SettingsPanel
 
     setUploadedImage(null); 
     setImagePreview(null);
@@ -1649,6 +1679,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         // For AI Agent, it will be notified.
         if (isAiAgentMode) {
             addNotification(`File "${file.name}" content cannot be displayed/embedded. AI Agent will be notified of the filename.`, "info");
+        } else if (isPrivateModeSelected) {
+            addNotification(`File "${file.name}" logged. Content not displayed for this type.`, "info");
         } else {
             addNotification(`File "${file.name}" content cannot be displayed/embedded. This model might not process it.`, "info");
         }
@@ -1759,7 +1791,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                     setSelectedModel(model); 
                     clearSearch();
                 }} 
-                modelSettings={modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings} 
+                modelSettings={modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings} 
                 onModelSettingsChange={handleModelSettingsChange}
                 onImageUpload={handleImageUpload}
                 imagePreview={imagePreview}
@@ -1789,6 +1821,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                 onTogglePinSession={handleTogglePinSession}
                 onSaveChatToDevice={handleSaveChatToDevice} // New prop for saving to device
                 onLoadChatFromDevice={handleLoadChatFromDevice} // New prop for loading from device
+                onExportChatWithMediaData={() => {
+                    addNotification("Export Chat with Media Data feature is not yet implemented.", "info");
+                }}
             />
         )}
     </>
@@ -1806,6 +1841,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     if (isTextToSpeechModelSelected) return "Enter text to synthesize speech...";
     if (isRealTimeTranslationMode) return "Real-Time Translation Active. Use Microphone.";
     if (isAiAgentMode) return "Enter main goal for AI Agent, or upload file...";
+    if (isPrivateModeSelected) return "Enter text or upload image/file to log locally...";
     return "Type your message or upload an image/file...";
   }
 
@@ -1813,13 +1849,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     if (isImagenModelSelected) return "Generate Image";
     if (isTextToSpeechModelSelected) return "Synthesize Speech";
     if (isAiAgentMode) return "Set Goal";
+    if (isPrivateModeSelected) return "Log Entry";
     return "Send message";
   }
 
   const sendButtonIcon = () => {
     if (isImagenModelSelected) return <PromptIcon className="w-6 h-6" />;
     if (isTextToSpeechModelSelected) return <SpeakerWaveIcon className="w-6 h-6" />;
-    if (isAiAgentMode) return <PaperAirplaneIcon className="w-6 h-6" />; 
+    if (isAiAgentMode || isPrivateModeSelected) return <PaperAirplaneIcon className="w-6 h-6" />; 
     return <PaperAirplaneIcon className="w-6 h-6" />;
   }
 
@@ -1895,11 +1932,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                 </button>
                 <h2 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light truncate">
                     {isRealTimeTranslationMode ? <LanguageIcon className="w-5 h-5 inline-block mr-2 align-text-bottom"/> : <ChatBubbleLeftRightIcon className="w-5 h-5 inline-block mr-2 align-text-bottom"/>}
-                    {isRealTimeTranslationMode ? "Real-Time Translation" : (isAiAgentMode ? "AI Agent" : (currentChatName || "New Chat"))}
+                    {isRealTimeTranslationMode ? "Real-Time Translation" : (isAiAgentMode ? "AI Agent" : (isPrivateModeSelected ? "Private Mode" : (currentChatName || "New Chat")))}
                 </h2>
             </div>
-            {/* Search Bar - Hidden in Real-Time Translation Mode */}
-            {!isRealTimeTranslationMode && (
+            {/* Search Bar - Hidden in Real-Time Translation Mode & Private Mode */}
+            {!isRealTimeTranslationMode && !isPrivateModeSelected && (
               <div className="flex items-center space-x-1.5 ml-2">
                   <div className="relative">
                       <input
@@ -1956,7 +1993,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                     <p className="whitespace-pre-wrap text-sm text-neutral-700 dark:text-neutral-200">{liveTranslationDisplay || "Translation will appear here..."}</p>
                 </div>
             </div>
-        ) : ( /* Chat Messages or AI Agent UI */
+        ) : ( /* Chat Messages or AI Agent UI or Private Mode UI */
           <div 
             ref={chatContainerRef}
             className="flex-grow overflow-y-auto mb-4 pr-2 space-y-2 relative" 
@@ -1972,7 +2009,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                             message={msg}
                             showAvatar={showAvatar}
                             onImageClick={msg.sender === 'ai' && msg.imagePreviews && msg.imagePreviews.length > 0 ? handleOpenImageModal : undefined}
-                            onRegenerate={msg.sender === 'ai' && msg.promptedByMessageId && !msg.isRegenerating && !isAiAgentMode ? handleRegenerateResponse : undefined}
+                            onRegenerate={msg.sender === 'ai' && msg.promptedByMessageId && !msg.isRegenerating && !isAiAgentMode && !isPrivateModeSelected ? handleRegenerateResponse : undefined}
                             isLoading={isLoading}
                             onPlayAudio={msg.audioUrl ? () => handlePlayAudio(msg.audioUrl!, msg.id) : undefined}
                             isAudioPlaying={currentPlayingMessageId === msg.id}
@@ -1982,10 +2019,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                     </div>
                 );
             })}
-            {isLoading && messages.length > 0 && messages[messages.length-1]?.sender === 'user' && !messages[messages.length-1]?.isRegenerating && ( 
+            {isLoading && messages.length > 0 && messages[messages.length-1]?.sender === 'user' && !messages[messages.length-1]?.isRegenerating && !isPrivateModeSelected && ( 
               <MessageBubble key="loading" message={{id: 'loading', text: isImagenModelSelected ? 'Generating image(s)...' : (isTextToSpeechModelSelected ? 'Synthesizing audio...' : (isAiAgentMode ? 'AI Agent is processing your goal...' : 'Thinking...')), sender: 'ai', model: selectedModel, timestamp: Date.now(), promptedByMessageId: messages[messages.length-1].id }} showAvatar={true} />
             )}
-            {isLoading && messages.length === 0 && ( 
+            {isLoading && messages.length === 0 && !isPrivateModeSelected && ( 
               <MessageBubble key="loading-initial" message={{id: 'loading-initial', text: isImagenModelSelected ? 'Generating image(s)...' : (isTextToSpeechModelSelected ? 'Synthesizing audio...' : (isAiAgentMode ? 'AI Agent is processing your goal...' : 'Thinking...')), sender: 'ai', model: selectedModel, timestamp: Date.now(), promptedByMessageId: 'initial' }} showAvatar={true} />
             )}
             <div ref={chatEndRef} />
@@ -2031,13 +2068,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                         <button onClick={() => { handleFileUpload(null); }} className="text-red-500 hover:text-red-700 inline-flex items-center" aria-label="Remove file" >
                            <XMarkIcon className="w-4 h-4" />
                         </button>
-                        {!uploadedTextFileContent && uploadedTextFileName && <p className="text-xs italic">(Content not displayed for this file type)</p>}
+                        {!uploadedTextFileContent && uploadedTextFileName && !isPrivateModeSelected && <p className="text-xs italic">(Content not displayed for this file type)</p>}
+                        {!uploadedTextFileContent && uploadedTextFileName && isPrivateModeSelected && <p className="text-xs italic">(File logged. Content not displayed for this type in preview.)</p>}
                     </div>
                 )}
             </div>
         )}
 
-        {/* Input Area: Standard Chat Input OR Real-Time Translation Controls OR AI Agent Input */}
+        {/* Input Area: Standard Chat Input OR Real-Time Translation Controls OR AI Agent Input OR Private Mode Input */}
         <div className="flex items-end border-t border-secondary dark:border-neutral-darkest pt-2 sm:pt-4">
           {isRealTimeTranslationMode ? (
             <div className="w-full flex justify-center">
@@ -2058,7 +2096,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             </div>
           ) : (
             <>
-              {(!isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode) && ( 
+              {(!isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode && !isPrivateModeSelected) && ( 
                 <button
                   onClick={handleToggleListen}
                   disabled={isLoading || !isSpeechRecognitionSupported || isImagenModelSelected || isTextToSpeechModelSelected || isGpt41AccessModalOpen}
@@ -2098,7 +2136,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
               </div>
               <button
                 onClick={handleSendMessage}
-                disabled={isLoading || isListening || isGpt41AccessModalOpen || (isImagenModelSelected && !input.trim()) || ((!input.trim() && !uploadedImage && !uploadedTextFileName) && (isAiAgentMode ? (!uploadedImage && !uploadedTextFileName) : (!isImagenModelSelected && !isTextToSpeechModelSelected))) }
+                disabled={isLoading || isListening || isGpt41AccessModalOpen || 
+                    (isImagenModelSelected && !input.trim()) || 
+                    (isPrivateModeSelected && !input.trim() && !uploadedImage && !uploadedTextFileName) || 
+                    ((!input.trim() && !uploadedImage && !uploadedTextFileName) && 
+                        (isAiAgentMode ? (!uploadedImage && !uploadedTextFileName) : (!isImagenModelSelected && !isTextToSpeechModelSelected && !isPrivateModeSelected))) 
+                }
                 className="ml-2 p-3 bg-primary hover:bg-primary-dark dark:bg-primary-light dark:hover:bg-primary text-white rounded-lg disabled:opacity-50 transition-colors self-stretch flex items-center justify-center" 
                 aria-label={sendButtonLabel()} >
                 {sendButtonIcon()}
