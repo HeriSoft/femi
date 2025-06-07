@@ -1,10 +1,11 @@
+
 // Fix: Remove triple-slash directive for 'vite/client' as its types are not found and import.meta.env is manually typed.
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo, useContext } from 'react';
 // Update to .ts/.tsx extensions
 import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType, UserGlobalProfile, AiAgentSettings, PrivateModeSettings } from '../types.ts';
 import type { Content } from '@google/genai'; // For constructing Gemini history
-import { ALL_MODEL_DEFAULT_SETTINGS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY, TRANSLATION_TARGET_LANGUAGES, MAX_SAVED_CHAT_SESSIONS } from '../constants.ts';
+import { ALL_MODEL_DEFAULT_SETTINGS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY, TRANSLATION_TARGET_LANGUAGES, MAX_SAVED_CHAT_SESSIONS, OPENAI_TTS_MAX_INPUT_LENGTH } from '../constants.ts';
 import MessageBubble from './MessageBubble.tsx';
 import SettingsPanel from './SettingsPanel.tsx';
 import HistoryPanel from './HistoryPanel.tsx'; // Import HistoryPanel
@@ -1561,6 +1562,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         addNotification("Please enter text for speech synthesis.", "info");
         return;
     }
+    if (isTextToSpeechModelSelected && input.length > OPENAI_TTS_MAX_INPUT_LENGTH) {
+        setError(`Input for TTS exceeds maximum length of ${OPENAI_TTS_MAX_INPUT_LENGTH} characters.`);
+        addNotification(`TTS input too long. Max ${OPENAI_TTS_MAX_INPUT_LENGTH} chars.`, "error");
+        return;
+    }
     if (isAiAgentMode && !input.trim() && !uploadedImage && !uploadedTextFileName) {
         setError("Please enter a goal or upload a file for the AI Agent.");
         addNotification("Please enter a goal or upload a file for the AI Agent.", "info");
@@ -1904,6 +1910,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     return { backgroundColor: currentTheme === 'dark' ? '#0e1621' : '#ffffff' };
   }, [chatBackgroundUrl, themeContext?.theme]);
 
+  const textareaPaddingRight = useMemo(() => {
+    if (isTextToSpeechModelSelected) return '4.5rem'; // For TTS counter
+    if (isImagenModelSelected && input.trim() && !isLoading && !isListening) return '2.5rem'; // For Imagen clear button
+    return '0.75rem'; // Default
+  }, [isTextToSpeechModelSelected, isImagenModelSelected, input, isLoading, isListening]);
+
 
   return (
     <div className="flex h-full">
@@ -2118,7 +2130,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                   onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey && !isLoading && !isListening) { e.preventDefault(); handleSendMessage(); }}}
                   placeholder={currentPromptPlaceholder()}
                   className="w-full p-3 border border-secondary dark:border-neutral-darkest rounded-lg focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:border-transparent outline-none resize-none bg-neutral-light dark:bg-neutral-darker text-neutral-darker dark:text-secondary-light"
-                  style={{paddingRight: isImagenModelSelected && input.trim() && !isLoading && !isListening ? '2.5rem' : '0.75rem' }}
+                  style={{ paddingRight: textareaPaddingRight }}
                   rows={calculateTextareaRows()}
                   disabled={isLoading || isListening || isGpt41AccessModalOpen}
                   aria-label="Chat input"
@@ -2133,11 +2145,21 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                     <XMarkIcon className="w-4 h-4" />
                   </button>
                 )}
+                {isTextToSpeechModelSelected && (
+                  <div className={`absolute bottom-2 right-3 text-xs pointer-events-none ${
+                    input.length > OPENAI_TTS_MAX_INPUT_LENGTH
+                      ? 'text-red-500 dark:text-red-400 font-semibold'
+                      : 'text-neutral-500 dark:text-neutral-400'
+                  }`}>
+                    {input.length}/{OPENAI_TTS_MAX_INPUT_LENGTH}
+                  </div>
+                )}
               </div>
               <button
                 onClick={handleSendMessage}
                 disabled={isLoading || isListening || isGpt41AccessModalOpen || 
                     (isImagenModelSelected && !input.trim()) || 
+                    (isTextToSpeechModelSelected && (!input.trim() || input.length > OPENAI_TTS_MAX_INPUT_LENGTH)) ||
                     (isPrivateModeSelected && !input.trim() && !uploadedImage && !uploadedTextFileName) || 
                     ((!input.trim() && !uploadedImage && !uploadedTextFileName) && 
                         (isAiAgentMode ? (!uploadedImage && !uploadedTextFileName) : (!isImagenModelSelected && !isTextToSpeechModelSelected && !isPrivateModeSelected))) 

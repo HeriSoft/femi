@@ -1,7 +1,7 @@
 /// <reference path="../global.d.ts" />
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { ThemeContextType, Model, UserGlobalProfile, LanguageOption, UserLanguageProfile, WebGameType, NotificationType as AppNotificationType, TienLenGameModalProps } from '../types.ts';
+import { ThemeContextType, Model, UserGlobalProfile, LanguageOption, UserLanguageProfile, WebGameType, NotificationType as AppNotificationType, TienLenGameModalProps, CreditPackage } from '../types.ts'; // Added CreditPackage
 import ChatPage from './ChatPage.tsx';
 import Header, { MockUser } from './Header.tsx';
 import LanguageLearningModal from './LanguageLearningModal.tsx';
@@ -10,7 +10,7 @@ import WebGamePlayerModal from './WebGamePlayerModal.tsx';
 import TienLenGameModal from './games/tienlen/TienLenGameModal.tsx';
 import { NotificationProvider, useNotification } from '../contexts/NotificationContext.tsx';
 import { KeyIcon } from './Icons.tsx';
-import { LOCAL_STORAGE_USER_PROFILE_KEY, DEFAULT_USER_LANGUAGE_PROFILE, EXP_MILESTONES_CONFIG, BADGES_CATALOG, LOCAL_STORAGE_CHAT_BACKGROUND_KEY } from '../constants.ts';
+import { LOCAL_STORAGE_USER_PROFILE_KEY, DEFAULT_USER_LANGUAGE_PROFILE, EXP_MILESTONES_CONFIG, BADGES_CATALOG, LOCAL_STORAGE_CHAT_BACKGROUND_KEY, DEMO_CREDIT_PACKAGES } from '../constants.ts';
 
 export const ThemeContext = React.createContext<ThemeContextType | undefined>(undefined);
 
@@ -48,6 +48,11 @@ interface AppContentProps {
   onChatBackgroundChange: (newUrl: string | null) => void;
   
   isAppReady: boolean;
+  // Credits related
+  currentUserCredits: number;
+  onPurchaseCredits: (packageId: string, paymentMethod: 'paypal' | 'stripe' | 'vietqr') => void;
+  paypalEmail: string | undefined;
+  onSavePayPalEmail: (email: string) => void;
 }
 
 // AppContent component defined outside App
@@ -60,7 +65,8 @@ const AppContent: React.FC<AppContentProps> = ({
   activeWebGameType, onPlayWebGame, activeWebGameTitle, isWebGamePlayerModalOpen, onCloseWebGamePlayerModal,
   isTienLenModalOpen, onToggleTienLenModal, 
   chatBackgroundUrl, onChatBackgroundChange,
-  isAppReady
+  isAppReady,
+  currentUserCredits, onPurchaseCredits, paypalEmail, onSavePayPalEmail // Added credit props
 }) => {
 
   if (currentUser && !isAppReady) {
@@ -95,6 +101,11 @@ const AppContent: React.FC<AppContentProps> = ({
         onChatBackgroundChange={onChatBackgroundChange}
         userProfile={userProfile} 
         onUpdateUserProfile={onUpdateUserProfile} 
+        // Pass credit props to Header, which passes to AccountSettingsModal
+        currentUserCredits={currentUserCredits}
+        onPurchaseCredits={onPurchaseCredits}
+        paypalEmail={paypalEmail}
+        onSavePayPalEmail={onSavePayPalEmail}
       />
       <main className="flex-grow overflow-hidden">
         {currentUser ? ( 
@@ -148,7 +159,6 @@ const AppContent: React.FC<AppContentProps> = ({
                 gameTitle={activeWebGameTitle}
             />
           )}
-          {/* VoiceAgentModal removed, widget rendered below */}
           {isVoiceAgentWidgetActive && (
             <elevenlabs-convai agent-id={elevenLabsAgentId}></elevenlabs-convai>
           )}
@@ -169,7 +179,12 @@ const App: React.FC = () => {
   });
 
   const [currentUser, setCurrentUser] = useState<MockUser | null>(null);
-  const [userProfile, setUserProfile] = useState<UserGlobalProfile>({ languageProfiles: {}, aboutMe: '' }); 
+  const [userProfile, setUserProfile] = useState<UserGlobalProfile>({ 
+    languageProfiles: {}, 
+    aboutMe: '',
+    credits: 100, // Initial mock credits
+    paypalEmail: undefined,
+  }); 
   const [isLoginModalInitiallyOpen, setIsLoginModalInitiallyOpen] = useState(false);
   const [isAppReady, setIsAppReady] = useState(false); 
   const [isLanguageLearningModalOpen, setIsLanguageLearningModalOpen] = useState(false);
@@ -202,22 +217,28 @@ const App: React.FC = () => {
   useEffect(() => {
     if (currentUser) {
       setIsAppReady(false); 
-      let loadedProfile: UserGlobalProfile = { languageProfiles: {}, aboutMe: '' }; 
+      let loadedProfile: UserGlobalProfile = { languageProfiles: {}, aboutMe: '', credits: 100, paypalEmail: undefined }; 
       try {
         const storedProfileString = localStorage.getItem(LOCAL_STORAGE_USER_PROFILE_KEY);
         if (storedProfileString) {
           const parsedProfile = JSON.parse(storedProfileString);
-          if (parsedProfile && typeof parsedProfile === 'object' && 'languageProfiles' in parsedProfile) {
-            loadedProfile = { ...loadedProfile, ...parsedProfile }; 
+          // Ensure credits and paypalEmail are part of the loaded profile or default correctly
+          if (parsedProfile && typeof parsedProfile === 'object') {
+            loadedProfile = { 
+              ...loadedProfile, // start with defaults (especially for credits/paypalEmail if not in old storage)
+              ...parsedProfile, // then load stored values
+              credits: typeof parsedProfile.credits === 'number' ? parsedProfile.credits : 100,
+              paypalEmail: typeof parsedProfile.paypalEmail === 'string' ? parsedProfile.paypalEmail : undefined,
+            }; 
           }
         }
       } catch (error) {
-        console.error("[App.tsx] Error loading/parsing user language profile from localStorage:", error);
+        console.error("[App.tsx] Error loading/parsing user profile from localStorage:", error);
       }
       setUserProfile(loadedProfile);
       setIsAppReady(true); 
     } else {
-      setUserProfile({ languageProfiles: {}, aboutMe: '' }); 
+      setUserProfile({ languageProfiles: {}, aboutMe: '', credits: 0, paypalEmail: undefined }); 
       setIsAppReady(true); 
       setIsLoginModalInitiallyOpen(true); 
       setIsLanguageLearningModalOpen(false); 
@@ -233,7 +254,7 @@ const App: React.FC = () => {
       try {
         localStorage.setItem(LOCAL_STORAGE_USER_PROFILE_KEY, JSON.stringify(userProfile));
       } catch (error) {
-        console.error("Error saving user language profile to localStorage:", error);
+        console.error("Error saving user profile to localStorage:", error);
       }
     }
   }, [userProfile, currentUser, isAppReady]);
@@ -267,9 +288,9 @@ const App: React.FC = () => {
   const handleAddExp = useCallback((language: LanguageOption, expPoints: number, boundAddAppNotification?: (message: string, type: AppNotificationType, details?: string) => void) => {
     const effectiveAddNotification = boundAddAppNotification || addAppNotification;
     setUserProfile(prevProfile => {
-      const newProfile: UserGlobalProfile = JSON.parse(JSON.stringify(prevProfile)); // Deep clone
+      const newProfile: UserGlobalProfile = JSON.parse(JSON.stringify(prevProfile)); 
       
-      if (!newProfile.languageProfiles) { // Initialize if undefined
+      if (!newProfile.languageProfiles) { 
         newProfile.languageProfiles = {};
       }
       if (!newProfile.languageProfiles[language]) {
@@ -295,7 +316,7 @@ const App: React.FC = () => {
           }
         }
       });
-      return newProfile; // Return the modified profile
+      return newProfile; 
     });
   }, [addAppNotification]); 
   
@@ -341,6 +362,28 @@ const App: React.FC = () => {
     setActiveWebGameTitle('');
   }, []);
   
+  // Mock Credit Purchase Logic
+  const handlePurchaseCredits = useCallback((packageId: string, paymentMethod: 'paypal' | 'stripe' | 'vietqr') => {
+    const pkg = DEMO_CREDIT_PACKAGES.find(p => p.id === packageId);
+    if (pkg) {
+      setUserProfile(prev => ({
+        ...prev,
+        credits: (prev.credits || 0) + pkg.creditsAwarded,
+      }));
+      addAppNotification(`Successfully purchased ${pkg.name} (+${pkg.creditsAwarded} credits) using ${paymentMethod}. (Mock Purchase)`, 'success');
+    } else {
+      addAppNotification("Credit package not found.", "error");
+    }
+  }, [addAppNotification]);
+
+  const handleSavePayPalEmail = useCallback((email: string) => {
+    setUserProfile(prev => ({
+      ...prev,
+      paypalEmail: email,
+    }));
+    addAppNotification("Mock: PayPal email saved.", "info");
+  }, []);
+
 
   const themeContextValue = useMemo(() => ({ theme, toggleTheme }), [theme, toggleTheme]);
 
@@ -379,14 +422,17 @@ const App: React.FC = () => {
         onChatBackgroundChange={handleChatBackgroundChange}
         
         isAppReady={isAppReady}
+
+        // Pass credit-related props
+        currentUserCredits={userProfile.credits}
+        onPurchaseCredits={handlePurchaseCredits}
+        paypalEmail={userProfile.paypalEmail}
+        onSavePayPalEmail={handleSavePayPalEmail}
       />
     </ThemeContext.Provider>
   );
 };
 
-// This RootAppWrapper is the main export for index.tsx (if this components/App.tsx is the one used)
-// Or it's a duplicate if root App.tsx is used by index.tsx.
-// Ensuring it's a valid FC for the error message.
 const RootAppWrapper: React.FC = () => {
   return (
     <NotificationProvider>
