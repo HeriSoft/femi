@@ -1,3 +1,6 @@
+
+
+
 import { Chat } from '@google/genai'; // Updated import
 import React from 'react'; // Added for React.DetailedHTMLProps
 
@@ -13,6 +16,7 @@ export enum Model {
   REAL_TIME_TRANSLATION = 'Real-Time Translation (Gemini)', // New Real-Time Translation Model
   AI_AGENT = 'AI Agent (gemini-2.5-flash-preview-04-17)', // Renamed from AI_TASK_ORCHESTRATOR and updated model ID
   PRIVATE = 'Private (Local Data Storage)', // New Private Mode
+  FLUX_KONTEX = 'Flux Kontex (fal-ai/flux-pro/kontext)', // New Image Editing Model
 }
 
 export interface ChatMessage {
@@ -22,13 +26,13 @@ export interface ChatMessage {
   timestamp: number; // Added to store the time of message creation
   model?: Model;
   imagePreview?: string; // For user messages with a single image (upload)
-  imagePreviews?: string[]; // For AI generated images (can be multiple)
+  imagePreviews?: string[]; // For AI generated/edited images (can be multiple for Imagen, single for Flux)
   imageMimeType?: 'image/jpeg' | 'image/png'; // For AI generated images
-  originalPrompt?: string; // For AI generated images, to store the original user prompt
+  originalPrompt?: string; // For AI generated/edited images, to store the original user prompt
   fileName?: string; // For user messages with files
   fileContent?: string; // For storing text file content
   groundingSources?: GroundingSource[];
-  isImageQuery?: boolean; // To flag user messages that are image generation prompts
+  isImageQuery?: boolean; // To flag user messages that are image generation/editing prompts
   isRegenerating?: boolean; // Flag for AI messages that are being regenerated
   // Stores the ID of the user message that led to this AI response, crucial for regeneration
   promptedByMessageId?: string; 
@@ -41,6 +45,8 @@ export interface ChatMessage {
   videoFileName?: string; // Persisted: name of the video
   videoMimeType?: string; // Persisted: mime type of the video
   isNote?: boolean; // For private mode text-only entries
+  // Field for Flux Kontex polling
+  fluxRequestId?: string; // Stores the request ID for polling Flux Kontex results
 }
 
 export interface GroundingSource {
@@ -81,9 +87,14 @@ export interface PrivateModeSettings extends Pick<ModelSettings, 'systemInstruct
     // Private mode doesn't use temperature, topK, topP for generation
 }
 
+export interface FluxKontexSettings {
+  guidance_scale: number; // Example: 7.5. Controls how closely the result follows the prompt
+  // Add other relevant settings like seed, num_inference_steps if supported and desired
+}
+
 
 export type AllModelSettings = {
-  [key in Model]?: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings>;
+  [key in Model]?: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings> & Partial<FluxKontexSettings>;
 };
 
 export interface ThemeContextType {
@@ -120,6 +131,7 @@ export interface ApiKeyStatus {
   isRealTimeTranslation?: boolean; // Flag for real-time translation model
   isAiAgent?: boolean; // Flag for AI Agent model (renamed from isTaskOrchestrator)
   isPrivateMode?: boolean; // Flag for Private (Local Data Storage) mode
+  isImageEditing?: boolean; // Flag for image editing models like Flux Kontex
 }
 
 export interface Persona {
@@ -131,8 +143,8 @@ export interface Persona {
 export interface SettingsPanelProps {
   selectedModel: Model;
   onModelChange: (model: Model) => void;
-  modelSettings: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings>; 
-  onModelSettingsChange: (settings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings>) => void;
+  modelSettings: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings> & Partial<FluxKontexSettings>; 
+  onModelSettingsChange: (settings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings & FluxKontexSettings>) => void;
   onImageUpload: (file: File | null) => void;
   imagePreview: string | null; // For user uploaded image preview
   onFileUpload: (file: File | null) => void; // Handles general files including text and video
@@ -182,7 +194,7 @@ export interface ChatSession {
   timestamp: number;
   model: Model; // The primary model used for this session
   messages: ChatMessage[];
-  modelSettingsSnapshot: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings>; 
+  modelSettingsSnapshot: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings> & Partial<FluxKontexSettings>; 
   isPinned?: boolean; // For pinning important chats
   activePersonaIdSnapshot?: string | null; // Snapshot of active persona
 }
@@ -203,7 +215,7 @@ export interface HistoryPanelProps {
 }
 
 // Notification System Types
-export type NotificationType = 'success' | 'error' | 'info';
+export type NotificationType = 'success' | 'error' | 'info' | 'warning';
 
 export interface NotificationMessage {
   id: string;
@@ -467,14 +479,11 @@ export interface HandwritingCanvasProps {
   disabled?: boolean;
 }
 
-// Added VideoModalProps
-export interface VideoModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  videoSrc: string | null;
-  title?: string;
-  mimeType?: string;
-}
-
-// Removed global declaration for 'elevenlabs-convai' from here
-// It will be moved to global.d.ts
+// VideoModalProps removed as VideoModal.tsx was deleted
+// export interface VideoModalProps {
+//   isOpen: boolean;
+//   onClose: () => void;
+//   videoSrc: string | null;
+//   title?: string;
+//   mimeType?: string;
+// }

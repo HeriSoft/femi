@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import RootAppWrapper from './App'; // Corrected path assuming App.tsx is at the root and extension resolution is handled
+import { RootAppWrapper } from './App.tsx'; // Changed to named import
 
 console.log("[index.tsx] Script start. React version available:", React.version);
 console.log("[index.tsx] ReactDOM available:", ReactDOM);
@@ -80,3 +80,4 @@ if (!rootElement) {
     document.body.prepend(errorDisplayDiv);
   }
 }
+console.log("[index.tsx] Script end, all content processed."); // Added diagnostic log

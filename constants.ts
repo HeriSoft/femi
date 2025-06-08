@@ -1,5 +1,5 @@
 
-import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank, AiAgentSettings, CreditPackage, PrivateModeSettings } from './types.ts'; // Update to .ts
+import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank, AiAgentSettings, CreditPackage, PrivateModeSettings, FluxKontexSettings } from './types.ts'; // Update to .ts
 
 export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
   temperature: 0.7,
@@ -55,6 +55,10 @@ export const DEFAULT_PRIVATE_MODE_SETTINGS: PrivateModeSettings & Pick<ModelSett
   topP: 0, // Not applicable
 };
 
+export const DEFAULT_FLUX_KONTEX_SETTINGS: FluxKontexSettings = {
+  guidance_scale: 7.5,
+};
+
 
 const GENERIC_FILE_HANDLING_INSTRUCTION = `
 FILE HANDLING:
@@ -90,6 +94,11 @@ export const ALL_MODEL_DEFAULT_SETTINGS: AllModelSettings = {
   },
   [Model.AI_AGENT]: { ...DEFAULT_AI_AGENT_SETTINGS },
   [Model.PRIVATE]: { ...DEFAULT_PRIVATE_MODE_SETTINGS },
+  [Model.FLUX_KONTEX]: {
+    ...DEFAULT_MODEL_SETTINGS, // Basic settings, mostly unused for image editing models like this
+    ...DEFAULT_FLUX_KONTEX_SETTINGS,
+    systemInstruction: 'Image editing context.', // Placeholder
+  },
 };
  
 export const LOCAL_STORAGE_SETTINGS_KEY = 'femiAiChatSettings';

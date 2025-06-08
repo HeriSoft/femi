@@ -1,7 +1,6 @@
-// <reference path="../global.d.ts" /> removed
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { ThemeContextType, Model, UserGlobalProfile, LanguageOption, UserLanguageProfile, WebGameType, NotificationType as AppNotificationType, TienLenGameModalProps, CreditPackage } from './types.ts';
+import { ThemeContextType, Model, UserGlobalProfile, LanguageOption, UserLanguageProfile, WebGameType, NotificationType as AppNotificationType, TienLenGameModalProps, CreditPackage } from './types.ts'; // Added CreditPackage
 import ChatPage from './components/ChatPage.tsx';
 import Header, { MockUser } from './components/Header.tsx';
 import LanguageLearningModal from './components/LanguageLearningModal.tsx';
@@ -169,7 +168,7 @@ const AppContent: React.FC<AppContentProps> = ({
 };
 
 
-const App: React.FC = () => {
+const App = (): JSX.Element => {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const storedTheme = localStorage.getItem('theme');
     if (storedTheme) {
@@ -222,11 +221,10 @@ const App: React.FC = () => {
         const storedProfileString = localStorage.getItem(LOCAL_STORAGE_USER_PROFILE_KEY);
         if (storedProfileString) {
           const parsedProfile = JSON.parse(storedProfileString);
-          // Ensure credits and paypalEmail are part of the loaded profile or default correctly
           if (parsedProfile && typeof parsedProfile === 'object') {
             loadedProfile = { 
-              ...loadedProfile, // start with defaults (especially for credits/paypalEmail if not in old storage)
-              ...parsedProfile, // then load stored values
+              ...loadedProfile,
+              ...parsedProfile,
               credits: typeof parsedProfile.credits === 'number' ? parsedProfile.credits : 100,
               paypalEmail: typeof parsedProfile.paypalEmail === 'string' ? parsedProfile.paypalEmail : undefined,
             }; 
@@ -285,9 +283,9 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleAddExp = useCallback((language: LanguageOption, expPoints: number, boundAddAppNotification?: (message: string, type: AppNotificationType, details?: string) => void) => {
+  const handleAddExp = useCallback((language: LanguageOption, expPoints: number, boundAddAppNotification?: (message: string, type: AppNotificationType, details?: string) => void): void => {
     const effectiveAddNotification = boundAddAppNotification || addAppNotification;
-    setUserProfile(prevProfile => {
+    setUserProfile((prevProfile: UserGlobalProfile): UserGlobalProfile => {
       const newProfile: UserGlobalProfile = JSON.parse(JSON.stringify(prevProfile)); 
       
       if (!newProfile.languageProfiles) { 
@@ -362,7 +360,6 @@ const App: React.FC = () => {
     setActiveWebGameTitle('');
   }, []);
   
-  // Mock Credit Purchase Logic
   const handlePurchaseCredits = useCallback((packageId: string, paymentMethod: 'paypal' | 'stripe' | 'vietqr') => {
     const pkg = DEMO_CREDIT_PACKAGES.find(p => p.id === packageId);
     if (pkg) {
@@ -382,7 +379,7 @@ const App: React.FC = () => {
       paypalEmail: email,
     }));
     addAppNotification("Mock: PayPal email saved.", "info");
-  }, []);
+  }, [addAppNotification]);
 
 
   const themeContextValue = useMemo(() => ({ theme, toggleTheme }), [theme, toggleTheme]);
@@ -423,7 +420,6 @@ const App: React.FC = () => {
         
         isAppReady={isAppReady}
 
-        // Pass credit-related props
         currentUserCredits={userProfile.credits}
         onPurchaseCredits={handlePurchaseCredits}
         paypalEmail={userProfile.paypalEmail}
@@ -433,7 +429,7 @@ const App: React.FC = () => {
   );
 };
 
-const RootAppWrapper: React.FC = () => {
+export const RootAppWrapper: React.FC = () => { // Changed to named export
   return (
     <NotificationProvider>
       <App />
@@ -441,4 +437,5 @@ const RootAppWrapper: React.FC = () => {
   );
 };
 
-export default RootAppWrapper;
+// Removed default export
+// export default RootAppWrapper;
