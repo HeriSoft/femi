@@ -9,6 +9,11 @@ import { fal } from '@fal-ai/client'; // Import fal.ai client
 // Define DEFAULT_FLUX_KONTEX_SETTINGS directly to avoid import issues
 const DEFAULT_FLUX_KONTEX_SETTINGS = {
   guidance_scale: 7.5,
+  safety_tolerance: 5,
+  num_inference_steps: 30,
+  seed: null, 
+  num_images: 1,
+  aspect_ratio: 'Original',
 };
 
 // Load environment variables from .env file
@@ -226,15 +231,21 @@ app.post('/api/openai/chat/stream', async (req, res) => {
         const errorData = JSON.parse(errorBodyText);
         errorDetail = errorData.error?.message || errorData.error || `Status: ${openaiResponse.status}, Body: ${errorBodyText.substring(0,200)}`;
       } catch(e){errorDetail = `Status: ${openaiResponse.status}, Body: ${errorBodyText.substring(0,200)}`;}
-      return res.status(openaiResponse.status).json({ error: `OpenAI API Error: ${errorDetail}` });
+      return res.status(openaiResponse.status).send(`data: ${JSON.stringify({error: errorDetail, isFinished: true})}\n\n`);
     }
-    
+
     res.setHeader('Content-Type', 'text/event-stream');
-    openaiResponse.body.pipe(res);
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    for await (const chunk of openaiResponse.body) {
+      res.write(chunk);
+    }
+    res.end();
 
   } catch (error) {
-    console.error("[OpenAI Chat Proxy Error] /api/openai/chat/stream:", error);
-    res.status(500).json({ error: error.message || "Failed to stream OpenAI response." });
+    console.error("[OpenAI Chat Proxy Error]:", error.message);
+    res.status(500).send(`data: ${JSON.stringify({error: error.message, isFinished: true})}\n\n`);
   }
 });
 
@@ -249,9 +260,9 @@ app.post('/api/openai/tts/generate', async (req, res) => {
   if (!modelIdentifier || !textInput || !voice || speed === undefined) {
     return res.status(400).json({ error: "Missing required fields for OpenAI TTS." });
   }
-
+  
   try {
-    console.log(`[OpenAI TTS Proxy] Generating audio for model: ${modelIdentifier}, voice: ${voice}`);
+    console.log(`[OpenAI TTS Proxy] Generating audio with model: ${modelIdentifier}, voice: ${voice}`);
     const openaiResponse = await fetch(OPENAI_TTS_URL, {
       method: 'POST',
       headers: {
@@ -262,38 +273,33 @@ app.post('/api/openai/tts/generate', async (req, res) => {
         model: modelIdentifier,
         input: textInput,
         voice: voice,
-        speed: Math.max(0.25, Math.min(4.0, speed)),
+        speed: speed,
         response_format: responseFormat,
       }),
     });
 
     if (!openaiResponse.ok) {
-      const errorBodyText = await openaiResponse.text();
-      console.error(`[OpenAI TTS Proxy] OpenAI TTS API Error: Status ${openaiResponse.status}, Body: ${errorBodyText}`);
-      let errorDetail;
-      try {
-        const errorData = JSON.parse(errorBodyText);
-        errorDetail = errorData.error?.message || errorData.error || `Status: ${openaiResponse.status}, Body: ${errorBodyText.substring(0,200)}`;
-      } catch(e){errorDetail = `Status: ${openaiResponse.status}, Body: ${errorBodyText.substring(0,200)}`;}
-      return res.status(openaiResponse.status).json({ error: `OpenAI TTS API Error: ${errorDetail}` });
+      const errorData = await openaiResponse.json().catch(() => ({})); // Attempt to parse error JSON
+      const errorDetail = errorData.error?.message || errorData.error || `OpenAI TTS API Error: ${openaiResponse.statusText}`;
+      console.error(`[OpenAI TTS Proxy] API Error: ${errorDetail}`, errorData);
+      return res.status(openaiResponse.status).json({ error: errorDetail });
     }
 
-    res.setHeader('Content-Type', openaiResponse.headers.get('content-type') || `audio/${responseFormat}`);
+    res.setHeader('Content-Type', `audio/${responseFormat}`);
     openaiResponse.body.pipe(res);
 
   } catch (error) {
-    console.error("[OpenAI TTS Proxy Error] /api/openai/tts/generate:", error);
-    res.status(500).json({ error: error.message || "Failed to generate OpenAI TTS audio." });
+    console.error("[OpenAI TTS Proxy Error]:", error.message);
+    res.status(500).json({ error: error.message || "Failed to generate audio via OpenAI TTS proxy." });
   }
 });
-
 
 // --- DEEPSEEK API PROXY ---
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_CHAT_URL = 'https://api.deepseek.com/chat/completions';
 
 if (DEEPSEEK_API_KEY) {
-    console.log("Deepseek API Key found in process.env.");
+    console.log("Deepseek API Key found in process.env.")
 } else {
     console.warn("PROXY WARNING: DEEPSEEK_API_KEY not found in process.env. Deepseek endpoints will likely fail.");
 }
@@ -301,259 +307,210 @@ if (DEEPSEEK_API_KEY) {
 // Proxy for Deepseek Chat (Streaming)
 // Expects: { modelIdentifier, history, modelSettings }
 app.post('/api/deepseek/chat/stream', async (req, res) => {
-  console.log(`[Deepseek Chat Proxy] Received request. DEEPSEEK_API_KEY is ${DEEPSEEK_API_KEY ? 'SET' : 'NOT SET'}`);
   if (!DEEPSEEK_API_KEY) {
-    console.error("[Deepseek Chat Proxy] Aborting: Deepseek API Key not configured on proxy.");
     return res.status(500).json({ error: "Deepseek API Key not configured on proxy." });
   }
   const { modelIdentifier, history, modelSettings } = req.body;
 
   if (!modelIdentifier || !history || !modelSettings) {
-    console.error("[Deepseek Chat Proxy] Aborting: Missing required fields for Deepseek chat.", {modelIdentifier, historyExists: !!history, modelSettingsExists: !!modelSettings});
     return res.status(400).json({ error: "Missing required fields for Deepseek chat." });
   }
-  
-  const textOnlyHistory = history.map(msg => {
-    if (typeof msg.content !== 'string') {
-      const textPart = (msg.content).find(p => p.type === 'text');
-      return { ...msg, content: textPart ? textPart.text : "" };
-    }
-    return msg;
-  }).filter(msg => msg.content || msg.role === 'assistant');
-
-  const requestPayload = {
-    model: modelIdentifier,
-    messages: textOnlyHistory,
-    temperature: modelSettings.temperature,
-    top_p: modelSettings.topP,
-    stream: true,
-  };
-  
-  console.log(`[Deepseek Chat Proxy] Streaming for model: ${modelIdentifier}. Payload:`, JSON.stringify(requestPayload, null, 2));
 
   try {
+    console.log(`[Deepseek Chat Proxy] Streaming for model: ${modelIdentifier}`);
     const deepseekResponse = await fetch(DEEPSEEK_CHAT_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
       },
-      body: JSON.stringify(requestPayload),
+      body: JSON.stringify({
+        model: modelIdentifier,
+        messages: history,
+        temperature: modelSettings.temperature,
+        top_p: modelSettings.topP,
+        stream: true,
+      }),
     });
 
     if (!deepseekResponse.ok) {
-      const errorBodyText = await deepseekResponse.text(); // Get raw text first
+      const errorBodyText = await deepseekResponse.text();
       console.error(`[Deepseek Chat Proxy] Deepseek API Error: Status ${deepseekResponse.status}, Body: ${errorBodyText}`);
       let errorDetail;
       try {
-        const errorData = JSON.parse(errorBodyText); // Try to parse as JSON
-        errorDetail = errorData.error?.message || errorData.detail || errorData.message || `Status: ${deepseekResponse.status}, Body: ${errorBodyText.substring(0, 200)}`;
-      } catch (e) {
-        errorDetail = `Status: ${deepseekResponse.status}, Body: ${errorBodyText.substring(0,200)}`;
-      }
-      return res.status(deepseekResponse.status).json({ error: `Deepseek API Error: ${errorDetail}` });
+        const errorData = JSON.parse(errorBodyText);
+        errorDetail = errorData.error?.message || errorData.error || `Status: ${deepseekResponse.status}, Body: ${errorBodyText.substring(0,200)}`;
+      } catch(e){errorDetail = `Status: ${deepseekResponse.status}, Body: ${errorBodyText.substring(0,200)}`;}
+      return res.status(deepseekResponse.status).send(`data: ${JSON.stringify({error: errorDetail, isFinished: true})}\n\n`);
     }
 
-    res.setHeader('Content-Type', 'text/event-stream'); 
-    deepseekResponse.body.pipe(res);
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    for await (const chunk of deepseekResponse.body) {
+      res.write(chunk);
+    }
+    res.end();
 
   } catch (error) {
-    console.error("[Deepseek Chat Proxy Error] Fetch or other error in /api/deepseek/chat/stream:", error);
-    res.status(500).json({ error: error.message || "Failed to stream Deepseek response due to proxy internal error." });
+    console.error("[Deepseek Chat Proxy Error]:", error.message);
+    res.status(500).send(`data: ${JSON.stringify({error: error.message, isFinished: true})}\n\n`);
   }
 });
 
-
-// --- FAL.AI API PROXY ---
+// --- FAL.AI API PROXY (for Flux Kontext) ---
 const FAL_KEY = process.env.FAL_KEY;
-const FAL_MODEL_FLUX_KONTEX = "fal-ai/flux-pro/kontext"; // Use full model ID for both submission and status/result
-
 if (FAL_KEY) {
-  fal.config({ credentials: FAL_KEY });
-  console.log("Fal.ai SDK configured with FAL_KEY.");
+    console.log("Fal.ai Key (FAL_KEY) found in process.env.");
 } else {
-  console.warn("PROXY WARNING: FAL_KEY not set in process.env. Fal.ai endpoints will likely fail.");
+    console.warn("PROXY WARNING: FAL_KEY not found in process.env. Fal.ai endpoints will likely fail.");
 }
 
+// Proxy for Fal.ai Flux Kontext Image Editing
 app.post('/api/fal/image/edit/flux-kontext', async (req, res) => {
-  if (!FAL_KEY) {
-    return res.status(500).json({ error: "Fal.ai API Key not configured on proxy." });
-  }
-
-  const { image_base_64, image_mime_type, prompt: promptFromUser, guidance_scale: guidanceScaleFromBody } = req.body;
-
-  if (!image_base_64) {
-    return res.status(400).json({ error: "Missing image_base_64 for Flux Kontex." });
-  }
-  if (!promptFromUser || typeof promptFromUser !== 'string' || promptFromUser.trim() === '') {
-    return res.status(400).json({ error: "Missing or invalid prompt for Flux Kontex. Must be a non-empty string." });
-  }
-  const prompt = promptFromUser.trim();
-
-  let guidanceScaleToUse = DEFAULT_FLUX_KONTEX_SETTINGS.guidance_scale;
-  if (guidanceScaleFromBody !== undefined) {
-    const parsedFromBody = Number(guidanceScaleFromBody);
-    if (isNaN(parsedFromBody) || parsedFromBody < 1 || parsedFromBody > 20) {
-      return res.status(400).json({ error: "guidance_scale must be a number between 1 and 20." });
+    if (!FAL_KEY) {
+        return res.status(500).json({ error: "Fal.ai API Key (FAL_KEY) not configured on proxy." });
     }
-    guidanceScaleToUse = parsedFromBody;
-  }
+    const {
+        image_base_64,
+        image_mime_type, 
+        prompt,
+        guidance_scale: guidance_scale_param,
+        safety_tolerance: safety_tolerance_param,
+        num_inference_steps: num_inference_steps_param,
+        seed: seed_param,
+    } = req.body;
 
-  try {
-    const imageBuffer = Buffer.from(image_base_64, 'base64');
-    const mimeType = image_mime_type || 'image/png';
-    if (!['image/png', 'image/jpeg'].includes(mimeType)) {
-      return res.status(400).json({ error: "Unsupported image MIME type. Use image/png or image/jpeg." });
+    if (!image_base_64 || !prompt || !image_mime_type) {
+        return res.status(400).json({ error: "Missing required fields: image_base_64, imageMimeType, prompt for Flux Kontext." });
     }
-
-    console.log(`[Flux Kontex Proxy] Uploading image to Fal.ai storage. MIME type: ${mimeType}`);
-    const storageUploadResult = await fal.storage.upload(imageBuffer, { contentType: mimeType });
-    console.log("[Flux Kontex Proxy] Raw response from fal.storage.upload:", storageUploadResult);
-
-    let imageUrl;
-    if (typeof storageUploadResult === 'string' && storageUploadResult.startsWith('http')) {
-        imageUrl = storageUploadResult;
-    } else if (typeof storageUploadResult === 'object' && storageUploadResult !== null && typeof storageUploadResult.url === 'string' && storageUploadResult.url.startsWith('http')) {
-        imageUrl = storageUploadResult.url;
-    } else {
-        console.error("[Flux Kontex Proxy Error] Fal.ai storage upload did not return a valid URL. Full upload response:", storageUploadResult);
-        throw new Error("Fal.ai storage upload failed to provide a usable image URL.");
-    }
-    console.log(`[Flux Kontex Proxy] Image uploaded to Fal.ai storage. URL: ${imageUrl}`);
     
-    console.log(`[Flux Kontex Proxy] Submitting image editing. Prompt (first 30 chars): '${prompt.substring(0, 30)}...'`);
-    console.log("[Flux Kontex Proxy] Input data:", { prompt, image_url: imageUrl, guidance_scale: guidanceScaleToUse });
+    const guidance_scale = guidance_scale_param ?? DEFAULT_FLUX_KONTEX_SETTINGS.guidance_scale;
+    const safety_tolerance = safety_tolerance_param ?? DEFAULT_FLUX_KONTEX_SETTINGS.safety_tolerance;
+    const num_inference_steps = num_inference_steps_param ?? DEFAULT_FLUX_KONTEX_SETTINGS.num_inference_steps;
+    const seed_value = seed_param; 
 
-    const submissionResponse = await fal.queue.submit(FAL_MODEL_FLUX_KONTEX, {
-      input: {
+    const falInput = {
         prompt: prompt,
-        image_url: imageUrl,
-        guidance_scale: guidanceScaleToUse,
-      },
+        image_url: `data:${image_mime_type};base64,${image_base_64}`,
+        guidance_scale: guidance_scale,
+        safety_tolerance: safety_tolerance,
+        seed: (seed_value === null || seed_value === undefined) ? null : seed_value,
+        num_inference_steps: num_inference_steps,
+    };
+
+    console.log(`[Flux Kontext Proxy] Input data for fal.queue.submit:`, {
+        ...falInput, 
+        image_url: falInput.image_url.substring(0, 50) + (falInput.image_url.length > 50 ? `... ${falInput.image_url.length - 50} more characters` : "")
     });
-    console.log("[Flux Kontex Proxy] Fal.ai Submission response:", JSON.stringify(submissionResponse, null, 2));
 
-    let requestIdValue;
-    if (submissionResponse && submissionResponse.request_id) {
-      requestIdValue = submissionResponse.request_id;
-    } else {
-      console.error("[Flux Kontex Proxy] Fal.ai submission did not return a recognizable request_id:", submissionResponse);
-      const submissionErrorMsg = submissionResponse?.detail || submissionResponse?.error?.message || "Fal.ai submission failed to return a request ID.";
-      throw new Error(submissionErrorMsg);
-    }
-    
-    await new Promise(resolve => setTimeout(resolve, 3000)); 
-
-    console.log(`[Flux Kontex Proxy] Performing early status check for requestId: ${requestIdValue} after delay`);
     try {
-        const initialStatus = await fal.queue.status(FAL_MODEL_FLUX_KONTEX, { requestId: requestIdValue }); 
-        console.log(`[Flux Kontex Proxy] Early status response for ${requestIdValue}:`, JSON.stringify(initialStatus, null, 2));
-
-        if (initialStatus && (initialStatus.status === 'FAILED' || initialStatus.status === 'ERROR')) {
-          const earlyErrorMessage = initialStatus.error?.message || initialStatus.result?.error?.message || initialStatus.result?.detail || initialStatus.detail || "Fal.ai request failed with early status check.";
-          console.error(`[Flux Kontex Proxy] Initial status for ${requestIdValue} indicates failure: ${earlyErrorMessage}`);
-        } else if (initialStatus && initialStatus.status === 'NOT_FOUND') {
-            console.warn(`[Flux Kontex Proxy] Early status check for ${requestIdValue} returned NOT_FOUND. Client will proceed with polling.`);
-        }
-    } catch (statusError) {
-        console.warn(`[Flux Kontex Proxy] Early status check API call for ${requestIdValue} failed:`, statusError.message);
-    }
-
-    res.json({ requestId: requestIdValue, message: "Request submitted, check status with requestId." });
-
-  } catch (error) {
-    console.error("[Flux Kontex Proxy Error] /api/fal/image/edit/flux-kontext:", error);
-    const errorMessage = error.output?.error?.message || error.message || "Failed to submit image edit request.";
-    const errorStatus = error.status || 500;
-    res.status(errorStatus).json({ error: errorMessage, details: error.output || error });
-  }
-});
-
-
-app.post('/api/fal/image/edit/status', async (req, res) => {
-  if (!FAL_KEY) {
-    return res.status(500).json({ error: "Fal.ai API Key not configured on proxy." });
-  }
-  const { requestId } = req.body;
-  if (!requestId) {
-    return res.status(400).json({ error: "Missing requestId." });
-  }
-  try {
-    console.log(`[Flux Kontex Status] Checking status for requestId: ${requestId} using model ID: ${FAL_MODEL_FLUX_KONTEX}`);
-    const statusResult = await fal.queue.status(FAL_MODEL_FLUX_KONTEX, { requestId });
-    console.log(`[Flux Kontex Status] Fal.ai status response for ${requestId}:`, JSON.stringify(statusResult, null, 2));
-
-    if (statusResult.status === 'COMPLETED') {
-      console.log(`[Flux Kontex Status] Job ${requestId} COMPLETED. Fetching result...`);
-      const jobResult = await fal.queue.result(FAL_MODEL_FLUX_KONTEX, { requestId });
-      console.log(`[Flux Kontex Status] Fal.ai result response for ${requestId}:`, JSON.stringify(jobResult, null, 2));
-
-      const imageUrl = jobResult?.data?.images?.[0]?.url;
-
-      if (typeof imageUrl === 'string' && imageUrl.trim() !== '') {
-        console.log(`[Flux Kontex Status] Extracted image URL: ${imageUrl}`);
-        res.json({ status: 'COMPLETED', editedImageUrl: imageUrl, rawResult: jobResult });
-      } else {
-        console.warn(`[Flux Kontex Status] Request ${requestId} completed, but valid image URL not found.`);
-        console.log(`[Flux Kontex Status] Detailed jobResult.data structure:`, JSON.stringify(jobResult?.data, null, 2));
-        if (jobResult?.data?.images?.[0]) {
-            console.log(`[Flux Kontex Status] First image object:`, JSON.stringify(jobResult.data.images[0], null, 2));
-            console.log(`[Flux Kontex Status] URL property: ${jobResult.data.images[0].url}, Type: ${typeof jobResult.data.images[0].url}`);
-        } else if (jobResult?.data?.images) {
-             console.log(`[Flux Kontex Status] jobResult.data.images is an array but might be empty or items lack URL.`);
-        } else if (jobResult?.data) {
-            console.log(`[Flux Kontex Status] jobResult.data exists but jobResult.data.images is missing or not an array.`);
-        } else {
-            console.log(`[Flux Kontex Status] jobResult.data is missing.`);
-        }
-        res.status(200).json({ 
-            status: 'COMPLETED_NO_IMAGE', 
-            message: 'Processing completed, but the expected image URL was not found in the API response.', 
-            rawResult: jobResult 
+        const queueResult = await fal.queue.submit("fal-ai/flux-pro/kontext", {
+            input: falInput,
         });
-      }
-    } else if (statusResult.status === 'IN_PROGRESS' || statusResult.status === 'IN_QUEUE') {
-      res.json({ status: statusResult.status, message: 'Image editing is still processing.' });
-    } else if (statusResult.status === 'NOT_FOUND') { 
-      res.json({ status: 'NOT_FOUND', message: 'Request ID not found. It might still be initializing or it is invalid.' });
-    } else { 
-      console.error("[Flux Kontex Status Error] Non-completed or non-progress status from fal.ai:", statusResult);
-      const errorMessage = statusResult.error?.message || statusResult.detail || "Failed to get a successful image edit result from Fal.ai.";
-      res.status(statusResult.error?.status_code || (statusResult.status === 'ERROR' ? 500 : 200) ).json({ status: statusResult.status || 'ERROR', error: errorMessage, details: statusResult });
+
+        if (queueResult && queueResult.request_id) {
+            console.log(`[Flux Kontext Proxy] Request ID from fal.queue.submit: ${queueResult.request_id}`);
+            res.json({ requestId: queueResult.request_id, message: "Image editing request submitted via queue. Polling for status." });
+        } else {
+            console.error("[Flux Kontext Proxy] Fal.queue.submit did not return a request_id. Result:", queueResult);
+            res.status(500).json({ error: "Fal.ai Flux Kontext: Failed to get a request ID for polling.", rawResult: queueResult });
+        }
+
+    } catch (error) {
+        console.error("[Flux Kontext Proxy Error] /api/fal/image/edit/flux-kontext:", error);
+        res.status(500).json({ error: error.message || "Failed to submit image editing request to Fal.ai proxy." });
     }
-  } catch (error) {
-    console.error("[Flux Kontex Status Error] API call to fal.queue.status or fal.queue.result failed:", error);
-    const errorMessage = error.output?.error?.message || error.message || "Failed to get result for the request.";
-    const errorStatus = error.status || 500; 
-    const errorDetails = error.output || error;
-    
-    let falApiReportedStatus = 'ERROR_IN_PROXY_CALL';
-    if (error.name === 'ApiError' && error.status === 404) {
-        falApiReportedStatus = 'NOT_FOUND';
-    } else if (error.output?.status) {
-        falApiReportedStatus = error.output.status;
+});
+
+// Proxy for checking Fal.ai request status
+// Expects: { requestId }
+app.post('/api/fal/image/edit/status', async (req, res) => {
+    if (!FAL_KEY) {
+        return res.status(500).json({ error: "Fal.ai API Key (FAL_KEY) not configured on proxy." });
+    }
+    const { requestId } = req.body;
+
+    if (!requestId) {
+        return res.status(400).json({ error: "Missing requestId for status check." });
     }
 
-    res.status(errorStatus).json({ status: falApiReportedStatus, error: errorMessage, details: errorDetails });
-  }
+    try {
+        console.log(`[Flux Kontext Status Proxy] Checking status for request ID: ${requestId}`);
+        const statusResult = await fal.queue.status("fal-ai/flux-pro/kontext", { requestId });
+        let responsePayload = { rawResult: statusResult, status: undefined, editedImageUrl: undefined, message: undefined, error: undefined };
+
+        if (statusResult) {
+            if (statusResult.status === 'COMPLETED') {
+                try {
+                    console.log(`[Flux Kontext Status Proxy] Status is COMPLETED for ${requestId}. Fetching result...`);
+                    const jobResult = await fal.queue.result("fal-ai/flux-pro/kontext", { requestId });
+                    console.log(`[Flux Kontext Status Proxy] Result fetched for ${requestId}. (Full result logged if verbose)`);
+                     if (process.env.VERBOSE_LOGGING === 'true') console.log("[Flux Kontext Status Proxy] Full result object:", JSON.stringify(jobResult, null, 2));
+
+
+                    if (jobResult && jobResult.data && jobResult.data.images && Array.isArray(jobResult.data.images) && jobResult.data.images.length > 0 && jobResult.data.images[0].url) {
+                        responsePayload.status = 'COMPLETED';
+                        responsePayload.editedImageUrl = jobResult.data.images[0].url;
+                        responsePayload.message = "Image editing completed successfully.";
+                        responsePayload.rawResult = jobResult;
+                    } else {
+                        responsePayload.status = 'COMPLETED_NO_IMAGE';
+                        responsePayload.message = "Processing completed, but no image URL was found in Fal.ai result payload.";
+                        responsePayload.error = "Fal.ai result payload did not contain an image URL or was structured unexpectedly.";
+                        responsePayload.rawResult = jobResult;
+                        console.warn("[Flux Kontext Status Proxy] 'COMPLETED' status, result fetched, but no image URL at expected path (result.data.images[0].url). Fal.ai result:", jobResult);
+                    }
+                } catch (resultError) {
+                    console.error(`[Flux Kontext Status Proxy Error] Fetching result for COMPLETED ${requestId}:`, resultError);
+                    responsePayload.status = 'ERROR_FETCHING_RESULT';
+                    responsePayload.error = `Failed to fetch result for completed job: ${resultError.message}`;
+                    responsePayload.message = "Image editing completed, but failed to retrieve the final image.";
+                }
+            } else if (statusResult.status === 'IN_PROGRESS' || statusResult.status === 'IN_QUEUE') {
+                responsePayload.status = statusResult.status;
+                responsePayload.message = `Image editing is ${statusResult.status.toLowerCase()}.`;
+            } else if (statusResult.status === 'ERROR') { 
+                responsePayload.status = 'ERROR';
+                const errorLog = statusResult.logs?.find(log => log.level === 'ERROR');
+                responsePayload.error = statusResult.error?.message || errorLog?.message || "Fal.ai reported an error.";
+                responsePayload.message = "Image editing failed.";
+            } else { 
+                responsePayload.status = statusResult.status || 'IN_PROGRESS'; 
+                responsePayload.message = `Image editing status: ${statusResult.status || 'Unknown'}.`;
+            }
+            
+            console.log(`[Flux Kontext Status Proxy] Status for ${requestId}: ${responsePayload.status}. Message: ${responsePayload.message}`);
+            return res.json(responsePayload);
+
+        } else { 
+            console.warn(`[Flux Kontext Status Proxy] Request ID ${requestId} not found by Fal.ai or statusResult was null/undefined.`);
+            return res.status(404).json({ status: 'NOT_FOUND', error: `Request ID ${requestId} not found or invalid status response.`, message: `Request ID ${requestId} not found or invalid status.` });
+        }
+
+    } catch (error) { 
+        console.error(`[Flux Kontext Status Proxy Error] Checking status for ${requestId}:`, error);
+        if (error.message && (error.message.includes("404") || error.message.toLowerCase().includes("not found") || error.message.toLowerCase().includes("request not found"))) {
+            return res.status(404).json({ status: 'NOT_FOUND', error: `Request ID ${requestId} not found (Fal error: ${error.message}).`, message: `Request ID ${requestId} not found.` });
+        }
+        res.status(500).json({ 
+            status: 'PROXY_REQUEST_ERROR', 
+            error: error.message || "Failed to check Fal.ai request status via proxy.", 
+            message: "Error checking status with Fal.ai proxy." 
+        });
+    }
 });
 
 
-app.get('/', (req, res) => {
-  res.send('AI Chat Proxy Server is running.');
-});
-
-// Final server startup logs
+// --- SERVER START ---
 app.listen(port, () => {
-  console.log(`AI Chat Proxy Server listening on port ${port}`);
-  console.log(`LOGIN_CODE_AUTH is ${process.env.LOGIN_CODE_AUTH ? 'SET' : 'NOT SET in proxy environment. Login will fail.'}`);
-  console.log(`GEMINI_API_KEY is ${process.env.GEMINI_API_KEY ? 'SET' : 'NOT SET in proxy environment'}.`);
-  console.log(`OPENAI_API_KEY is ${process.env.OPENAI_API_KEY ? 'SET' : 'NOT SET in proxy environment'}.`);
-  console.log(`DEEPSEEK_API_KEY is ${process.env.DEEPSEEK_API_KEY ? 'SET' : 'NOT SET in proxy environment'}.`);
-  console.log(`FAL_KEY is ${FAL_KEY ? 'SET' : 'NOT SET in proxy environment. Fal.ai endpoints will fail.'}`);
-
-
-  console.log("\nEnsure your frontend (e.g., Vite) is configured to proxy /api requests to this server if running on different ports during development.");
-  console.log("Example Vite config (vite.config.js or vite.config.ts):");
-  console.log("server: { proxy: { '/api': { target: 'http://localhost:3001', changeOrigin: true } } }");
+  console.log(`AI Chat Proxy Server listening at http://localhost:${port}`);
+  if (allowedOrigins.length === 0) {
+      console.warn("PROXY WARNING: CORS_ALLOWED_ORIGINS is not set or is empty. This means NO cross-origin requests will be allowed by default if 'origin' header is present. For local development with a frontend on a different port, set e.g., CORS_ALLOWED_ORIGINS=http://localhost:5173 (if Vite default) or http://localhost:3000 (if Create React App default). For Vercel deployment, ensure your Vercel project URL is in this list.");
+  } else if (allowedOrigins.includes('*')) {
+      console.warn("PROXY WARNING: CORS_ALLOWED_ORIGINS is set to '*'. This allows all origins, which might be insecure for production environments.");
+  } else {
+      console.log(`CORS allows requests from these origins: ${allowedOrigins.join(', ')}`);
+  }
 });
