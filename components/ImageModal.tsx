@@ -33,31 +33,44 @@ const ImageModal: React.FC<ImageModalProps> = ({ isOpen, onClose, imageBase64, p
     return `data:${mimeType};base64,${imageBase64}`;
   };
 
-  const downloadImage = () => {
+  const downloadImage = async () => {
     const extension = mimeType === 'image/jpeg' ? 'jpg' : 'png';
-    // Use a more descriptive name, including part of the prompt if possible
     const safePrompt = prompt.replace(/[^a-z0-9_.-]/gi, '_').substring(0, 30);
     const randomChars = generateRandomAlphanumeric(4);
     const fileName = `${safePrompt || 'ai_image'}_${randomChars}.${extension}`;
 
     const link = document.createElement('a');
+    let objectUrlToRevoke: string | null = null;
     
-    if (imageBase64.startsWith('http')) {
-      // For direct URLs, set href and download attribute.
-      // Browser will handle fetching. May be subject to CORS if cross-origin.
-      link.href = imageBase64;
-    } else if (imageBase64.startsWith('data:image')) {
-      // If it's already a full data URL
-      link.href = imageBase64;
-    } else {
-      // Assume it's raw base64 data
-      link.href = `data:${mimeType};base64,${imageBase64}`;
+    try {
+        if (imageBase64.startsWith('http')) {
+            // For direct URLs, fetch the image data as a blob
+            const response = await fetch(imageBase64);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+            }
+            const blob = await response.blob();
+            link.href = URL.createObjectURL(blob);
+            objectUrlToRevoke = link.href;
+        } else if (imageBase64.startsWith('data:image')) {
+            link.href = imageBase64;
+        } else {
+            link.href = `data:${mimeType};base64,${imageBase64}`;
+        }
+        
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        if (objectUrlToRevoke) {
+            URL.revokeObjectURL(objectUrlToRevoke);
+        }
+    } catch (error) {
+        console.error("Error downloading image:", error);
+        // Potentially show a notification to the user
+        alert(`Failed to download image: ${(error as Error).message}`);
     }
-    
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   return (

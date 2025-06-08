@@ -237,8 +237,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [uploadedImage, setUploadedImage] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null); 
+  const [uploadedImages, setUploadedImages] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [uploadedTextFileContent, setUploadedTextFileContent] = useState<string | null>(null);
   const [uploadedTextFileName, setUploadedTextFileName] = useState<string | null>(null);
   const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false);
@@ -423,7 +423,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       [Model.FLUX_KONTEX]: {
         isSet: isProxyExpectedToHaveKey, 
         envVarName: 'FAL_KEY (on proxy)', 
-        modelName: 'Flux Kontex Image Edit', 
+        modelName: 'Flux Kontext Image Edit', 
         isMock: false, 
         isGeminiPlatform: false, 
         isImageEditing: true 
@@ -495,13 +495,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     }
     
     if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || isFluxKontexModelSelected) { 
-        if (!isFluxKontexModelSelected) { // Flux Kontex needs an image upload
-          setUploadedImage(null);
-          setImagePreview(null); 
+        if (!isFluxKontexModelSelected) { // Flux Kontext needs an image upload
+          setUploadedImages([]);
+          setImagePreviews([]); 
         }
         setUploadedTextFileContent(null);
         setUploadedTextFileName(null);
-        if (!isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected) setActivePersonaId(null); // AI Agent, Private Mode, Flux Kontex don't use personas, but other special models do clear it
+        if (!isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected) setActivePersonaId(null); // AI Agent, Private Mode, Flux Kontext don't use personas, but other special models do clear it
         if (isListening && !isRealTimeTranslationMode) { // Stop chat STT if switching to special mode
             recognitionRef.current?.stop();
         }
@@ -880,8 +880,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
 
       setActiveSessionId(sessionId);
       setCurrentChatName(sessionToLoad.name);
-      setUploadedImage(null);
-      setImagePreview(null);
+      setUploadedImages([]);
+      setImagePreviews([]);
       setUploadedTextFileContent(null);
       setUploadedTextFileName(null);
       setIsWebSearchEnabled(false); 
@@ -898,8 +898,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     setMessages([]);
     setActiveSessionId(null);
     setCurrentChatName("New Chat");
-    setUploadedImage(null);
-    setImagePreview(null);
+    setUploadedImages([]);
+    setImagePreviews([]);
     setUploadedTextFileContent(null);
     setUploadedTextFileName(null);
     setIsWebSearchEnabled(false);
@@ -916,7 +916,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         }));
     }
 
-    if (!isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected) setActivePersonaId(null); // AI Agent, Private Mode, Flux Kontex don't use personas
+    if (!isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected) setActivePersonaId(null); // AI Agent, Private Mode, Flux Kontext don't use personas
     setError(null);
     setIsSidebarOpen(false); 
     addNotification("Started new chat.", "info");
@@ -1089,8 +1089,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             setActiveSessionId(null); 
             setCurrentChatName(sessionToLoad.name + " (from device)"); // Indicate it's from device
 
-            setUploadedImage(null);
-            setImagePreview(null);
+            setUploadedImages([]);
+            setImagePreviews([]);
             setUploadedTextFileContent(null);
             setUploadedTextFileName(null);
             setIsWebSearchEnabled(false); 
@@ -1251,7 +1251,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       if (pollCount > MAX_TOTAL_POLLS) {
         if (intervalId) clearInterval(intervalId);
         setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Image editing timed out for: "${userPrompt}". Please try again.`, isRegenerating: false, fluxRequestId: undefined } : msg));
-        addNotification("Flux Kontex image editing timed out.", "error");
+        addNotification("Flux Kontext image editing timed out.", "error");
         setIsLoading(false);
         return;
       }
@@ -1275,7 +1275,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             addNotification("Image editing successful!", "success");
           } else {
             setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Image editing completed, but no image was returned. Prompt: "${userPrompt}"`, isRegenerating: false, fluxRequestId: undefined } : msg));
-            addNotification("Flux Kontex: Processing completed, but no image was returned by the API.", "info", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0, 200) : undefined);
+            addNotification("Flux Kontext: Processing completed, but no image was returned by the API.", "info", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0, 200) : undefined);
           }
           setIsLoading(false);
           return;
@@ -1288,7 +1288,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             if (intervalId) clearInterval(intervalId);
             const errorMessage = statusResult.error || `Request ID ${requestId} not found after several attempts.`;
             setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error editing image: ${errorMessage}. Prompt: "${userPrompt}"`, isRegenerating: false, fluxRequestId: undefined } : msg));
-            addNotification(`Flux Kontex Error: ${errorMessage}`, "error", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0,200) : undefined);
+            addNotification(`Flux Kontext Error: ${errorMessage}`, "error", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0,200) : undefined);
             setIsLoading(false);
             return;
           }
@@ -1298,7 +1298,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
           if (intervalId) clearInterval(intervalId);
           const errorMessage = statusResult.error || "Unknown error during image editing.";
           setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error editing image: ${errorMessage}. Prompt: "${userPrompt}"`, isRegenerating: false, fluxRequestId: undefined } : msg));
-          addNotification(`Flux Kontex Error: ${errorMessage}`, "error", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0,200) : undefined);
+          addNotification(`Flux Kontext Error: ${errorMessage}`, "error", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0,200) : undefined);
           setIsLoading(false);
         }
       } catch (pollingError: any) {
@@ -1316,8 +1316,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
 
   const internalSendMessage = async (
     currentInputText: string,
-    currentUploadedImageFile: File | null, 
-    currentImagePreviewDataUrl: string | null, 
+    currentActiveImageFile: File | null,     // The primary image for the message
+    currentActiveImagePreview: string | null, // Preview for the primary image
     currentUploadedTextContent: string | null,
     currentUploadedTextFileName: string | null,
     isRegenerationOfAiMsgId?: string 
@@ -1333,7 +1333,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     if (isAiAgentMode) {
         if (currentUploadedTextFileName && currentUploadedTextContent) {
             textForApi = `Content from uploaded file "${currentUploadedTextFileName}":\n${currentUploadedTextContent}\n\n---\n\nUser's goal: ${textForApi}`;
-        } else if (currentUploadedTextFileName && !currentUploadedTextContent && !currentUploadedImageFile) {
+        } else if (currentUploadedTextFileName && !currentUploadedTextContent && !currentActiveImageFile) {
             textForApi = `${fileContextNote}\n\nUser's goal: ${textForApi}`;
         }
     } else if (currentUploadedTextFileName && currentUploadedTextContent) { // Standard chat with text file
@@ -1346,11 +1346,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         text: userDisplayedText, 
         sender: 'user',
         timestamp: messageTimestamp,
-        imagePreview: currentImagePreviewDataUrl || undefined,
+        imagePreview: currentActiveImagePreview || undefined, // Uses the single active preview
         fileName: currentUploadedTextFileName || undefined,
         isImageQuery: isImagenModelSelected || isFluxKontexModelSelected,
         isTaskGoal: isAiAgentMode, 
-        isNote: isPrivateModeSelected && (!currentImagePreviewDataUrl && !currentUploadedTextFileName),
+        isNote: isPrivateModeSelected && (!currentActiveImagePreview && !currentUploadedTextFileName),
         model: isPrivateModeSelected ? Model.PRIVATE : undefined,
     };
 
@@ -1388,8 +1388,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         setMessages(prev => prev.map(msg => msg.id === userMessageId ? {...msg, model: Model.PRIVATE} : msg)); // Add model to user message
         setIsLoading(false);
         setInput('');
-        setUploadedImage(null);
-        setImagePreview(null);
+        setUploadedImages([]);
+        setImagePreviews([]);
         setUploadedTextFileContent(null);
         setUploadedTextFileName(null);
         addNotification("Entry logged locally. AI features disabled in Private Mode.", "info");
@@ -1432,18 +1432,18 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             throw new Error("TTS generation failed to return audio.");
         }
 
-      } else if (currentModelStatus?.isImageEditing && !currentModelStatus.isMock) { // Flux Kontex
-          if (!currentUploadedImageFile || !currentImagePreviewDataUrl) {
-            throw new Error("Flux Kontex requires an image to be uploaded.");
+      } else if (currentModelStatus?.isImageEditing && !currentModelStatus.isMock) { // Flux Kontext
+          if (!currentActiveImageFile || !currentActiveImagePreview) {
+            throw new Error("Flux Kontext requires an image to be uploaded and selected.");
           }
 
-          const [header, base64Data] = (currentImagePreviewDataUrl || '').split(',');
+          const [header, base64Data] = (currentActiveImagePreview || '').split(',');
           if (!base64Data || !/^[A-Za-z0-9+/=]+$/.test(base64Data)) { // Basic base64 validation
-            throw new Error("Invalid image data provided for Flux Kontex.");
+            throw new Error("Invalid image data provided for Flux Kontext.");
           }
           
           const mimeTypeMatch = header?.match(/data:(image\/[a-zA-Z0-9-.+]+);base64/) || [];
-          const mimeTypeForFal = (mimeTypeMatch[1] || currentUploadedImageFile?.type || 'image/png') as 'image/jpeg' | 'image/png';
+          const mimeTypeForFal = (mimeTypeMatch[1] || currentActiveImageFile?.type || 'image/png') as 'image/jpeg' | 'image/png';
 
 
           const result = await editImageWithFluxKontexProxy({
@@ -1463,7 +1463,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             } : msg));
             pollFluxKontexStatus(result.requestId, aiMessageId, userDisplayedText);
           } else {
-            throw new Error(result.error || "Flux Kontex image submission failed to return a request ID.");
+            throw new Error(result.error || "Flux Kontext image submission failed to return a request ID.");
           }
 
       } else if (currentModelStatus?.isGeminiPlatform && !currentModelStatus.isMock && !isRealTimeTranslationMode && !isPrivateModeSelected) { 
@@ -1533,15 +1533,15 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                 currentUserParts.push({ text: textForApi.trim() });
             }
             // Add non-text/non-image file note for non-AI Agent Gemini models if not already in textForApi
-            if (!isAiAgentMode && currentUploadedTextFileName && !currentUploadedTextContent && !currentUploadedImageFile) {
+            if (!isAiAgentMode && currentUploadedTextFileName && !currentUploadedTextContent && !currentActiveImageFile) {
                 currentUserParts.push({ text: fileContextNote });
             }
             
-            if (currentUploadedImageFile && currentImagePreviewDataUrl) { 
+            if (currentActiveImageFile && currentActiveImagePreview) { 
                 try {
-                    const base64Image = currentImagePreviewDataUrl.split(',')[1];
+                    const base64Image = currentActiveImagePreview.split(',')[1];
                     if (base64Image) {
-                         currentUserParts.push({ inlineData: { mimeType: currentUploadedImageFile.type, data: base64Image } });
+                         currentUserParts.push({ inlineData: { mimeType: currentActiveImageFile.type, data: base64Image } });
                     }
                 } catch(e) { console.error("Error processing current user uploaded image for Gemini:", e); }
             }
@@ -1588,16 +1588,16 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         });
         
         let currentTurnTextForApi = textForApi.trim();
-        if (currentUploadedTextFileName && !currentUploadedTextContent && !currentUploadedImageFile) {
+        if (currentUploadedTextFileName && !currentUploadedTextContent && !currentActiveImageFile) {
             currentTurnTextForApi = `${currentTurnTextForApi}\n\n${fileContextNote}`;
         }
 
         const currentUserContent: Array<{type: 'text', text: string} | {type: 'image_url', image_url: {url: string, detail?: "auto" | "low" | "high" }}> = [];
         if (currentTurnTextForApi.trim()) currentUserContent.push({ type: 'text', text: currentTurnTextForApi.trim() });
-        if (currentUploadedImageFile && currentImagePreviewDataUrl) currentUserContent.push({ type: 'image_url', image_url: { url: currentImagePreviewDataUrl, detail: "auto" }});
+        if (currentActiveImageFile && currentActiveImagePreview) currentUserContent.push({ type: 'image_url', image_url: { url: currentActiveImagePreview, detail: "auto" }});
 
         if(currentUserContent.length > 0) history.push({ role: 'user', content: currentUserContent });
-        else if (userDisplayedText === "" && !currentUploadedImageFile && !currentUploadedTextFileName) history.push({ role: 'user', content: " " }); 
+        else if (userDisplayedText === "" && !currentActiveImageFile && !currentUploadedTextFileName) history.push({ role: 'user', content: " " }); 
 
         const stream = sendOpenAIMessageStream({ 
             modelIdentifier: actualModelIdentifier, 
@@ -1624,7 +1624,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         });
         
         let currentTurnTextForDeepseek = textForApi.trim();
-        if (currentUploadedTextFileName && !currentUploadedTextContent && !currentUploadedImageFile) {
+        if (currentUploadedTextFileName && !currentUploadedTextContent && !currentActiveImageFile) {
             currentTurnTextForDeepseek = `${currentTurnTextForDeepseek}\n\n${fileContextNote}`;
         }
         history.push({ role: 'user', content: currentTurnTextForDeepseek || " " }); 
@@ -1645,11 +1645,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       } else if (currentModelStatus?.isMock && !isRealTimeTranslationMode && !isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected) { 
         const mockParts: Part[] = [];
         if (textForApi.trim()) mockParts.push({ text: textForApi.trim() });
-        if (currentUploadedTextFileName && !currentUploadedTextContent && !currentUploadedImageFile) {
+        if (currentUploadedTextFileName && !currentUploadedTextContent && !currentActiveImageFile) {
             mockParts.push({ text: fileContextNote });
         }
-        if (currentUploadedImageFile && currentImagePreviewDataUrl) { 
-            mockParts.push({ inlineData: { mimeType: currentUploadedImageFile.type as 'image/jpeg' | 'image/png', data: currentImagePreviewDataUrl.split(',')[1] } });
+        if (currentActiveImageFile && currentActiveImagePreview) { 
+            mockParts.push({ inlineData: { mimeType: currentActiveImageFile.type as 'image/jpeg' | 'image/png', data: currentActiveImagePreview.split(',')[1] } });
         }
         const stream = sendMockMessageStream(mockParts, selectedModel, currentModelSpecificSettings as ModelSettings); 
         let currentText = '';
@@ -1677,16 +1677,16 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       }]);
     }
 
-    // Only clear inputs if not polling for Flux Kontex or not regenerating, etc.
+    // Only clear inputs if not polling for Flux Kontext or not regenerating, etc.
     if (!isFluxKontexModelSelected || (isFluxKontexModelSelected && !messages.find(m => m.id === aiMessageId)?.fluxRequestId)) {
       setIsLoading(false);
     }
     
     if (!isRegenerationOfAiMsgId && !isRealTimeTranslationMode && !isPrivateModeSelected) { 
         setInput(''); 
-        if (!isFluxKontexModelSelected) { // Keep image for Flux Kontex if user might want to retry or edit again
-            setUploadedImage(null);
-            setImagePreview(null); 
+        if (!isFluxKontexModelSelected) { // Keep image for Flux Kontext if user might want to retry or edit again
+            setUploadedImages([]);
+            setImagePreviews([]); 
         }
         setUploadedTextFileContent(null);
         setUploadedTextFileName(null);
@@ -1697,20 +1697,20 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   const handleSendMessage = async () => {
     if (isRealTimeTranslationMode || isListening) return; 
     
-    if (isImagenModelSelected && !input.trim()) { // Specific check for Imagen prompt
+    if (isImagenModelSelected && !input.trim()) { 
         setError("Please enter a prompt for image generation.");
         addNotification("Please enter a prompt for image generation.", "info");
         return;
     }
     if (isFluxKontexModelSelected) {
-        if (!uploadedImage) {
+        if (uploadedImages.length === 0) {
             setError("Please upload an image to edit.");
-            addNotification("Please upload an image for Flux Kontex model.", "info");
+            addNotification("Please upload an image for Flux Kontext model.", "info");
             return;
         }
         if (!input.trim()) {
             setError("Please enter a prompt to describe how to edit the image.");
-            addNotification("Please enter an editing prompt for Flux Kontex.", "info");
+            addNotification("Please enter an editing prompt for Flux Kontext.", "info");
             return;
         }
     }
@@ -1724,24 +1724,28 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         addNotification(`TTS input too long. Max ${OPENAI_TTS_MAX_INPUT_LENGTH} chars.`, "error");
         return;
     }
-    if (isAiAgentMode && !input.trim() && !uploadedImage && !uploadedTextFileName) {
+    if (isAiAgentMode && !input.trim() && uploadedImages.length === 0 && !uploadedTextFileName) {
         setError("Please enter a goal or upload a file for the AI Agent.");
         addNotification("Please enter a goal or upload a file for the AI Agent.", "info");
         return;
     }
-     if (isPrivateModeSelected && !input.trim() && !uploadedImage && !uploadedTextFileName) {
+     if (isPrivateModeSelected && !input.trim() && uploadedImages.length === 0 && !uploadedTextFileName) {
         setError("Please enter text, or upload an image/file to log in Private Mode.");
         addNotification("Please enter text, or upload an image/file to log in Private Mode.", "info");
         return;
     }
     // General check for other models if input and attachments are empty
-    if (!isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected && !input.trim() && !uploadedImage && !uploadedTextFileName) {
+    if (!isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected && !input.trim() && uploadedImages.length === 0 && !uploadedTextFileName) {
         return; // Do nothing if everything is empty for standard chat models
     }
 
     setIsLoading(true);
     setError(null);
-    await internalSendMessage(input, uploadedImage, imagePreview, uploadedTextFileContent, uploadedTextFileName);
+    // For Flux Kontext and other models that use a single image, pass the first one.
+    const activeImageFile = uploadedImages.length > 0 ? uploadedImages[0] : null;
+    const activeImagePreview = imagePreviews.length > 0 ? imagePreviews[0] : null;
+
+    await internalSendMessage(input, activeImageFile, activeImagePreview, uploadedTextFileContent, uploadedTextFileName);
   };
   
   const handleRegenerateResponse = async (aiMessageIdToRegenerate: string, promptedByMsgId: string) => {
@@ -1764,15 +1768,16 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       setError(null);
       
       const regenInputText = userMessageForRegen.text;
-      let currentRegenImageFile: File | null = null; // This would need to be re-fetched or stored if regeneration needs the File object. For now, using preview.
-      let currentRegenImagePreview: string | null = userMessageForRegen.imagePreview || null;
+      // For regeneration, we assume the image was part of the original userMessageForRegen.
+      // We'd need a more complex way to re-fetch or store the File object if it's strictly required.
+      // For now, using the preview URL. If the model needs the File object again, this might need adjustment.
+      const currentRegenImagePreview = userMessageForRegen.imagePreview || null;
+      // This simple approach won't have access to the original File object for regeneration.
+      // If File object is crucial, it would need to be stored with the ChatMessage or re-selected.
+      // For now, sending null for File, relying on preview if that's how model consumes it.
+      const currentRegenImageFile: File | null = null; 
       let currentRegenUploadedTextContent: string | null = null; // Need to retrieve this from history if possible
       let currentRegenUploadedTextFileName: string | null = userMessageForRegen.fileName || null;
-
-      // Logic to re-fetch text file content for regeneration IF NEEDED.
-      // For now, assume it was part of the original userMessageForRegen.text or we can't re-fetch it.
-      // A more robust solution would be to store the text content on the userMessage object itself.
-
 
       setMessages(prev => prev.map(msg => {
           if (msg.id === aiMessageIdToRegenerate) {
@@ -1796,32 +1801,46 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
           regenInputText, 
           currentRegenImageFile, 
           currentRegenImagePreview, 
-          currentRegenUploadedTextContent, // This will be null if not from original message text
+          currentRegenUploadedTextContent,
           currentRegenUploadedTextFileName,
           aiMessageIdToRegenerate 
       );
   };
 
-
-  const handleImageUpload = (file: File | null) => {
-    if (isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected ) return; 
-    // Imagen and Flux Kontex need image upload. Standard chat models can also accept it.
-    setUploadedImage(file);
+  const handleSetUploadedImages = (newFiles: File[]) => {
+    if (isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected ) return;
+    
+    const validFiles = newFiles.slice(0, 4); // Max 4 images
+    setUploadedImages(validFiles);
     setUploadedTextFileContent(null); 
     setUploadedTextFileName(null);
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => { setImagePreview(reader.result as string); };
-      reader.readAsDataURL(file);
-    } else { setImagePreview(null); }
+
+    const newPreviews: string[] = [];
+    if (validFiles.length > 0) {
+        let filesProcessed = 0;
+        validFiles.forEach(file => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                newPreviews.push(reader.result as string);
+                filesProcessed++;
+                if (filesProcessed === validFiles.length) {
+                    setImagePreviews(newPreviews);
+                }
+            };
+            reader.readAsDataURL(file);
+        });
+    } else {
+        setImagePreviews([]);
+    }
     clearSearch();
   };
 
-  const handleFileUpload = (file: File | null) => {
-    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isFluxKontexModelSelected) return; // Private mode handles files differently via SettingsPanel
 
-    setUploadedImage(null); 
-    setImagePreview(null);
+  const handleFileUpload = (file: File | null) => {
+    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isFluxKontexModelSelected) return; 
+
+    setUploadedImages([]); 
+    setImagePreviews([]);
 
     if (file) {
       const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
@@ -1839,8 +1858,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         reader.readAsText(file);
       } else { 
         setUploadedTextFileContent(null); 
-        // For non-AI Agent models, they won't be explicitly told about the file yet.
-        // For AI Agent, it will be notified.
         if (isAiAgentMode) {
             addNotification(`File "${file.name}" content cannot be displayed/embedded. AI Agent will be notified of the filename.`, "info");
         } else if (isPrivateModeSelected) {
@@ -1949,8 +1966,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                 }} 
                 modelSettings={modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings & FluxKontexSettings} 
                 onModelSettingsChange={handleModelSettingsChange}
-                onImageUpload={handleImageUpload}
-                imagePreview={imagePreview}
+                uploadedImages={uploadedImages}
+                imagePreviews={imagePreviews}
+                onSetUploadedImages={handleSetUploadedImages}
                 onFileUpload={handleFileUpload}
                 uploadedTextFileName={uploadedTextFileName}
                 isWebSearchEnabled={isWebSearchEnabled}
@@ -2097,7 +2115,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                 </button>
                 <h2 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light truncate">
                     {isRealTimeTranslationMode ? <LanguageIcon className="w-5 h-5 inline-block mr-2 align-text-bottom"/> : (isFluxKontexModelSelected ? <EditIcon className="w-5 h-5 inline-block mr-2 align-text-bottom" /> : <ChatBubbleLeftRightIcon className="w-5 h-5 inline-block mr-2 align-text-bottom"/>)}
-                    {isRealTimeTranslationMode ? "Real-Time Translation" : (isAiAgentMode ? "AI Agent" : (isPrivateModeSelected ? "Private Mode" : (isFluxKontexModelSelected ? "Flux Image Editor" : (currentChatName || "New Chat"))))}
+                    {isRealTimeTranslationMode ? "Real-Time Translation" : (isAiAgentMode ? "AI Agent" : (isPrivateModeSelected ? "Private Mode" : (isFluxKontexModelSelected ? "Flux Kontext Editor" : (currentChatName || "New Chat"))))}
                 </h2>
             </div>
             {/* Search Bar - Hidden in Real-Time Translation Mode & Private Mode */}
@@ -2217,14 +2235,22 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         {error && !isRealTimeTranslationMode && <div className="text-red-500 dark:text-red-400 p-2 my-2 bg-red-100 dark:bg-red-900 border border-red-500 dark:border-red-400 rounded-md text-sm">{error}</div>}
 
         {/* Attachments Preview - Hidden in Real-Time Translation Mode */}
-        {!isRealTimeTranslationMode && (!isImagenModelSelected && !isTextToSpeechModelSelected && (imagePreview || uploadedTextFileName)) && (
+        {!isRealTimeTranslationMode && (!isImagenModelSelected && !isTextToSpeechModelSelected && (imagePreviews.length > 0 || uploadedTextFileName)) && (
             <div className="mb-2 p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-secondary-light dark:bg-neutral-darker">
-                {imagePreview && ( 
-                    <div className="relative group inline-block w-24 h-24 mr-2 align-top">
-                        <img src={imagePreview} alt="Preview" className="w-full h-full object-cover rounded"/>
-                        <button onClick={() => { handleImageUpload(null); }} className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Remove image" >
-                           <XMarkIcon className="w-4 h-4" />
-                        </button>
+                {imagePreviews.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                        {imagePreviews.map((previewUrl, index) => (
+                             <div key={index} className="relative group w-16 h-16 sm:w-20 sm:h-20">
+                                <img src={previewUrl} alt={`Preview ${index + 1}`} className="w-full h-full object-cover rounded-md border border-neutral-300 dark:border-neutral-600"/>
+                                <button 
+                                    onClick={() => handleSetUploadedImages(uploadedImages.filter((_, i) => i !== index))} 
+                                    className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" 
+                                    aria-label={`Remove image ${index + 1}`}
+                                >
+                                <XMarkIcon className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        ))}
                     </div>
                 )}
                 {uploadedTextFileName && (
@@ -2312,11 +2338,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                 onClick={handleSendMessage}
                 disabled={isLoading || isListening || isGpt41AccessModalOpen || 
                     (isImagenModelSelected && !input.trim()) || 
-                    (isFluxKontexModelSelected && (!input.trim() || !uploadedImage)) ||
+                    (isFluxKontexModelSelected && (!input.trim() || uploadedImages.length === 0)) ||
                     (isTextToSpeechModelSelected && (!input.trim() || input.length > OPENAI_TTS_MAX_INPUT_LENGTH)) ||
-                    (isPrivateModeSelected && !input.trim() && !uploadedImage && !uploadedTextFileName) || 
-                    ((!input.trim() && !uploadedImage && !uploadedTextFileName) && 
-                        (isAiAgentMode ? (!uploadedImage && !uploadedTextFileName) : (!isImagenModelSelected && !isTextToSpeechModelSelected && !isPrivateModeSelected && !isFluxKontexModelSelected))) 
+                    (isPrivateModeSelected && !input.trim() && uploadedImages.length === 0 && !uploadedTextFileName) || 
+                    ((!input.trim() && uploadedImages.length === 0 && !uploadedTextFileName) && 
+                        (isAiAgentMode ? (uploadedImages.length === 0 && !uploadedTextFileName) : (!isImagenModelSelected && !isTextToSpeechModelSelected && !isPrivateModeSelected && !isFluxKontexModelSelected))) 
                 }
                 className="ml-2 p-3 bg-primary hover:bg-primary-dark dark:bg-primary-light dark:hover:bg-primary text-white rounded-lg disabled:opacity-50 transition-colors self-stretch flex items-center justify-center" 
                 aria-label={sendButtonLabel()} >

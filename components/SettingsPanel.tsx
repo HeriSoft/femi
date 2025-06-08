@@ -1,9 +1,13 @@
 
 
+
+
+
+
 import React, { useState } from 'react';
-import { Model, ModelSettings, SettingsPanelProps as LocalSettingsPanelProps, ApiKeyStatus, getActualModelIdentifier, ImagenSettings, Persona, OpenAITtsSettings, OpenAiTtsVoice, RealTimeTranslationSettings, AiAgentSettings } from '../types.ts';
-import { ArrowUpTrayIcon, PhotoIcon, XMarkIcon, MagnifyingGlassIcon, KeyIcon, InformationCircleIcon, UserCircleIcon, PlusCircleIcon, TrashIcon, PencilSquareIcon, SpeakerWaveIcon, LanguageIcon } from './Icons.tsx';
-import { TRANSLATION_TARGET_LANGUAGES } from '../constants.ts';
+import { Model, ModelSettings, SettingsPanelProps as LocalSettingsPanelProps, ApiKeyStatus, getActualModelIdentifier, ImagenSettings, Persona, OpenAITtsSettings, OpenAiTtsVoice, RealTimeTranslationSettings, AiAgentSettings, FluxKontexSettings, FluxKontexAspectRatio } from '../types.ts';
+import { ArrowUpTrayIcon, PhotoIcon, XMarkIcon, MagnifyingGlassIcon, KeyIcon, InformationCircleIcon, UserCircleIcon, PlusCircleIcon, TrashIcon, PencilSquareIcon, SpeakerWaveIcon, LanguageIcon, PencilIcon as EditIcon, ArrowPathIcon } from './Icons.tsx'; // Changed EditIcon to PencilIcon as EditIcon, Added ArrowPathIcon
+import { TRANSLATION_TARGET_LANGUAGES, DEFAULT_FLUX_KONTEX_SETTINGS } from '../constants.ts';
 
 
 const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
@@ -11,8 +15,9 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
   onModelChange,
   modelSettings, 
   onModelSettingsChange,
-  onImageUpload,
-  imagePreview,
+  uploadedImages,      // Changed from onImageUpload
+  imagePreviews,       // Changed from imagePreview
+  onSetUploadedImages, // Changed from onImageUpload
   onFileUpload,
   uploadedTextFileName,
   isWebSearchEnabled,
@@ -31,15 +36,27 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
   const [personaInstruction, setPersonaInstruction] = useState('');
 
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'text') => {
-    const file = event.target.files?.[0];
-    if (type === 'image') {
-      onImageUpload(file || null);
-    } else if (type === 'text') {
-      onFileUpload(file || null);
+  const handleImageFilesChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files) {
+      const newFilesArray = Array.from(files);
+      const combinedFiles = [...uploadedImages, ...newFilesArray].slice(0, 4); // Limit to 4
+      onSetUploadedImages(combinedFiles);
     }
+    event.target.value = ''; // Reset file input
+  };
+
+  const handleRemoveImage = (indexToRemove: number) => {
+    const newFiles = uploadedImages.filter((_, index) => index !== indexToRemove);
+    onSetUploadedImages(newFiles);
+  };
+  
+  const handleTextFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    onFileUpload(file || null);
     event.target.value = ''; 
   };
+
 
   const handlePersonaEdit = (persona: Persona) => {
     setEditingPersona(persona);
@@ -87,28 +104,44 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
   const isCurrentModelGeminiPlatformChat = currentApiKeyStatus?.isGeminiPlatform && 
                                          !currentApiKeyStatus?.isMock && 
                                          !currentApiKeyStatus?.isImageGeneration && 
+                                         !currentApiKeyStatus?.isTextToSpeech &&
                                          !currentApiKeyStatus?.isRealTimeTranslation &&
-                                         !currentApiKeyStatus?.isAiAgent; 
+                                         !currentApiKeyStatus?.isAiAgent &&
+                                         !currentApiKeyStatus?.isImageEditing;
 
   const isImagenModel = selectedModel === Model.IMAGEN3 || currentApiKeyStatus?.isImageGeneration;
   const isTextToSpeechModel = selectedModel === Model.OPENAI_TTS || currentApiKeyStatus?.isTextToSpeech;
   const isRealTimeTranslationModel = selectedModel === Model.REAL_TIME_TRANSLATION || currentApiKeyStatus?.isRealTimeTranslation;
   const isAiAgentModel = selectedModel === Model.AI_AGENT || currentApiKeyStatus?.isAiAgent; 
+  const isFluxKontexModel = selectedModel === Model.FLUX_KONTEX || currentApiKeyStatus?.isImageEditing;
+  const isPrivateModel = selectedModel === Model.PRIVATE || currentApiKeyStatus?.isPrivateMode;
 
 
   const actualModelId = getActualModelIdentifier(selectedModel);
-  const isDeepseekChat = actualModelId === 'deepseek-chat'; 
-
+  
   const generalFileAcceptTypes = ".txt,.md,.json,.js,.ts,.jsx,.tsx,.py,.java,.c,.cpp,.h,.hpp,.cs,.go,.rs,.rb,.php,.html,.htm,.css,.scss,.less,.xml,.yaml,.yml,.ini,.sh,.bat,.ps1,.sql,.csv,.log,.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation";
+  const imageFileAcceptTypes = "image/jpeg, image/png, image/webp, image/gif, image/avif";
 
-  const typedModelSettings = modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings; 
 
-  const aspectRatios: { value: string; label: string }[] = [
+  const typedModelSettings = modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & FluxKontexSettings; 
+
+  const imagenAspectRatios: { value: string; label: string }[] = [
     { value: '1:1', label: '1:1 (Square)' },
     { value: '16:9', label: '16:9 (Landscape)' },
     { value: '9:16', label: '9:16 (Portrait)' },
     { value: '4:3', label: '4:3 (Standard)' },
     { value: '3:4', label: '3:4 (Tall)' },
+  ];
+
+  const fluxKontexAspectRatios: { value: FluxKontexAspectRatio; label: string }[] = [
+    { value: 'Original', label: 'Original (Match Input)'},
+    { value: '1:1', label: '1:1 (Square)' },
+    { value: '16:9', label: '16:9 (Landscape)' },
+    { value: '9:16', label: '9:16 (Portrait)' },
+    { value: '3:4', label: '3:4 (Tall)' },
+    { value: '2:3', label: '2:3 (Portrait)' },
+    { value: '9:21', label: '9:21 (Extra Tall)' },
+    { value: '21:9', label: '21:9 (Extra Wide)' },
   ];
 
   const ttsVoices: { value: OpenAiTtsVoice; label: string }[] = [
@@ -119,6 +152,11 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
     { value: 'nova', label: 'Nova' },
     { value: 'shimmer', label: 'Shimmer' },
   ];
+  
+  const handleRandomizeSeed = () => {
+    const randomSeed = Math.floor(Math.random() * 1000000000); // Generate a large random integer
+    onModelSettingsChange({ seed: randomSeed });
+  };
 
 
   return (
@@ -154,34 +192,34 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
                     : 'bg-red-100 dark:bg-red-900 border-red-500 dark:border-red-400 text-red-700 dark:text-red-300'
             } border`}>
                 <p className="font-medium">
-                    {currentApiKeyStatus.modelName} ({currentApiKeyStatus.isMock ? "Mock" : (currentApiKeyStatus.isTextToSpeech ? "TTS API" : (currentApiKeyStatus.isRealTimeTranslation ? "Translation API" : (currentApiKeyStatus.isAiAgent ? "AI Agent API" : "Live API Key")))})
+                    {currentApiKeyStatus.modelName} ({currentApiKeyStatus.isMock ? "Mock" : (currentApiKeyStatus.isTextToSpeech ? "TTS API" : (currentApiKeyStatus.isRealTimeTranslation ? "Translation API" : (currentApiKeyStatus.isAiAgent ? "AI Agent API" : (currentApiKeyStatus.isImageEditing ? "Image Editing API" : (currentApiKeyStatus.isPrivateMode ? "Local Mode" : "Live API Key")))))})
                 </p>
                 <p>Env Variable: <code>process.env.{currentApiKeyStatus.envVarName}</code></p>
                 {currentApiKeyStatus.isSet ? (
                     <p>Key detected in environment.</p>
                 ) : (
-                    currentApiKeyStatus.isMock ? 
-                    <p>Key NOT detected, but this is a mock model and will function.</p> :
+                    currentApiKeyStatus.isMock || currentApiKeyStatus.isPrivateMode ? 
+                    <p>Key NOT detected, but this is a mock/local model and will function.</p> :
                     <p>Key NOT detected in environment.</p>
                 )}
-                {!currentApiKeyStatus.isSet && !currentApiKeyStatus.isMock && (
+                {!currentApiKeyStatus.isSet && !currentApiKeyStatus.isMock && !currentApiKeyStatus.isPrivateMode && (
                     <p className="mt-1 font-semibold">This model will not function without the API key (<code>process.env.{currentApiKeyStatus.envVarName}</code>).</p>
                 )}
                  {currentApiKeyStatus.isGeminiPlatform && (
                     <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
-                        This model uses the Google AI Studio API Key (<code>API_KEY</code>).
+                        This model uses the Google AI Studio API Key (<code>GEMINI_API_KEY</code> on proxy).
                     </p>
                  )}
                  <p className="mt-2 text-xs text-neutral-600 dark:text-neutral-400">
                     <InformationCircleIcon className="w-4 h-4 inline mr-1" />
-                    Environment variables should be set in <code>config.js</code> (for client-side keys if any) or on the proxy server.
+                    API keys are configured on the backend proxy server (<code>proxy-server/.env</code>).
                 </p>
             </div>
         )}
       </div>
 
-      {/* Persona Management Section - Hidden for Imagen, TTS, Real-Time Translation, AI Agent */}
-      {!isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && (
+      {/* Persona Management Section - Hidden for Imagen, TTS, Real-Time Translation, AI Agent, Private Mode, Flux Kontex */}
+      {!isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isPrivateModel && !isFluxKontexModel && (
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
           <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light mb-2 flex items-center">
             <UserCircleIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" />
@@ -266,8 +304,8 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
       )}
 
 
-      {/* Chat Model Settings - Hidden for Imagen, TTS, Real-Time Translation. AI Agent has its own section. */}
-      {!isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && ( 
+      {/* Chat Model Settings - Hidden for Imagen, TTS, Real-Time Translation, Flux Kontext, Private Mode. AI Agent has its own section. */}
+      {!isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isFluxKontexModel && !isPrivateModel && ( 
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
           <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light">Model Settings (Chat)</h3>
           <div>
@@ -300,7 +338,7 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
               className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
             />
           </div>
-          { (currentApiKeyStatus?.isGeminiPlatform && !currentApiKeyStatus.isImageGeneration) && ( 
+          { (currentApiKeyStatus?.isGeminiPlatform && !currentApiKeyStatus.isImageGeneration && !currentApiKeyStatus.isImageEditing && !currentApiKeyStatus.isPrivateMode) && ( 
           <div>
             <label htmlFor="top-k" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
               Top K: {typedModelSettings.topK}
@@ -336,158 +374,37 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
           </div>
         </div>
       )}
-      
-      {/* Imagen Settings */}
-      {isImagenModel && currentApiKeyStatus?.isGeminiPlatform && ( 
-        <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
-           <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light">Image Generation Settings</h3>
-           <div>
-             <label htmlFor="imagen-num-images" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-                Number of Images: {typedModelSettings.numberOfImages}
-             </label>
-             <input
-                type="number"
-                id="imagen-num-images"
-                min="1"
-                max="4"
-                step="1"
-                value={typedModelSettings.numberOfImages || 1}
-                onChange={(e) => onModelSettingsChange({ numberOfImages: parseInt(e.target.value, 10) })}
-                disabled={disabled}
-                className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
-             />
-           </div>
-           <div>
-             <label htmlFor="imagen-aspect-ratio" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-                Aspect Ratio
-             </label>
-             <select
-                id="imagen-aspect-ratio"
-                value={typedModelSettings.aspectRatio || '1:1'}
-                onChange={(e) => onModelSettingsChange({ aspectRatio: e.target.value })}
-                disabled={disabled}
-                className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
-                >
-                {aspectRatios.map(ar => (
-                    <option key={ar.value} value={ar.value}>{ar.label}</option>
-                ))}
-             </select>
-           </div>
-           <div>
-             <label htmlFor="imagen-output-mime" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-                Output Format
-             </label>
-             <select
-                id="imagen-output-mime"
-                value={typedModelSettings.outputMimeType || 'image/jpeg'}
-                onChange={(e) => onModelSettingsChange({ outputMimeType: e.target.value as 'image/jpeg' | 'image/png' })}
-                disabled={disabled}
-                className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
-                >
-                <option value="image/jpeg">JPEG</option>
-                <option value="image/png">PNG</option>
-             </select>
-           </div>
-        </div>
-      )}
 
-      {/* TTS Settings */}
-      {isTextToSpeechModel && (
+      {/* AI Agent Settings - Uses standard model settings but gets its own section for clarity */}
+      {isAiAgentModel && (
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
           <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
-            <SpeakerWaveIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" />
-            Text-to-Speech Settings
+              <UserCircleIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" /> {/* Reusing Persona icon as a generic AI/Agent icon */}
+              AI Agent Settings
           </h3>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">
+            The AI Agent uses a specific system instruction to guide its planning and execution capabilities.
+            You can adjust temperature, Top K, and Top P for its responses. Personas are disabled for AI Agent.
+          </p>
           <div>
-            <label htmlFor="tts-voice" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              Voice
+            <label htmlFor="ai-agent-system-instruction" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              System Instruction (AI Agent - Read Only)
             </label>
-            <select
-              id="tts-voice"
-              value={typedModelSettings.voice || 'alloy'}
-              onChange={(e) => onModelSettingsChange({ voice: e.target.value as OpenAiTtsVoice })}
-              disabled={disabled}
-              className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
-            >
-              {ttsVoices.map(voice => (
-                <option key={voice.value} value={voice.value}>{voice.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="tts-speed" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              Speed: {(typedModelSettings.speed || 1.0).toFixed(2)}x
-            </label>
-            <input
-              type="range"
-              id="tts-speed"
-              min="0.25"
-              max="4.0"
-              step="0.05"
-              value={typedModelSettings.speed || 1.0}
-              onChange={(e) => onModelSettingsChange({ speed: parseFloat(e.target.value) })}
-              disabled={disabled}
-              className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
+            <textarea
+              id="ai-agent-system-instruction"
+              rows={5}
+              value={typedModelSettings.systemInstruction}
+              readOnly
+              className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light/70 dark:bg-neutral-dark/70 opacity-70 cursor-not-allowed text-xs"
             />
           </div>
            <div>
-            <label htmlFor="tts-model" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              TTS Model Quality
-            </label>
-            <select
-              id="tts-model"
-              value={typedModelSettings.modelIdentifier || 'tts-1'}
-              onChange={(e) => onModelSettingsChange({ modelIdentifier: e.target.value as 'tts-1' | 'tts-1-hd' })}
-              disabled={disabled}
-              className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
-            >
-              <option value="tts-1">Standard (tts-1)</option>
-              <option value="tts-1-hd">High Definition (tts-1-hd)</option>
-            </select>
-          </div>
-        </div>
-      )}
-
-      {/* Real-Time Translation Settings */}
-      {isRealTimeTranslationModel && (
-        <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
-          <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
-            <LanguageIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" />
-            Real-Time Translation Settings
-          </h3>
-          <div>
-            <label htmlFor="target-language-select" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              Target Language
-            </label>
-            <select
-              id="target-language-select"
-              value={typedModelSettings.targetLanguage || 'en'}
-              onChange={(e) => onModelSettingsChange({ targetLanguage: e.target.value })}
-              disabled={disabled}
-              className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
-            >
-              {TRANSLATION_TARGET_LANGUAGES.map(lang => (
-                <option key={lang.code} value={lang.code}>{lang.flag} {lang.name}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-      )}
-
-      {/* AI Agent Settings (Only Temperature, TopK, TopP relevant) */}
-      {isAiAgentModel && (
-        <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
-          <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light">AI Agent Settings</h3>
-           <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              AI Agent uses web search implicitly. System instruction is fixed. You can upload one image or text file for context.
-            </p>
-          <div>
-            <label htmlFor="temperature-agent" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+            <label htmlFor="ai-agent-temperature" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
               Temperature: {typedModelSettings.temperature.toFixed(2)}
             </label>
             <input
               type="range"
-              id="temperature-agent"
+              id="ai-agent-temperature"
               min="0"
               max="1" 
               step="0.01"
@@ -498,12 +415,12 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
             />
           </div>
           <div>
-            <label htmlFor="top-k-agent" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+            <label htmlFor="ai-agent-top-k" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
               Top K: {typedModelSettings.topK}
             </label>
             <input
               type="range"
-              id="top-k-agent"
+              id="ai-agent-top-k"
               min="1"
               max="100" 
               step="1"
@@ -514,12 +431,12 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
             />
           </div>
           <div> 
-            <label htmlFor="top-p-agent" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+            <label htmlFor="ai-agent-top-p" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
               Top P: {typedModelSettings.topP.toFixed(2)}
             </label>
             <input
               type="range"
-              id="top-p-agent"
+              id="ai-agent-top-p"
               min="0"
               max="1"
               step="0.01"
@@ -531,110 +448,406 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
           </div>
         </div>
       )}
-
-
-      {/* Attachments - Hidden for Imagen, TTS, Real-Time Translation. AI Agent has its own logic for this. */}
-      {(!isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel) && ( 
+      
+      {/* Private Mode Settings */}
+      {isPrivateModel && (
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
-          <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light">
-            Attachments {isAiAgentModel ? '(AI Agent Context)' : '(Chat)'}
-          </h3>
-          
-          {/* Image Upload: Available for standard chat models and AI Agent */}
-          {(selectedModel !== Model.CLAUDE && !isDeepseekChat) && (
-              <div>
-                  <label htmlFor="image-upload" className={`flex items-center justify-center w-full px-4 py-2 border-2 border-dashed border-secondary dark:border-neutral-darkest rounded-md  ${disabled ? 'cursor-not-allowed opacity-50' :'cursor-pointer hover:bg-secondary/50 dark:hover:bg-neutral-dark/50'} transition-colors`}>
-                      <PhotoIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light"/>
-                      <span className="text-sm text-neutral-darker dark:text-secondary-light">Upload Image</span>
-                      <input id="image-upload" type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, 'image')} disabled={disabled} />
-                  </label>
-                  {imagePreview && (
-                  <div className="mt-2 relative group w-24 h-24">
-                      <img src={imagePreview} alt="Preview" className="w-full h-full object-cover rounded"/>
-                      <button
-                          onClick={() => onImageUpload(null)}
-                          className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                          aria-label="Remove image"
-                          disabled={disabled}
-                      >
-                          <XMarkIcon className="w-4 h-4" />
-                      </button>
-                  </div>
-                  )}
-              </div>
-          )}
-          {isDeepseekChat && !isAiAgentModel && (
-              <p className="text-xs text-neutral-500 dark:text-neutral-400">Image uploads are not supported by the Deepseek-chat model.</p>
-          )}
-          {selectedModel === Model.CLAUDE && !isAiAgentModel && (
-              <p className="text-xs text-neutral-500 dark:text-neutral-400">Image uploads are not applicable for the mock Claude model.</p>
-          )}
-
-          {/* Text File Upload: Available for standard chat models and AI Agent */}
-          {(selectedModel !== Model.CLAUDE) && (
-              <div> 
-                  <label htmlFor="file-upload" className={`flex items-center justify-center w-full px-4 py-2 border-2 border-dashed border-secondary dark:border-neutral-darkest rounded-md  ${disabled ? 'cursor-not-allowed opacity-50' :'cursor-pointer hover:bg-secondary/50 dark:hover:bg-neutral-dark/50'} transition-colors`}>
-                      <ArrowUpTrayIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light"/>
-                      <span className="text-sm text-neutral-darker dark:text-secondary-light">Upload File (Text-based)</span>
-                      <input id="file-upload" type="file" accept={generalFileAcceptTypes} className="hidden" onChange={(e) => handleFileChange(e, 'text')} disabled={disabled} />
-                  </label>
-                  {uploadedTextFileName && (
-                      <div className="mt-2 text-sm text-neutral-darker dark:text-secondary-light flex items-center">
-                          File: {uploadedTextFileName}
-                          <button
-                              onClick={() => onFileUpload(null)}
-                              className="ml-2 text-red-500 hover:text-red-700"
-                              aria-label="Remove file"
-                              disabled={disabled}
-                          >
-                              <XMarkIcon className="w-4 h-4" />
-                          </button>
-                      </div>
-                  )}
-              </div>
-          )}
-          {selectedModel === Model.CLAUDE && !isAiAgentModel && (
-              <p className="text-xs text-neutral-500 dark:text-neutral-400">File uploads are not applicable for the mock Claude model.</p>
-          )}
+            <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
+              <UserCircleIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" /> {/* Reusing Persona icon */}
+              Private Mode Information
+            </h3>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                In Private Mode, your chat messages, uploaded images, and files are stored only in this browser session and are NOT sent to any AI model or external server.
+                All other model settings (like temperature, personas, web search) are disabled as there is no AI interaction.
+            </p>
+             <div>
+                <label htmlFor="private-mode-system-instruction" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+                System Instruction (Private Mode - Read Only)
+                </label>
+                <textarea
+                id="private-mode-system-instruction"
+                rows={2}
+                value={typedModelSettings.systemInstruction}
+                readOnly
+                className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light/70 dark:bg-neutral-dark/70 opacity-70 cursor-not-allowed text-xs"
+                />
+            </div>
         </div>
       )}
-      
-      {(isImagenModel || isTextToSpeechModel || isRealTimeTranslationModel) && !isAiAgentModel && (
-         <p className="text-xs text-neutral-500 dark:text-neutral-400 border-t border-secondary dark:border-neutral-darkest pt-4">
-            {isImagenModel && "Personas, Attachments, Web Search, and detailed Chat Model Settings are not applicable for Imagen3."}
-            {isTextToSpeechModel && "Personas, Attachments, Web Search, and detailed Chat Model Settings are not applicable for OpenAI TTS."}
-            {isRealTimeTranslationModel && "Personas, Chat Attachments, Web Search, and standard Chat Model Settings are not applicable for Real-Time Translation."}
-        </p>
+
+
+      {/* Imagen Settings */}
+      {isImagenModel && (
+        <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
+            <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
+                <PhotoIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" /> 
+                Imagen Settings
+            </h3>
+            <div>
+                <label htmlFor="number-of-images" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+                Number of Images: {typedModelSettings.numberOfImages || 1}
+                </label>
+                <input
+                type="range"
+                id="number-of-images"
+                min="1"
+                max="4"
+                step="1"
+                value={typedModelSettings.numberOfImages || 1}
+                onChange={(e) => onModelSettingsChange({ numberOfImages: parseInt(e.target.value, 10) })}
+                disabled={disabled}
+                className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
+                />
+            </div>
+             <div>
+                <label htmlFor="aspect-ratio" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Aspect Ratio</label>
+                <select 
+                    id="aspect-ratio"
+                    value={typedModelSettings.aspectRatio || '1:1'}
+                    onChange={(e) => onModelSettingsChange({ aspectRatio: e.target.value })}
+                    disabled={disabled}
+                    className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
+                >
+                    {imagenAspectRatios.map(ratio => (
+                        <option key={ratio.value} value={ratio.value}>{ratio.label}</option>
+                    ))}
+                </select>
+            </div>
+            <div>
+                <label htmlFor="output-mime-type" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Output Format</label>
+                <select 
+                    id="output-mime-type"
+                    value={typedModelSettings.outputMimeType || 'image/jpeg'}
+                    onChange={(e) => onModelSettingsChange({ outputMimeType: e.target.value as 'image/jpeg' | 'image/png' })}
+                    disabled={disabled}
+                    className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
+                >
+                    <option value="image/jpeg">JPEG</option>
+                    <option value="image/png">PNG</option>
+                </select>
+            </div>
+            <div className="mt-2 p-3 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-sm text-blue-700 dark:text-blue-300">
+                <InformationCircleIcon className="w-5 h-5 inline mr-1.5 align-text-bottom" />
+                Enter a prompt in the chat input to generate images. System instructions and other chat settings are not used for image generation.
+            </div>
+        </div>
       )}
-       {isAiAgentModel && (
-         <p className="text-xs text-neutral-500 dark:text-neutral-400 border-t border-secondary dark:border-neutral-darkest pt-4">
-            Personas are not applicable for AI Agent. Web Search is always active. Use Model Settings above for temperature, TopK, TopP.
-        </p>
+
+      {/* OpenAI TTS Settings */}
+      {isTextToSpeechModel && (
+        <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
+            <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
+                <SpeakerWaveIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" /> 
+                Text-to-Speech Settings
+            </h3>
+             <div>
+                <label htmlFor="tts-model-identifier" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">TTS Model</label>
+                <select 
+                    id="tts-model-identifier"
+                    value={typedModelSettings.modelIdentifier || 'tts-1'}
+                    onChange={(e) => onModelSettingsChange({ modelIdentifier: e.target.value as 'tts-1' | 'tts-1-hd' })}
+                    disabled={disabled}
+                    className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
+                >
+                    <option value="tts-1">OpenAI TTS-1 (Standard)</option>
+                    <option value="tts-1-hd">OpenAI TTS-1 HD (High Definition)</option>
+                </select>
+            </div>
+            <div>
+                <label htmlFor="tts-voice" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Voice</label>
+                <select 
+                    id="tts-voice"
+                    value={typedModelSettings.voice || 'alloy'}
+                    onChange={(e) => onModelSettingsChange({ voice: e.target.value as OpenAiTtsVoice })}
+                    disabled={disabled}
+                    className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
+                >
+                    {ttsVoices.map(voice => (
+                        <option key={voice.value} value={voice.value}>{voice.label}</option>
+                    ))}
+                </select>
+            </div>
+            <div>
+                <label htmlFor="tts-speed" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+                Speed: {(typedModelSettings.speed || 1.0).toFixed(2)}x
+                </label>
+                <input
+                type="range"
+                id="tts-speed"
+                min="0.25"
+                max="4.0"
+                step="0.05"
+                value={typedModelSettings.speed || 1.0}
+                onChange={(e) => onModelSettingsChange({ speed: parseFloat(e.target.value) })}
+                disabled={disabled}
+                className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
+                />
+            </div>
+            <div className="mt-2 p-3 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-sm text-blue-700 dark:text-blue-300">
+                <InformationCircleIcon className="w-5 h-5 inline mr-1.5 align-text-bottom" />
+                Enter text in the chat input to synthesize speech. Chat settings (temp, etc.) are not used.
+            </div>
+        </div>
+      )}
+
+      {/* Real-Time Translation Settings */}
+      {isRealTimeTranslationModel && (
+         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
+            <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
+                <LanguageIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" /> 
+                Real-Time Translation Settings
+            </h3>
+            <div>
+                <label htmlFor="target-language" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Target Language for Translation</label>
+                <select 
+                    id="target-language"
+                    value={(typedModelSettings as RealTimeTranslationSettings).targetLanguage || 'en'}
+                    onChange={(e) => onModelSettingsChange({ targetLanguage: e.target.value })}
+                    disabled={disabled}
+                    className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
+                >
+                    {TRANSLATION_TARGET_LANGUAGES.map(lang => (
+                        <option key={lang.code} value={lang.code}>{lang.flag} {lang.name}</option>
+                    ))}
+                </select>
+            </div>
+            <div className="mt-2 p-3 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-sm text-blue-700 dark:text-blue-300">
+                <InformationCircleIcon className="w-5 h-5 inline mr-1.5 align-text-bottom" />
+                Use the microphone button in the chat area to start real-time speech-to-text and translation.
+            </div>
+        </div>
+      )}
+
+      {/* Flux Kontext Settings */}
+      {isFluxKontexModel && (
+        <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
+          <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
+            <EditIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" />
+            Flux Kontext Settings
+          </h3>
+          <div>
+            <label htmlFor="flux-safety-tolerance" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Safety Tolerance: {typedModelSettings.safety_tolerance ?? DEFAULT_FLUX_KONTEX_SETTINGS.safety_tolerance}
+            </label>
+            <input
+              type="range"
+              id="flux-safety-tolerance"
+              min="1" max="5" step="1"
+              value={typedModelSettings.safety_tolerance ?? DEFAULT_FLUX_KONTEX_SETTINGS.safety_tolerance}
+              onChange={(e) => onModelSettingsChange({ safety_tolerance: parseInt(e.target.value, 10) })}
+              disabled={disabled}
+              className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
+            />
+          </div>
+          <div>
+            <label htmlFor="flux-guidance-scale" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Guidance Scale: {typedModelSettings.guidance_scale?.toFixed(1) ?? DEFAULT_FLUX_KONTEX_SETTINGS.guidance_scale.toFixed(1)}
+            </label>
+            <input
+              type="range"
+              id="flux-guidance-scale"
+              min="0" max="20" step="0.5"
+              value={typedModelSettings.guidance_scale ?? DEFAULT_FLUX_KONTEX_SETTINGS.guidance_scale}
+              onChange={(e) => onModelSettingsChange({ guidance_scale: parseFloat(e.target.value) })}
+              disabled={disabled}
+              className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
+            />
+          </div>
+          <div>
+            <label htmlFor="flux-num-inference-steps" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Number of Inference Steps: {typedModelSettings.num_inference_steps ?? DEFAULT_FLUX_KONTEX_SETTINGS.num_inference_steps}
+            </label>
+            <input
+              type="range"
+              id="flux-num-inference-steps"
+              min="10" max="100" step="1"
+              value={typedModelSettings.num_inference_steps ?? DEFAULT_FLUX_KONTEX_SETTINGS.num_inference_steps}
+              onChange={(e) => onModelSettingsChange({ num_inference_steps: parseInt(e.target.value, 10) })}
+              disabled={disabled}
+              className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
+            />
+          </div>
+           <div>
+            <label htmlFor="flux-num-images" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Number of Images: {typedModelSettings.num_images ?? DEFAULT_FLUX_KONTEX_SETTINGS.num_images}
+            </label>
+            <input
+              type="range"
+              id="flux-num-images"
+              min="1" max="4" step="1"
+              value={typedModelSettings.num_images ?? DEFAULT_FLUX_KONTEX_SETTINGS.num_images}
+              onChange={(e) => onModelSettingsChange({ num_images: parseInt(e.target.value, 10) })}
+              disabled={disabled}
+              className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
+            />
+          </div>
+          <div className="flex items-end space-x-2">
+            <div className="flex-grow">
+                <label htmlFor="flux-seed" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+                Seed (empty for random)
+                </label>
+                <input
+                type="number"
+                id="flux-seed"
+                value={typedModelSettings.seed === null || typedModelSettings.seed === undefined ? '' : typedModelSettings.seed}
+                onChange={(e) => onModelSettingsChange({ seed: e.target.value === '' ? null : parseInt(e.target.value, 10) })}
+                placeholder="Random"
+                disabled={disabled}
+                className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
+                />
+            </div>
+            <button 
+                onClick={handleRandomizeSeed}
+                disabled={disabled}
+                className="p-2 border border-secondary dark:border-neutral-darkest rounded-md text-neutral-darker dark:text-secondary-light hover:bg-secondary/50 dark:hover:bg-neutral-dark/50"
+                title="Randomize Seed"
+            >
+                <ArrowPathIcon className="w-5 h-5"/>
+            </button>
+          </div>
+          <div>
+            <label htmlFor="flux-aspect-ratio" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Aspect Ratio</label>
+            <select 
+                id="flux-aspect-ratio"
+                value={typedModelSettings.aspect_ratio || DEFAULT_FLUX_KONTEX_SETTINGS.aspect_ratio}
+                onChange={(e) => onModelSettingsChange({ aspect_ratio: e.target.value as FluxKontexAspectRatio })}
+                disabled={disabled}
+                className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
+            >
+                {fluxKontexAspectRatios.map(ratio => (
+                    <option key={ratio.value} value={ratio.value}>{ratio.label}</option>
+                ))}
+            </select>
+          </div>
+          <div className="mt-2 p-3 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-sm text-blue-700 dark:text-blue-300">
+            <InformationCircleIcon className="w-5 h-5 inline mr-1.5 align-text-bottom" />
+            Upload an image and provide a prompt to describe the desired edits.
+          </div>
+        </div>
       )}
 
 
-      {/* Web Search - Hidden for Imagen, TTS, Real-Time Translation, AI Agent */}
-      {isCurrentModelGeminiPlatformChat && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && ( 
-        <div className="space-y-2 border-t border-secondary dark:border-neutral-darkest pt-4">
-          <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light">Tools (Gemini Chat)</h3>
-          <label htmlFor="web-search-toggle" className={`flex items-center ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-            <div className="relative">
-              <input
-                type="checkbox"
-                id="web-search-toggle"
-                className="sr-only"
-                checked={isWebSearchEnabled}
-                onChange={(e) => onWebSearchToggle(e.target.checked)}
-                disabled={disabled} 
+      {/* Web Search Toggle - Only for compatible models */}
+      {isCurrentModelGeminiPlatformChat && (
+        <div className="border-t border-secondary dark:border-neutral-darkest pt-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
+              <MagnifyingGlassIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" /> Web Search
+            </h3>
+            <button
+              onClick={() => onWebSearchToggle(!isWebSearchEnabled)}
+              disabled={disabled}
+              className={`${
+                isWebSearchEnabled ? 'bg-primary dark:bg-primary-light' : 'bg-secondary dark:bg-neutral-darkest'
+              } relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:ring-offset-2 dark:focus:ring-offset-neutral-dark`}
+              role="switch"
+              aria-checked={isWebSearchEnabled}
+            >
+              <span
+                className={`${
+                  isWebSearchEnabled ? 'translate-x-6' : 'translate-x-1'
+                } inline-block w-4 h-4 transform bg-white rounded-full transition-transform`}
               />
-              <div className={`block w-10 h-6 rounded-full transition-colors ${isWebSearchEnabled ? 'bg-primary dark:bg-primary-light' : 'bg-secondary dark:bg-neutral-darkest'}`}></div>
-              <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition transform ${isWebSearchEnabled ? 'translate-x-full' : ''}`}></div>
+            </button>
+          </div>
+           <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                Enable to allow the AI to search the web for up-to-date information. (Only for Gemini models)
+            </p>
+        </div>
+      )}
+
+      {/* File Upload Section - Hidden for TTS, RTTM. Specific behavior for Imagen, AI Agent, Private Mode, Flux Kontex */}
+      { !isTextToSpeechModel && !isRealTimeTranslationModel && (
+        <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
+          <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light">Attachments</h3>
+          
+          {/* Image Upload */}
+           <div>
+            <label htmlFor="image-upload" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              {isImagenModel ? "Base Image (Optional for some techniques)" : (isFluxKontexModel ? "Upload Image(s) to Edit*" : "Upload Image(s)")}
+            </label>
+            <div className="mt-1">
+              <input
+                type="file"
+                id="image-upload"
+                accept={imageFileAcceptTypes}
+                multiple // Allow multiple files
+                onChange={handleImageFilesChange}
+                className="hidden"
+                disabled={disabled}
+              />
+              <button
+                onClick={() => document.getElementById('image-upload')?.click()}
+                disabled={disabled || uploadedImages.length >= 4}
+                className="px-4 py-2 border border-secondary dark:border-neutral-darkest rounded-md text-sm font-medium text-neutral-darker dark:text-secondary-light hover:bg-secondary/50 dark:hover:bg-neutral-dark/50 flex items-center disabled:opacity-50"
+              >
+                <PhotoIcon className="w-5 h-5 mr-2" /> Choose Image(s) (Max 4)
+              </button>
+              {uploadedImages.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {imagePreviews.map((previewUrl, index) => (
+                    <div key={index} className="relative group w-16 h-16 sm:w-20 sm:h-20">
+                      <img src={previewUrl} alt={`Preview ${index + 1}`} className="w-full h-full object-cover rounded-md border border-secondary dark:border-neutral-darkest" />
+                      <button
+                        onClick={() => handleRemoveImage(index)}
+                        className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-xs"
+                        aria-label={`Remove image ${index + 1}`}
+                      >
+                        <XMarkIcon className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="ml-3 text-sm text-neutral-darker dark:text-secondary-light flex items-center">
-                <MagnifyingGlassIcon className="w-4 h-4 mr-1" />
-                Enable Web Search (Google)
+             {isFluxKontexModel ? (
+                 <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                    Hint: you can drag and drop file(s) here, or provide a base64 encoded data URL Accepted file types: jpg, jpeg, png, webp, gif, avif
+                    <br/>* Image upload is required for Flux Kontext model. The first uploaded image will be used for editing.
+                </p>
+             ) : (
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                   Accepted file types: {imageFileAcceptTypes.split(', ').join(', ')}
+                </p>
+             )}
+          </div>
+
+          {/* General File Upload (for standard chat, AI Agent, Private Mode) - Hidden for Imagen, Flux Kontex */}
+          {!isImagenModel && !isFluxKontexModel && (
+            <div>
+              <label htmlFor="file-upload" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+                Upload File (Text, PDF, etc.)
+              </label>
+              <div className="mt-1 flex items-center space-x-2">
+                <input
+                  type="file"
+                  id="file-upload"
+                  accept={generalFileAcceptTypes}
+                  onChange={handleTextFileChange}
+                  className="hidden"
+                  disabled={disabled}
+                />
+                <button
+                  onClick={() => document.getElementById('file-upload')?.click()}
+                  disabled={disabled}
+                  className="px-4 py-2 border border-secondary dark:border-neutral-darkest rounded-md text-sm font-medium text-neutral-darker dark:text-secondary-light hover:bg-secondary/50 dark:hover:bg-neutral-dark/50 flex items-center"
+                >
+                  <ArrowUpTrayIcon className="w-5 h-5 mr-2" /> Choose File
+                </button>
+                {uploadedTextFileName && (
+                  <div className="text-sm text-neutral-500 dark:text-neutral-400 flex items-center">
+                    <span className="truncate max-w-[100px] sm:max-w-[150px]" title={uploadedTextFileName}>{uploadedTextFileName}</span>
+                    <button onClick={() => onFileUpload(null)} className="ml-1 text-red-500 hover:text-red-700" aria-label="Remove file">
+                      <XMarkIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                AI Agent will receive text content directly. Other models may only get filename.
+              </p>
             </div>
-          </label>
+          )}
         </div>
       )}
     </div>
