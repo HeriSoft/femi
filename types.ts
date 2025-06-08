@@ -16,7 +16,7 @@ export enum Model {
   REAL_TIME_TRANSLATION = 'Real-Time Translation (Gemini)', // New Real-Time Translation Model
   AI_AGENT = 'AI Agent (gemini-2.5-flash-preview-04-17)', // Renamed from AI_TASK_ORCHESTRATOR and updated model ID
   PRIVATE = 'Private (Local Data Storage)', // New Private Mode
-  FLUX_KONTEX = 'Flux Kontex (fal-ai/flux-pro/kontext)', // New Image Editing Model
+  FLUX_KONTEX = 'Flux Kontext (fal-ai/flux-pro/kontext)', // New Image Editing Model, updated "Kontex" to "Kontext"
 }
 
 export interface ChatMessage {
@@ -87,9 +87,15 @@ export interface PrivateModeSettings extends Pick<ModelSettings, 'systemInstruct
     // Private mode doesn't use temperature, topK, topP for generation
 }
 
+export type FluxKontexAspectRatio = 'Original' | '1:1' | '16:9' | '9:16' | '3:4' | '2:3' | '9:21' | '21:9';
+
 export interface FluxKontexSettings {
-  guidance_scale: number; // Example: 7.5. Controls how closely the result follows the prompt
-  // Add other relevant settings like seed, num_inference_steps if supported and desired
+  guidance_scale: number; 
+  safety_tolerance?: number; 
+  num_inference_steps?: number; 
+  seed?: number | null; 
+  num_images?: number; 
+  aspect_ratio?: FluxKontexAspectRatio;
 }
 
 
@@ -145,11 +151,14 @@ export interface SettingsPanelProps {
   onModelChange: (model: Model) => void;
   modelSettings: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings> & Partial<FluxKontexSettings>; 
   onModelSettingsChange: (settings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings & FluxKontexSettings>) => void;
-  onImageUpload: (file: File | null) => void;
-  imagePreview: string | null; // For user uploaded image preview
+  
+  uploadedImages: File[]; // Changed from onImageUpload / imagePreview to handle multiple
+  imagePreviews: string[];  // Previews for the uploaded images
+  onSetUploadedImages: (files: File[]) => void; // Callback to update the list of uploaded images
+
   onFileUpload: (file: File | null) => void; // Handles general files including text and video
   uploadedTextFileName: string | null; // For text files or generic files
-  uploadedVideoFileName?: string | null; // Specific for video files
+  uploadedVideoFileName?: string | null; // Specific for video files (optional chaining for safety)
   isWebSearchEnabled: boolean;
   onWebSearchToggle: (enabled: boolean) => void;
   disabled?: boolean;
