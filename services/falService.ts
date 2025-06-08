@@ -29,7 +29,7 @@ export interface FluxKontexStatusProxyResponse {
 export async function editImageWithFluxKontexProxy(
   params: EditImageWithFluxKontexParams
 ): Promise<FluxKontexSubmitProxyResponse> {
-  const { image_base_64, imageMimeType, prompt, settings } = params; // Changed from imageBase64
+  const { image_base_64, imageMimeType, prompt, settings } = params; 
 
   try {
     const response = await fetch('/api/fal/image/edit/flux-kontext', {
@@ -38,29 +38,34 @@ export async function editImageWithFluxKontexProxy(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        image_base_64: image_base_64, // Use the destructured image_base_64
+        image_base_64: image_base_64,
         image_mime_type: imageMimeType,
         prompt: prompt,
-        guidance_scale: settings.guidance_scale, 
+        guidance_scale: settings.guidance_scale,
+        safety_tolerance: settings.safety_tolerance,
+        num_inference_steps: settings.num_inference_steps,
+        seed: settings.seed,
+        num_images: settings.num_images,
+        aspect_ratio: settings.aspect_ratio,
       }),
     });
 
     const data: FluxKontexSubmitProxyResponse = await response.json();
 
     if (!response.ok || data.error) {
-      return { error: data.error || `Fal.ai Flux Kontex proxy submission failed: \${response.statusText}` };
+      return { error: data.error || `Fal.ai Flux Kontext proxy submission failed: ${response.statusText}` };
     }
     
     if (data.requestId) {
       return { requestId: data.requestId, message: data.message };
     } else {
       // This case should ideally be handled by the proxy returning an error if requestId is missing
-      return { error: data.error || "Fal.ai Flux Kontex proxy did not return a requestId." };
+      return { error: data.error || "Fal.ai Flux Kontext proxy did not return a requestId." };
     }
 
   } catch (error: any) {
-    console.error("Error calling Fal.ai Flux Kontex proxy service for submission:", error);
-    return { error: `Network or unexpected error calling Fal.ai Flux Kontex proxy for submission: \${error.message}` };
+    console.error("Error calling Fal.ai Flux Kontext proxy service for submission:", error);
+    return { error: `Network or unexpected error calling Fal.ai Flux Kontext proxy for submission: ${error.message}` };
   }
 }
 
@@ -78,7 +83,7 @@ export async function checkFluxKontexStatusProxy(
     
     if (!response.ok) {
         return { 
-            error: data.error || `Fal.ai status check failed with HTTP status: \${response.statusText}`, 
+            error: data.error || `Fal.ai status check failed with HTTP status: ${response.statusText}`, 
             status: data.status || 'PROXY_REQUEST_ERROR', 
             rawResult: data 
         };
@@ -93,6 +98,6 @@ export async function checkFluxKontexStatusProxy(
 
   } catch (error: any) {
     console.error("Error calling Fal.ai status proxy service:", error);
-    return { error: `Network error checking Fal.ai status: \${error.message}`, status: 'NETWORK_ERROR' };
+    return { error: `Network error checking Fal.ai status: ${error.message}`, status: 'NETWORK_ERROR' };
   }
 }
