@@ -1,9 +1,4 @@
 
-
-
-
-
-
 import React, { useState } from 'react';
 import { Model, ModelSettings, SettingsPanelProps as LocalSettingsPanelProps, ApiKeyStatus, getActualModelIdentifier, ImagenSettings, Persona, OpenAITtsSettings, OpenAiTtsVoice, RealTimeTranslationSettings, AiAgentSettings, FluxKontexSettings, FluxKontexAspectRatio } from '../types.ts';
 import { ArrowUpTrayIcon, PhotoIcon, XMarkIcon, MagnifyingGlassIcon, KeyIcon, InformationCircleIcon, UserCircleIcon, PlusCircleIcon, TrashIcon, PencilSquareIcon, SpeakerWaveIcon, LanguageIcon, PencilIcon as EditIcon, ArrowPathIcon } from './Icons.tsx'; // Changed EditIcon to PencilIcon as EditIcon, Added ArrowPathIcon
@@ -756,15 +751,15 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
         </div>
       )}
 
-      {/* File Upload Section - Hidden for TTS, RTTM. Specific behavior for Imagen, AI Agent, Private Mode, Flux Kontex */}
-      { !isTextToSpeechModel && !isRealTimeTranslationModel && (
+      {/* File Upload Section - Hidden for TTS, RTTM, and Imagen. Specific behavior for AI Agent, Private Mode, Flux Kontex */}
+      { !isTextToSpeechModel && !isRealTimeTranslationModel && !isImagenModel && (
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
           <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light">Attachments</h3>
           
-          {/* Image Upload */}
+          {/* Image Upload - Conditional based on model type */}
            <div>
             <label htmlFor="image-upload" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              {isImagenModel ? "Base Image (Optional for some techniques)" : (isFluxKontexModel ? "Upload Image(s) to Edit*" : "Upload Image(s)")}
+              {isFluxKontexModel ? "Upload Image(s) to Edit*" : "Upload Image(s)"}
             </label>
             <div className="mt-1">
               <input
@@ -813,7 +808,7 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
           </div>
 
           {/* General File Upload (for standard chat, AI Agent, Private Mode) - Hidden for Imagen, Flux Kontex */}
-          {!isImagenModel && !isFluxKontexModel && (
+          {!isFluxKontexModel && (
             <div>
               <label htmlFor="file-upload" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
                 Upload File (Text, PDF, etc.)

@@ -329,7 +329,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       });
   };
 
-  const handleDownloadResponse = () => {
+  const handleDownloadAgentResponse = () => {
     if (!message.text || !message.promptedByMessageId) return;
     const goalText = message.originalPrompt || message.promptedByMessageId || "ai_agent_plan";
     const sanitizedGoalText = goalText.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, 30);
@@ -345,6 +345,36 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     URL.revokeObjectURL(url);
     addNotification("Agent response downloaded.", "success");
   };
+
+  const handleDownloadFluxKontextJson = () => {
+    if (message.model !== Model.FLUX_KONTEX || !message.imagePreviews || message.imagePreviews.length === 0) return;
+
+    const jsonData = {
+      model: message.model.toString(), // Display name from enum
+      originalPrompt: message.originalPrompt || '',
+      editedImageUrl: message.imagePreviews[0],
+      timestamp: message.timestamp,
+      fluxRequestId: message.fluxRequestId || null,
+      imageMimeType: message.imageMimeType || null,
+    };
+
+    const jsonString = JSON.stringify(jsonData, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    
+    const safePrompt = (message.originalPrompt || 'flux_edit').replace(/[^a-z0-9_.-]/gi, '_').substring(0, 25);
+    const timestampForFile = message.id || Date.now();
+    link.download = `flux_kontext_edit_${safePrompt}_${timestampForFile}.json`;
+    
+    link.href = href;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(href);
+    addNotification("Flux Kontext edit details saved as JSON.", "success");
+  };
+
 
   const ActionButton: React.FC<{
     onClick?: () => void;
@@ -416,8 +446,10 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
           {message.imagePreviews && !isUser && message.imagePreviews.length > 0 && (
             <div className={`mt-2 grid gap-2 ${message.imagePreviews.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-              {message.imagePreviews.map((imgStr, index) => ( // Changed variable name from imgB64 to imgStr
-                <div key={index} className="relative group/image" 
+              {message.imagePreviews.map((imgStr, index) => ( 
+                <div 
+                  key={index} 
+                  className="relative group/image rounded-md overflow-hidden" // Added rounded-md and overflow-hidden here
                   onClick={() => onImageClick && onImageClick(imgStr, message.originalPrompt || '', message.imageMimeType || 'image/jpeg')}
                   role="button" tabIndex={0} aria-label={`View generated image ${index + 1}`}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onImageClick && onImageClick(imgStr, message.originalPrompt || '', message.imageMimeType || 'image/jpeg'); }}
@@ -492,9 +524,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                 </ActionButton>
               )}
               {message.isTaskPlan && message.text.trim() && (
-                 <ActionButton onClick={handleDownloadResponse} title="Download Agent Response" ariaLabel="Download AI Agent response as text file">
+                 <ActionButton onClick={handleDownloadAgentResponse} title="Download Agent Response" ariaLabel="Download AI Agent response as text file">
                    <ArrowDownTrayIcon className="w-3.5 h-3.5" />
                  </ActionButton>
+              )}
+              {message.model === Model.FLUX_KONTEX && message.imagePreviews && message.imagePreviews.length > 0 && !message.isRegenerating && (
+                <ActionButton onClick={handleDownloadFluxKontextJson} title="Save Edit Details (JSON)" ariaLabel="Download Flux Kontext edit details as JSON file">
+                  <ArrowDownTrayIcon className="w-3.5 h-3.5" />
+                </ActionButton>
               )}
           </div>
         </div>
