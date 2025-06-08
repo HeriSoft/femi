@@ -1,7 +1,11 @@
 
-
-
 import React from 'react';
+
+export const FilmIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9A2.25 2.25 0 0 0 13.5 5.25h-9A2.25 2.25 0 0 0 2.25 7.5v9A2.25 2.25 0 0 0 4.5 18.75Z" />
+  </svg>
+);
 
 export const SunIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
@@ -172,7 +176,7 @@ export const Bars3Icon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
 
 export const ChatBubbleLeftRightIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193l-3.722.537a59.731 59.731 0 01-1.008.065c-.441 0-.873-.024-1.295-.073a59.331 59.331 0 01-3.54-1.053m0 0A59.331 59.331 0 006.25 13.342a59.731 59.731 0 00-1.008-.065c-.441 0-.873.024-1.295.073a59.331 59.331 0 00-3.54 1.053m0 0A59.331 59.331 0 002.25 13.342a59.731 59.731 0 00-1.008-.065C.799 13.253 0 12.281 0 11.145V6.859c0-1.136.847 2.1 1.98-2.193l3.722-.537a59.731 59.731 0 011.008-.065c.441 0 .873.024 1.295.073a59.331 59.331 0 013.54 1.053m0 0A59.331 59.331 0 0017.75 3.66a59.731 59.731 0 001.008.065c.441 0 .873.024 1.295-.073a59.331 59.331 0 013.54-1.053m0 0A59.331 59.331 0 0021.75 3.66a59.731 59.731 0 001.008.065c.799.029 1.507.625 1.507 1.418V6.86c0 1.136-.847 2.1-1.98 2.193l-3.722.537a59.731 59.731 0 01-1.008.065c-.441 0-.873-.024-1.295-.073a59.331 59.331 0 01-3.54-1.053M3 3l3.031 3.031m0 0A5.995 5.995 0 019 9m0 0c0-1.519.424-2.936 1.175-4.125m0 0L15 3m-3 6h.008v.008H12V9z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193l-3.722.537a59.731 59.731 0 01-1.008.065c-.441 0-.873-.024-1.295-.073a59.331 59.331 0 01-3.54-1.053m0 0A59.331 59.331 0 006.25 13.342a59.731 59.731 0 00-1.008-.065c-.441 0-.873.024-1.295.073a59.331 59.331 0 00-3.54 1.053m0 0A59.331 59.331 0 002.25 13.342a59.731 59.731 0 00-1.008-.065C.799 13.253 0 12.281 0 11.145V6.859c0-1.136.847 2.1 1.98-2.193l3.722-.537a59.731 59.731 0 011.008-.065c.441 0 .873.024 1.295.073a59.331 59.331 0 013.54 1.053m0 0A59.331 59.331 0 0017.75 3.66a59.731 59.731 0 001.008.065c.441 0 .873.024 1.295-.073a59.331 59.331 0 013.54-1.053m0 0A59.331 59.331 0 0021.75 3.66a59.731 59.731 0 001.008.065c.799.029 1.507.625 1.507 1.418V6.86c0 1.136-.847 2.1-1.98 2.193l-3.722.537a59.731 59.731 0 01-1.008.065c-.441 0-.873.024-1.295-.073a59.331 59.331 0 01-3.54-1.053M3 3l3.031 3.031m0 0A5.995 5.995 0 019 9m0 0c0-1.519.424-2.936 1.175-4.125m0 0L15 3m-3 6h.008v.008H12V9z" />
     </svg>
 );
 
@@ -386,3 +390,9 @@ export const BuildingStorefrontIcon: React.FC<React.SVGProps<SVGSVGElement>> = (
 
 // ... any other icons you might need
 // Removed duplicate ChatBubbleLeftEllipsisIcon
+// FilmIcon was already defined above.
+// export const FilmIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+//   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+//     <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9A2.25 2.25 0 0 0 13.5 5.25h-9A2.25 2.25 0 0 0 2.25 7.5v9A2.25 2.25 0 0 0 4.5 18.75Z" />
+//   </svg>
+// );

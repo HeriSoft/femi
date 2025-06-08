@@ -1,8 +1,8 @@
 
 import React, { useEffect, useRef, useState, useContext } from 'react';
 import hljs from 'https://esm.sh/highlight.js@11.9.0'; 
-import { ChatMessage, ThemeContextType } from '../types.ts';
-import { RobotIcon, UserIcon, LinkIcon, PhotoIcon, ArrowPathIcon, ClipboardIcon, CheckIcon, SpeakerWaveIcon, StopCircleIcon, ArrowDownTrayIcon } from './Icons.tsx'; // Added ArrowDownTrayIcon
+import { ChatMessage, ThemeContextType, Model } from '../types.ts';
+import { RobotIcon, UserIcon, LinkIcon, PhotoIcon, ArrowPathIcon, ClipboardIcon, CheckIcon, SpeakerWaveIcon, StopCircleIcon, ArrowDownTrayIcon, FilmIcon, DocumentPlusIcon } from './Icons.tsx'; // Added FilmIcon, DocumentPlusIcon
 import { useNotification } from '../contexts/NotificationContext.tsx'; 
 import { ThemeContext } from '../App.tsx';
 
@@ -211,7 +211,7 @@ const EnhancedMessageContent: React.FC<EnhancedMessageContentProps> = React.memo
 interface MessageBubbleProps {
   message: ChatMessage;
   showAvatar: boolean; 
-  onImageClick?: (imageBase64: string, promptText: string, mimeType: 'image/jpeg' | 'image/png') => void;
+  onImageClick?: (imageData: string, promptText: string, mimeType: 'image/jpeg' | 'image/png') => void; // Renamed imageB64 to imageData
   onRegenerate?: (aiMessageId: string, promptedByMessageId: string) => void;
   isLoading?: boolean;
   onPlayAudio?: () => void;
@@ -256,11 +256,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   if (currentTheme === 'light') {
     if (isUser) {
-      bubbleBackgroundColor = message.isTaskGoal ? '#e0f2fe' : '#effdde'; // Light blue for goal, light green for normal
+      bubbleBackgroundColor = message.isTaskGoal ? '#e0f2fe' : (message.model === Model.PRIVATE ? '#e2e8f0' : '#effdde'); 
       bubbleTextColor = '#374151';    
       audioButtonClasses = 'bg-black/10 hover:bg-black/20 text-neutral-700'; 
       timestampColor = 'rgba(75, 85, 99, 0.7)'; 
       if (message.isTaskGoal) specialBorderClass = 'border-l-4 border-blue-400';
+      else if (message.model === Model.PRIVATE) specialBorderClass = 'border-l-4 border-slate-400';
     } else { // AI in light theme
       bubbleBackgroundColor = message.isTaskPlan ? '#dcfce7' : '#ffffff'; // Light green for AI Agent plan, white for normal AI
       bubbleTextColor = '#374151';    
@@ -270,11 +271,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     }
   } else { // Dark theme
     if (isUser) {
-      bubbleBackgroundColor = message.isTaskGoal ? '#1e3a8a' : '#2b5278'; // Darker blue for goal, standard dark blue for normal
+      bubbleBackgroundColor = message.isTaskGoal ? '#1e3a8a' : (message.model === Model.PRIVATE ? '#374151' : '#2b5278');
       bubbleTextColor = '#FFFFFF';    
       audioButtonClasses = 'bg-white/20 hover:bg-white/30 text-white'; 
       timestampColor = 'rgba(209, 213, 219, 0.7)'; 
       if (message.isTaskGoal) specialBorderClass = 'border-l-4 border-blue-500';
+      else if (message.model === Model.PRIVATE) specialBorderClass = 'border-l-4 border-slate-500';
     } else { // AI in dark theme
       bubbleBackgroundColor = message.isTaskPlan ? '#14532d' : '#182533'; // Darker green for AI Agent plan, standard dark gray/blue for normal AI
       bubbleTextColor = '#FFFFFF';    
@@ -310,7 +312,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const displayText = message.text;
   const taskGoalPrefix = message.isTaskGoal ? "🎯 **Goal:** " : "";
   const taskPlanPrefix = message.isTaskPlan ? "📝 **Agent Response:** " : ""; 
-  const finalDisplayText = `${taskGoalPrefix}${taskPlanPrefix}${displayText}`;
+  const privateNotePrefix = message.isNote && message.model === Model.PRIVATE ? "📝 **Note:** ": "";
+  const finalDisplayText = `${taskGoalPrefix}${taskPlanPrefix}${privateNotePrefix}${displayText}`;
 
   const handleCopyText = () => {
     if (!finalDisplayText.trim()) return;
@@ -382,140 +385,77 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         {showAvatar && (
           <div className={`w-full h-full rounded-full flex items-center justify-center ${
             isUser 
-              ? 'bg-blue-100 dark:bg-blue-900' 
+              ? (message.model === Model.PRIVATE ? 'bg-slate-200 dark:bg-slate-700' : 'bg-blue-100 dark:bg-blue-900')
               : 'bg-gray-200 dark:bg-gray-700'
-          }`}>
-            {isUser ? (
-              <UserIcon className="w-5 h-5 text-blue-700 dark:text-blue-300" />
-            ) : (
-              <RobotIcon className="w-5 h-5 text-gray-700 dark:text-gray-300" />
-            )}
+            } shadow-sm`}
+            title={isUser ? 'User' : (message.model || 'AI Assistant')}
+          >
+            {isUser ? <UserIcon className={`w-5 h-5 ${message.model === Model.PRIVATE ? 'text-slate-600 dark:text-slate-300' : 'text-blue-600 dark:text-blue-300'}`} /> : <RobotIcon className="w-5 h-5 text-gray-600 dark:text-gray-300" />}
           </div>
         )}
       </div>
-      
-      <div className="relative"> 
-        <div
-          className={tailClasses}
-          style={tailStyle}
-          aria-hidden="true"
-        ></div>
-        
-        <div className={bubbleContentClasses} style={bubbleStyle}>
-          <div className="flex justify-between items-start mb-1">
-            <span className="font-semibold text-sm flex-grow" style={{ color: bubbleTextColor }}>
-              {isUser ? 'You' : (message.model || 'AI')}
-              {message.isRegenerating && <span className="italic text-xs"> (Regenerating...)</span>}
-            </span>
-            <div className="flex items-center">
-                {finalDisplayText.trim() && (
-                    <ActionButton
-                        onClick={handleCopyText}
-                        disabled={isLoading}
-                        title={isTextCopied ? "Copied!" : "Copy message"}
-                        ariaLabel={isTextCopied ? "Message copied" : "Copy message text"}
-                    >
-                        {isTextCopied ? <CheckIcon className="w-4 h-4" /> : <ClipboardIcon className="w-4 h-4" />}
-                    </ActionButton>
-                )}
-                {!isUser && onRegenerate && message.promptedByMessageId && !message.isRegenerating && !message.isTaskPlan && (
-                    <ActionButton
-                        onClick={() => onRegenerate(message.id, message.promptedByMessageId!)}
-                        disabled={isLoading}
-                        title="Regenerate response"
-                        ariaLabel="Regenerate AI response"
-                    >
-                        <ArrowPathIcon className="w-4 h-4" />
-                    </ActionButton>
-                )}
-                {!isUser && message.isTaskPlan && (
-                    <ActionButton
-                        onClick={handleDownloadResponse}
-                        disabled={isLoading || !message.text}
-                        title="Download AI Agent Response"
-                        ariaLabel="Download AI Agent Response"
-                    >
-                        <ArrowDownTrayIcon className="w-4 h-4" />
-                    </ActionButton>
-                )}
-            </div>
+      <div className="flex flex-col items-start">
+        <div 
+          className={bubbleContentClasses}
+          style={bubbleStyle}
+          role="log" 
+          aria-live={message.isRegenerating ? "polite" : "off"}
+          aria-atomic="true"
+        >
+           {!isUser && showAvatar && <div className={tailClasses} style={tailStyle}></div>}
+          
+          <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+            <EnhancedMessageContent text={finalDisplayText} searchQuery={searchQuery} />
           </div>
-
-          {message.imagePreview && isUser && !message.isImageQuery && (
-            <div className="my-2">
-              <img src={message.imagePreview} alt="Uploaded content" className="max-w-xs max-h-48 rounded-md object-contain" />
+          
+          {message.imagePreview && isUser && (
+            <div className="mt-2">
+              <img src={message.imagePreview} alt="Uploaded content" className="max-w-xs max-h-64 rounded-md object-contain" />
             </div>
           )}
 
-          {message.imagePreviews && message.imagePreviews.length > 0 && !isUser && (
-            <div className="my-2 flex flex-wrap gap-2">
-              {message.imagePreviews.map((imgSrc, index) => (
-                <button
-                  key={index}
-                  onClick={() => onImageClick?.(
-                    imgSrc.split(',')[1], 
-                    message.originalPrompt || "Image generation", 
-                    message.imageMimeType || 'image/jpeg'
-                  )}
-                  className="cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent dark:focus:ring-accent-light rounded-md transition-all hover:opacity-80"
-                  aria-label={`View generated image ${index + 1}`}
+          {message.imagePreviews && !isUser && message.imagePreviews.length > 0 && (
+            <div className={`mt-2 grid gap-2 ${message.imagePreviews.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              {message.imagePreviews.map((imgStr, index) => ( // Changed variable name from imgB64 to imgStr
+                <div key={index} className="relative group/image" 
+                  onClick={() => onImageClick && onImageClick(imgStr, message.originalPrompt || '', message.imageMimeType || 'image/jpeg')}
+                  role="button" tabIndex={0} aria-label={`View generated image ${index + 1}`}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onImageClick && onImageClick(imgStr, message.originalPrompt || '', message.imageMimeType || 'image/jpeg'); }}
                 >
-                  <img 
-                    src={imgSrc} 
-                    alt={`Generated AI content ${index + 1} for prompt: ${message.originalPrompt || ""}`} 
-                    className="max-w-full sm:max-w-xs max-h-96 rounded-md object-contain" 
-                  />
-                </button>
+                  <img src={imgStr} alt={`Generated art ${index + 1}`} className="max-w-full h-auto max-h-60 rounded-md object-contain cursor-pointer" />
+                   <div className="absolute inset-0 bg-black bg-opacity-0 group-hover/image:bg-opacity-20 transition-opacity flex items-center justify-center">
+                      <PhotoIcon className="w-8 h-8 text-white opacity-0 group-hover/image:opacity-80 transform scale-75 group-hover/image:scale-100 transition-all" />
+                  </div>
+                </div>
               ))}
             </div>
           )}
-
-          {message.fileName && isUser && (
-             <div className="my-1 p-2 rounded text-xs" style={{ backgroundColor: 'rgba(0,0,0,0.05)' }}> 
-                Attached File: {message.fileName}
-            </div>
-          )}
           
-          {finalDisplayText && finalDisplayText.trim().length > 0 && (
-            <div className="text-sm whitespace-pre-wrap break-words overflow-x-hidden" style={{ color: bubbleTextColor }}>
-              <EnhancedMessageContent text={finalDisplayText} searchQuery={searchQuery} />
-            </div>
-          )}
-           {finalDisplayText.trim() === '' && !isUser && !message.isRegenerating && !message.isTaskGoal && !message.isTaskPlan && ( 
-              <div className="text-sm italic" style={{ color: currentTheme === 'light' ? '#6b7280' : '#9ca3af' }}>(AI returned an empty response)</div>
+          {message.fileName && isUser && message.model === Model.PRIVATE && !message.imagePreview && !message.videoFileName && (
+             <div className="mt-2 p-2 bg-black/5 dark:bg-white/10 rounded-md text-xs flex items-center">
+                <DocumentPlusIcon className="w-4 h-4 mr-1.5 flex-shrink-0" />
+                File: <span className="truncate ml-1">{message.fileName}</span>
+             </div>
           )}
 
-          {message.audioUrl && onPlayAudio && !isUser && (
-            <div className="mt-2">
-              <button
-                onClick={onPlayAudio}
-                disabled={isLoading}
-                className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors 
-                  ${isAudioPlaying
-                    ? (currentTheme === 'light' ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-red-900 text-red-400 hover:bg-red-800')
-                    : audioButtonClasses
-                  } disabled:opacity-50`}
-                aria-label={isAudioPlaying ? "Stop audio" : "Play audio"}
-              >
-                {isAudioPlaying ? <StopCircleIcon className="w-4 h-4 mr-1.5" /> : <SpeakerWaveIcon className="w-4 h-4 mr-1.5" />}
-                {isAudioPlaying ? 'Stop' : 'Play Audio'}
-              </button>
+          {message.videoFileName && isUser && message.model === Model.PRIVATE && (
+            <div className="mt-2 p-2 bg-black/5 dark:bg-white/10 rounded-md text-xs flex items-center">
+                <FilmIcon className="w-4 h-4 mr-1.5 flex-shrink-0" />
+                Video: <span className="truncate ml-1">{message.videoFileName} ({message.videoMimeType || 'video/unknown'})</span>
             </div>
           )}
 
           {message.groundingSources && message.groundingSources.length > 0 && (
-            <div className="mt-2 pt-2 border-t" style={{ borderColor: 'rgba(255,255,255,0.2)'}}> 
-              <p className="text-xs font-semibold mb-1">Sources:</p>
-              <ul className="space-y-1">
+            <div className="mt-2 border-t border-black/10 dark:border-white/10 pt-2">
+              <p className="text-xs font-semibold mb-0.5" style={{color: bubbleTextColor === '#FFFFFF' ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.7)'}}>Sources:</p>
+              <ul className="space-y-0.5">
                 {message.groundingSources.map((source, index) => (
                   <li key={index} className="text-xs">
-                    <a
-                      href={source.uri}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center hover:underline text-accent dark:text-accent-light" 
-                    >
-                      <LinkIcon className="w-3 h-3 mr-1 flex-shrink-0" />
+                    <a href={source.uri} target="_blank" rel="noopener noreferrer"
+                       className="flex items-center hover:underline opacity-80 hover:opacity-100"
+                       style={{color: bubbleTextColor === '#FFFFFF' ? 'rgba(200,220,255,0.9)' : 'rgba(0,50,150,0.9)' }}
+                       title={source.uri}>
+                      <LinkIcon className="w-3 h-3 mr-1 flex-shrink-0"/>
                       <span className="truncate">{source.title || source.uri}</span>
                     </a>
                   </li>
@@ -523,16 +463,46 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
               </ul>
             </div>
           )}
-          
-          {message.timestamp > 0 && (
-             <div 
-                className="text-xs text-right mt-1" 
-                style={{ color: timestampColor }}
-            >
-                {formatTime(message.timestamp)}
-            </div>
+
+          {message.audioUrl && !isUser && (
+             <div className="mt-2 flex items-center">
+                <button onClick={onPlayAudio} disabled={isLoading}
+                    className={`${audioButtonClasses} p-2 rounded-full mr-2 transition-colors disabled:opacity-50`}
+                    aria-label={isAudioPlaying ? "Stop audio playback" : "Play audio response"}
+                    title={isAudioPlaying ? "Stop audio" : "Play audio"}
+                >
+                    {isAudioPlaying ? <StopCircleIcon className="w-5 h-5"/> : <SpeakerWaveIcon className="w-5 h-5"/>}
+                </button>
+                <span className="text-xs italic opacity-80" style={{color: bubbleTextColor === '#FFFFFF' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)'}}>
+                    Audio generated for: "{message.originalPrompt ? (message.originalPrompt.length > 30 ? message.originalPrompt.substring(0,27)+'...' : message.originalPrompt) : 'your prompt'}"
+                </span>
+             </div>
           )}
+
+          {/* Action Buttons Row */}
+           <div className="absolute -top-1 -right-1 sm:top-0 sm:right-0 flex items-center p-0.5 sm:p-1 rounded-full transition-opacity duration-150">
+              {message.text.trim() && !message.isRegenerating && (
+                <ActionButton onClick={handleCopyText} title={isTextCopied ? "Copied!" : "Copy Text"} ariaLabel="Copy message text">
+                  {isTextCopied ? <CheckIcon className="w-3.5 h-3.5" /> : <ClipboardIcon className="w-3.5 h-3.5" />}
+                </ActionButton>
+              )}
+              {!isUser && onRegenerate && message.promptedByMessageId && !message.isImageQuery && !message.audioUrl && !message.isTaskPlan && (
+                <ActionButton onClick={() => onRegenerate(message.id, message.promptedByMessageId!)} disabled={isLoading} title="Regenerate Response" ariaLabel="Regenerate AI response">
+                  <ArrowPathIcon className="w-3.5 h-3.5" />
+                </ActionButton>
+              )}
+              {message.isTaskPlan && message.text.trim() && (
+                 <ActionButton onClick={handleDownloadResponse} title="Download Agent Response" ariaLabel="Download AI Agent response as text file">
+                   <ArrowDownTrayIcon className="w-3.5 h-3.5" />
+                 </ActionButton>
+              )}
+          </div>
         </div>
+        {showAvatar && message.timestamp && (
+            <p className="text-xs mt-0.5" style={{ color: timestampColor, paddingLeft: isUser ? '0' : '0.75rem', paddingRight: isUser ? '0.75rem' : '0' }}>
+                {formatTime(message.timestamp)}
+            </p>
+        )}
       </div>
     </div>
   );

@@ -3,7 +3,7 @@
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo, useContext } from 'react';
 // Update to .ts/.tsx extensions
-import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType, UserGlobalProfile, AiAgentSettings, PrivateModeSettings } from '../types.ts';
+import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType, UserGlobalProfile, AiAgentSettings, PrivateModeSettings, FluxKontexSettings, NotificationType } from '../types.ts';
 import type { Content } from '@google/genai'; // For constructing Gemini history
 import { ALL_MODEL_DEFAULT_SETTINGS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY, TRANSLATION_TARGET_LANGUAGES, MAX_SAVED_CHAT_SESSIONS, OPENAI_TTS_MAX_INPUT_LENGTH } from '../constants.ts';
 import MessageBubble from './MessageBubble.tsx';
@@ -16,8 +16,9 @@ import { sendOpenAIMessageStream } from '../services/openaiService.ts';
 import { sendDeepseekMessageStream } from '../services/deepseekService.ts';
 import { sendMockMessageStream } from '../services/mockApiService.ts';
 import { generateOpenAITTS } from "../services/openaiTTSService"; // Changed this line
+import { editImageWithFluxKontexProxy, checkFluxKontexStatusProxy } from '../services/falService.ts'; // Added Fal.ai service
 // Added MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon, ChevronDownIcon
-import { PaperAirplaneIcon, CogIcon, XMarkIcon, PromptIcon, Bars3Icon, ChatBubbleLeftRightIcon, ClockIcon as HistoryIcon, MicrophoneIcon, StopCircleIcon, SpeakerWaveIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon, ChevronDownIcon, ArrowDownTrayIcon } from './Icons.tsx';
+import { PaperAirplaneIcon, CogIcon, XMarkIcon, PromptIcon, Bars3Icon, ChatBubbleLeftRightIcon, ClockIcon as HistoryIcon, MicrophoneIcon, StopCircleIcon, SpeakerWaveIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon, ChevronDownIcon, ArrowDownTrayIcon, PencilIcon as EditIcon } from './Icons.tsx'; // Added EditIcon
 import { ThemeContext } from '../App.tsx'; // Import ThemeContext
 
 // Helper to deep merge settings, useful for loading from localStorage
@@ -213,7 +214,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     const activePersona = activePersonaId ? personas.find(p => p.id === activePersonaId) : null;
 
     // For non-special models, construct system instruction with About Me and Persona
-    if (selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS && selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.AI_AGENT && selectedModel !== Model.PRIVATE) {
+    if (selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS && selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.AI_AGENT && selectedModel !== Model.PRIVATE && selectedModel !== Model.FLUX_KONTEX) {
         let finalSystemInstruction = baseSettings.systemInstruction;
 
         if (activePersona) {
@@ -228,7 +229,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         // If neither persona nor aboutMeText, finalSystemInstruction remains baseSettings.systemInstruction
         return { ...baseSettings, systemInstruction: finalSystemInstruction };
     }
-    // For special models (Imagen, TTS, RTTM, AiAgent, Private), just return base settings for that model
+    // For special models (Imagen, TTS, RTTM, AiAgent, Private, Flux Kontex), just return base settings for that model
     return baseSettings;
   }, [allSettings, selectedModel, activePersonaId, personas, userProfile]);
 
@@ -254,6 +255,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   const isRealTimeTranslationMode = selectedModel === Model.REAL_TIME_TRANSLATION;
   const isAiAgentMode = selectedModel === Model.AI_AGENT;
   const isPrivateModeSelected = selectedModel === Model.PRIVATE;
+  const isFluxKontexModelSelected = selectedModel === Model.FLUX_KONTEX;
+
 
   const pruneChatSessions = useCallback((sessions: ChatSession[], maxSessions: number): { prunedSessions: ChatSession[], numPruned: number } => {
     if (sessions.length <= maxSessions) {
@@ -375,6 +378,18 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   const gpt41ModalInteractionFlagRef = useRef(false); // Tracks if modal has been shown for current GPT4O selection
   const previousModelBeforeGpt41ModalRef = useRef<Model | null>(null);
 
+  const clearSearch = useCallback(() => {
+    setIsSearchActive(false);
+    setSearchQuery('');
+    setTempSearchQuery('');
+    setSearchResults([]);
+    setCurrentSearchResultIndex(-1);
+    // Optional: Notify user if search was active and they expect a notification
+    // if (searchQuery) { // Check if search was actually active before clearing
+    //   addNotification("Search cleared.", "info");
+    // }
+  }, []);
+
 
   const apiKeyStatuses = React.useMemo((): Record<Model, ApiKeyStatus> => {
     const isProxyExpectedToHaveKey = true; 
@@ -404,6 +419,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         isMock: true, 
         isGeminiPlatform: false,
         isPrivateMode: true,
+      },
+      [Model.FLUX_KONTEX]: {
+        isSet: isProxyExpectedToHaveKey, 
+        envVarName: 'FAL_KEY (on proxy)', 
+        modelName: 'Flux Kontex Image Edit', 
+        isMock: false, 
+        isGeminiPlatform: false, 
+        isImageEditing: true 
       },
     };
   }, []);
@@ -466,17 +489,19 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   // Effect for model selection changes, including GPT-4.1 access modal
   useEffect(() => {
     const currentModelStatus = apiKeyStatuses[selectedModel];
-    // Disable web search if current model is not Gemini platform chat or if AI Agent (which handles its own search)
-    if ((!currentModelStatus?.isGeminiPlatform || currentModelStatus?.isImageGeneration || currentModelStatus?.isTextToSpeech || currentModelStatus?.isRealTimeTranslation || currentModelStatus?.isAiAgent || currentModelStatus?.isPrivateMode) && isWebSearchEnabled) {
+    // Disable web search if current model is not Gemini platform chat or if AI Agent (which handles its own search) or Flux Kontex
+    if ((!currentModelStatus?.isGeminiPlatform || currentModelStatus?.isImageGeneration || currentModelStatus?.isTextToSpeech || currentModelStatus?.isRealTimeTranslation || currentModelStatus?.isAiAgent || currentModelStatus?.isPrivateMode || currentModelStatus?.isImageEditing) && isWebSearchEnabled) {
         setIsWebSearchEnabled(false);
     }
     
-    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected ) { // AI Agent can have attachments
-        setUploadedImage(null);
-        setImagePreview(null); 
+    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || isFluxKontexModelSelected) { 
+        if (!isFluxKontexModelSelected) { // Flux Kontex needs an image upload
+          setUploadedImage(null);
+          setImagePreview(null); 
+        }
         setUploadedTextFileContent(null);
         setUploadedTextFileName(null);
-        if (!isAiAgentMode && !isPrivateModeSelected) setActivePersonaId(null); // AI Agent & Private Mode don't use personas, but other special models do clear it
+        if (!isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected) setActivePersonaId(null); // AI Agent, Private Mode, Flux Kontex don't use personas, but other special models do clear it
         if (isListening && !isRealTimeTranslationMode) { // Stop chat STT if switching to special mode
             recognitionRef.current?.stop();
         }
@@ -520,9 +545,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       gpt41ModalInteractionFlagRef.current = false;
       if (isGpt41AccessModalOpen) setIsGpt41AccessModalOpen(false); // Close modal if open and model changed
     }
-
+    clearSearch(); // Clear search when model changes
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedModel]); // Dependencies intentionally simplified for this specific logic
+  }, [selectedModel, clearSearch]); // Dependencies intentionally simplified for this specific logic, added clearSearch
 
 
   const translateLiveSegment = useCallback(async (text: string, targetLangCode: string) => {
@@ -696,7 +721,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   };
 
 
-  const handleModelSettingsChange = useCallback((newSettings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings>) => {
+  const handleModelSettingsChange = useCallback((newSettings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings & FluxKontexSettings>) => {
     setAllSettings(prev => {
       const baseModelSettings = prev[selectedModel] || ALL_MODEL_DEFAULT_SETTINGS[selectedModel]!;
       let processedNewSettings = { ...newSettings };
@@ -707,9 +732,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
        if ('speed' in processedNewSettings && typeof processedNewSettings.speed === 'number') {
         processedNewSettings.speed = Math.max(0.25, Math.min(4.0, processedNewSettings.speed));
       }
+      if ('guidance_scale' in processedNewSettings && typeof processedNewSettings.guidance_scale === 'number') {
+        processedNewSettings.guidance_scale = Math.max(0, Math.min(20, processedNewSettings.guidance_scale));
+      }
       
       const activeP = activePersonaId ? personas.find(p => p.id === activePersonaId) : null;
-      if (activeP && 'systemInstruction' in processedNewSettings && selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS && selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.AI_AGENT && selectedModel !== Model.PRIVATE) {
+      if (activeP && 'systemInstruction' in processedNewSettings && selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS && selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.AI_AGENT && selectedModel !== Model.PRIVATE && selectedModel !== Model.FLUX_KONTEX) {
           delete processedNewSettings.systemInstruction;
       }
 
@@ -750,8 +778,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   };
 
   const handleSaveCurrentChat = useCallback(() => {
-    if (isRealTimeTranslationMode || isAiAgentMode || isPrivateModeSelected) {
-        addNotification(`Cannot save chat in ${isRealTimeTranslationMode ? 'Real-Time Translation' : (isAiAgentMode ? 'AI Agent' : 'Private')} mode.`, "info");
+    if (isRealTimeTranslationMode || isAiAgentMode || isPrivateModeSelected || isFluxKontexModelSelected) {
+        addNotification(`Cannot save chat in ${isRealTimeTranslationMode ? 'Real-Time Translation' : (isAiAgentMode ? 'AI Agent' : (isPrivateModeSelected ? 'Private' : 'Image Editing'))} mode.`, "info");
         return;
     }
     if (messages.length === 0) {
@@ -829,12 +857,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         addNotification(`Chat "${sessionName}" saved to browser.`, "success");
     }
     clearSearch();
-  }, [messages, selectedModel, modelSettings, activeSessionId, savedSessions, activePersonaId, addNotification, currentChatName, isRealTimeTranslationMode, isAiAgentMode, isPrivateModeSelected, pruneChatSessions]);
+  }, [messages, selectedModel, modelSettings, activeSessionId, savedSessions, activePersonaId, addNotification, currentChatName, isRealTimeTranslationMode, isAiAgentMode, isPrivateModeSelected, isFluxKontexModelSelected, pruneChatSessions, clearSearch]);
 
   const handleLoadSession = useCallback((sessionId: string) => {
     const sessionToLoad = savedSessions.find(s => s.id === sessionId);
     if (sessionToLoad) {
-      if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT || sessionToLoad.model === Model.PRIVATE) {
+      if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT || sessionToLoad.model === Model.PRIVATE || sessionToLoad.model === Model.FLUX_KONTEX) {
           addNotification(`Cannot load "${sessionToLoad.model}" sessions directly. Please start a new one if needed.`, "info");
           return;
       }
@@ -864,7 +892,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     } else {
       addNotification("Failed to load chat session from browser.", "error");
     }
-  }, [savedSessions, addNotification]);
+  }, [savedSessions, addNotification, clearSearch]);
 
   const handleStartNewChat = useCallback(() => {
     setMessages([]);
@@ -876,7 +904,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     setUploadedTextFileName(null);
     setIsWebSearchEnabled(false);
     
-    if (selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.PRIVATE && !(selectedModel === Model.GPT4O && !isGpt41Unlocked)) { // AI Agent & Private mode settings reset normally
+    if (selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.PRIVATE && selectedModel !== Model.FLUX_KONTEX && !(selectedModel === Model.GPT4O && !isGpt41Unlocked)) { // AI Agent & Private mode settings reset normally
         setAllSettings(prev => ({
             ...prev,
             [selectedModel]: { ...(ALL_MODEL_DEFAULT_SETTINGS[selectedModel] || ALL_MODEL_DEFAULT_SETTINGS[Model.GEMINI]!) }
@@ -888,7 +916,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         }));
     }
 
-    if (!isAiAgentMode && !isPrivateModeSelected) setActivePersonaId(null); // AI Agent & Private Mode don't use personas, so don't clear if it's the active model
+    if (!isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected) setActivePersonaId(null); // AI Agent, Private Mode, Flux Kontex don't use personas
     setError(null);
     setIsSidebarOpen(false); 
     addNotification("Started new chat.", "info");
@@ -904,7 +932,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             setIsSpeakingLiveTranslation(false);
         }
     }
-  }, [selectedModel, addNotification, isRealTimeTranslationMode, isSpeakingLiveTranslation, isGpt41Unlocked, isAiAgentMode, isPrivateModeSelected]);
+  }, [selectedModel, addNotification, isRealTimeTranslationMode, isSpeakingLiveTranslation, isGpt41Unlocked, isAiAgentMode, isPrivateModeSelected, isFluxKontexModelSelected, clearSearch]);
 
   const handleDeleteSession = useCallback((sessionId: string) => {
     const sessionToDelete = savedSessions.find(s => s.id === sessionId);
@@ -964,8 +992,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   }, [addNotification, pruneChatSessions]);
 
   const handleSaveChatToDevice = useCallback(() => {
-    if (isRealTimeTranslationMode || isAiAgentMode || isPrivateModeSelected) {
-      addNotification(`Cannot save chat to device in ${isRealTimeTranslationMode ? 'Real-Time Translation' : (isAiAgentMode ? 'AI Agent' : 'Private')} mode.`, "info");
+    if (isRealTimeTranslationMode || isAiAgentMode || isPrivateModeSelected || isFluxKontexModelSelected) {
+      addNotification(`Cannot save chat to device in ${isRealTimeTranslationMode ? 'Real-Time Translation' : (isAiAgentMode ? 'AI Agent' : (isPrivateModeSelected ? 'Private' : 'Image Editing'))} mode.`, "info");
       return;
     }
     if (messages.length === 0) {
@@ -1016,7 +1044,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       console.error("Error saving chat to device:", e);
       addNotification("Failed to save chat to device.", "error", e.message);
     }
-  }, [messages, selectedModel, modelSettings, activeSessionId, currentChatName, activePersonaId, addNotification, isRealTimeTranslationMode, isAiAgentMode, isPrivateModeSelected, savedSessions]);
+  }, [messages, selectedModel, modelSettings, activeSessionId, currentChatName, activePersonaId, addNotification, isRealTimeTranslationMode, isAiAgentMode, isPrivateModeSelected, isFluxKontexModelSelected, savedSessions]);
 
 
   const handleLoadChatFromDevice = useCallback(async (file: File) => {
@@ -1039,7 +1067,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             if (!sessionToLoad.messages || !sessionToLoad.model || !sessionToLoad.modelSettingsSnapshot || !sessionToLoad.name || !sessionToLoad.timestamp) {
                 throw new Error("File is not a valid chat session format. Missing required fields.");
             }
-            if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT || sessionToLoad.model === Model.PRIVATE) {
+            if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT || sessionToLoad.model === Model.PRIVATE || sessionToLoad.model === Model.FLUX_KONTEX) {
                 addNotification(`Cannot load "${sessionToLoad.model}" sessions from file.`, "info");
                 return;
             }
@@ -1080,11 +1108,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         addNotification("Error reading the selected file.", "error");
     };
     reader.readAsText(file);
-  }, [addNotification]);
+  }, [addNotification, clearSearch]);
 
 
-  const handleOpenImageModal = useCallback((imageB64: string, promptText: string, mime: 'image/jpeg' | 'image/png') => {
-    setModalImage(imageB64);
+  const handleOpenImageModal = useCallback((imageData: string, promptText: string, mime: 'image/jpeg' | 'image/png') => { // Renamed imageB64 to imageData
+    setModalImage(imageData);
     setModalPrompt(promptText);
     setModalMimeType(mime);
     setIsImageModalOpen(true);
@@ -1209,6 +1237,82 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     }
   }, [currentPlayingMessageId, isSpeakingLiveTranslation, liveTranslationAudioUrl]);
 
+  const pollFluxKontexStatus = useCallback(async (requestId: string, aiMessageId: string, userPrompt: string) => {
+    const MAX_TOTAL_POLLS = 30; // Total polls (approx 90s with 3s interval)
+    const POLL_INTERVAL = 3000; // 3 seconds
+    const MAX_NOT_FOUND_POLLS = 12; // Allow 'NOT_FOUND' for first ~36 seconds
+    
+    let pollCount = 0;
+    let notFoundCount = 0;
+    let intervalId: number | undefined;
+
+    const performPoll = async () => {
+      pollCount++;
+      if (pollCount > MAX_TOTAL_POLLS) {
+        if (intervalId) clearInterval(intervalId);
+        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Image editing timed out for: "${userPrompt}". Please try again.`, isRegenerating: false, fluxRequestId: undefined } : msg));
+        addNotification("Flux Kontex image editing timed out.", "error");
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const statusResult = await checkFluxKontexStatusProxy(requestId);
+
+        if (statusResult.status === 'COMPLETED') {
+          if (intervalId) clearInterval(intervalId);
+          if (statusResult.editedImageUrl) {
+            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? {
+              ...msg,
+              text: `Image edited based on your prompt: "${userPrompt}"`,
+              imagePreviews: [statusResult.editedImageUrl!],
+              imageMimeType: 'image/png', // Fal default for flux-pro is png
+              originalPrompt: userPrompt,
+              isRegenerating: false,
+              fluxRequestId: undefined,
+              timestamp: msg.timestamp || Date.now()
+            } : msg));
+            addNotification("Image editing successful!", "success");
+          } else {
+            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Image editing completed, but no image was returned. Prompt: "${userPrompt}"`, isRegenerating: false, fluxRequestId: undefined } : msg));
+            addNotification("Flux Kontex: Processing completed, but no image was returned by the API.", "info", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0, 200) : undefined);
+          }
+          setIsLoading(false);
+          return;
+        } else if (statusResult.status === 'IN_PROGRESS' || statusResult.status === 'IN_QUEUE') {
+          notFoundCount = 0; // Reset notFoundCount if progress is seen
+          setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Image editing: ${statusResult.status?.toLowerCase()} (ID: ${requestId}). Attempt ${pollCount}/${MAX_TOTAL_POLLS}...` } : msg));
+        } else if (statusResult.status === 'NOT_FOUND') {
+          notFoundCount++;
+          if (notFoundCount > MAX_NOT_FOUND_POLLS) {
+            if (intervalId) clearInterval(intervalId);
+            const errorMessage = statusResult.error || `Request ID ${requestId} not found after several attempts.`;
+            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error editing image: ${errorMessage}. Prompt: "${userPrompt}"`, isRegenerating: false, fluxRequestId: undefined } : msg));
+            addNotification(`Flux Kontex Error: ${errorMessage}`, "error", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0,200) : undefined);
+            setIsLoading(false);
+            return;
+          }
+          // Still within not_found tolerance, treat as in progress
+          setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Image editing: Verifying request (ID: ${requestId}). Attempt ${pollCount}/${MAX_TOTAL_POLLS}...` } : msg));
+        } else { // ERROR or other statuses
+          if (intervalId) clearInterval(intervalId);
+          const errorMessage = statusResult.error || "Unknown error during image editing.";
+          setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error editing image: ${errorMessage}. Prompt: "${userPrompt}"`, isRegenerating: false, fluxRequestId: undefined } : msg));
+          addNotification(`Flux Kontex Error: ${errorMessage}`, "error", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0,200) : undefined);
+          setIsLoading(false);
+        }
+      } catch (pollingError: any) {
+        if (intervalId) clearInterval(intervalId);
+        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error checking image edit status: ${pollingError.message}. Prompt: "${userPrompt}"`, isRegenerating: false, fluxRequestId: undefined } : msg));
+        addNotification(`Polling Error: ${pollingError.message}`, "error");
+        setIsLoading(false);
+      }
+    };
+    
+    performPoll(); 
+    intervalId = window.setInterval(performPoll, POLL_INTERVAL);
+  }, [addNotification, setMessages, setIsLoading]);
+
 
   const internalSendMessage = async (
     currentInputText: string,
@@ -1244,7 +1348,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         timestamp: messageTimestamp,
         imagePreview: currentImagePreviewDataUrl || undefined,
         fileName: currentUploadedTextFileName || undefined,
-        isImageQuery: isImagenModelSelected,
+        isImageQuery: isImagenModelSelected || isFluxKontexModelSelected,
         isTaskGoal: isAiAgentMode, 
         isNote: isPrivateModeSelected && (!currentImagePreviewDataUrl && !currentUploadedTextFileName),
         model: isPrivateModeSelected ? Model.PRIVATE : undefined,
@@ -1260,6 +1364,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     let aiPlaceholderText = isRegenerationOfAiMsgId ? 'Regenerating...' : '';
     if (!isRegenerationOfAiMsgId) {
         if (isImagenModelSelected) aiPlaceholderText = 'Generating image(s)...';
+        else if (isFluxKontexModelSelected) aiPlaceholderText = 'Submitting image for editing...';
         else if (isTextToSpeechModelSelected) aiPlaceholderText = 'Synthesizing audio...';
         else if (isAiAgentMode) aiPlaceholderText = 'AI Agent is processing your goal...';
         else if (isPrivateModeSelected) aiPlaceholderText = 'Data logged locally. No AI response.';
@@ -1298,7 +1403,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     }
     
     try {
-      const currentModelSpecificSettings = modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings;
+      const currentModelSpecificSettings = modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings & FluxKontexSettings;
       const currentModelStatus = apiKeyStatuses[selectedModel];
       const actualModelIdentifier = getActualModelIdentifier(selectedModel);
 
@@ -1326,6 +1431,40 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         } else {
             throw new Error("TTS generation failed to return audio.");
         }
+
+      } else if (currentModelStatus?.isImageEditing && !currentModelStatus.isMock) { // Flux Kontex
+          if (!currentUploadedImageFile || !currentImagePreviewDataUrl) {
+            throw new Error("Flux Kontex requires an image to be uploaded.");
+          }
+
+          const [header, base64Data] = (currentImagePreviewDataUrl || '').split(',');
+          if (!base64Data || !/^[A-Za-z0-9+/=]+$/.test(base64Data)) { // Basic base64 validation
+            throw new Error("Invalid image data provided for Flux Kontex.");
+          }
+          
+          const mimeTypeMatch = header?.match(/data:(image\/[a-zA-Z0-9-.+]+);base64/) || [];
+          const mimeTypeForFal = (mimeTypeMatch[1] || currentUploadedImageFile?.type || 'image/png') as 'image/jpeg' | 'image/png';
+
+
+          const result = await editImageWithFluxKontexProxy({
+            image_base_64: base64Data, // Use the snake_case parameter name
+            imageMimeType: mimeTypeForFal,
+            prompt: textForApi, // Use textForApi which might have more context
+            settings: currentModelSpecificSettings as FluxKontexSettings,
+          });
+          
+          if (result.requestId) {
+            setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? {
+                ...msg,
+                text: result.message || `Image editing submitted (ID: ${result.requestId}). Waiting for results...`,
+                fluxRequestId: result.requestId, // Store request ID
+                isRegenerating: false,
+                timestamp: msg.timestamp || Date.now()
+            } : msg));
+            pollFluxKontexStatus(result.requestId, aiMessageId, userDisplayedText);
+          } else {
+            throw new Error(result.error || "Flux Kontex image submission failed to return a request ID.");
+          }
 
       } else if (currentModelStatus?.isGeminiPlatform && !currentModelStatus.isMock && !isRealTimeTranslationMode && !isPrivateModeSelected) { 
         if (isImagenModelSelected) { 
@@ -1503,7 +1642,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
           if (chunk.isFinished) break;
         }
       
-      } else if (currentModelStatus?.isMock && !isRealTimeTranslationMode && !isAiAgentMode && !isPrivateModeSelected) { 
+      } else if (currentModelStatus?.isMock && !isRealTimeTranslationMode && !isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected) { 
         const mockParts: Part[] = [];
         if (textForApi.trim()) mockParts.push({ text: textForApi.trim() });
         if (currentUploadedTextFileName && !currentUploadedTextContent && !currentUploadedImageFile) {
@@ -1518,7 +1657,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
           currentText += chunk;
           setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? { ...msg, text: currentText, isRegenerating: false } : msg));
         }
-      } else if (!isRealTimeTranslationMode && !isPrivateModeSelected) { 
+      } else if (!isRealTimeTranslationMode && !isPrivateModeSelected && !isFluxKontexModelSelected) { 
           throw new Error(`API integration for ${selectedModel} is not implemented or API key/Vertex config is missing and it's not a mock model.`); 
       }
     } catch (e: any) {
@@ -1538,11 +1677,17 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       }]);
     }
 
-    setIsLoading(false);
+    // Only clear inputs if not polling for Flux Kontex or not regenerating, etc.
+    if (!isFluxKontexModelSelected || (isFluxKontexModelSelected && !messages.find(m => m.id === aiMessageId)?.fluxRequestId)) {
+      setIsLoading(false);
+    }
+    
     if (!isRegenerationOfAiMsgId && !isRealTimeTranslationMode && !isPrivateModeSelected) { 
         setInput(''); 
-        setUploadedImage(null);
-        setImagePreview(null); 
+        if (!isFluxKontexModelSelected) { // Keep image for Flux Kontex if user might want to retry or edit again
+            setUploadedImage(null);
+            setImagePreview(null); 
+        }
         setUploadedTextFileContent(null);
         setUploadedTextFileName(null);
     }
@@ -1556,6 +1701,18 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         setError("Please enter a prompt for image generation.");
         addNotification("Please enter a prompt for image generation.", "info");
         return;
+    }
+    if (isFluxKontexModelSelected) {
+        if (!uploadedImage) {
+            setError("Please upload an image to edit.");
+            addNotification("Please upload an image for Flux Kontex model.", "info");
+            return;
+        }
+        if (!input.trim()) {
+            setError("Please enter a prompt to describe how to edit the image.");
+            addNotification("Please enter an editing prompt for Flux Kontex.", "info");
+            return;
+        }
     }
     if (isTextToSpeechModelSelected && !input.trim()) {
         setError("Please enter text for speech synthesis.");
@@ -1578,7 +1735,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         return;
     }
     // General check for other models if input and attachments are empty
-    if (!isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode && !isPrivateModeSelected && !input.trim() && !uploadedImage && !uploadedTextFileName) {
+    if (!isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected && !input.trim() && !uploadedImage && !uploadedTextFileName) {
         return; // Do nothing if everything is empty for standard chat models
     }
 
@@ -1588,7 +1745,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   };
   
   const handleRegenerateResponse = async (aiMessageIdToRegenerate: string, promptedByMsgId: string) => {
-      if (isRealTimeTranslationMode || isAiAgentMode || isPrivateModeSelected) return; 
+      if (isRealTimeTranslationMode || isAiAgentMode || isPrivateModeSelected || isFluxKontexModelSelected) return; 
       const userMessageForRegen = messages.find(m => m.id === promptedByMsgId && m.sender === 'user');
       const aiMessageToRegen = messages.find(m => m.id === aiMessageIdToRegenerate && m.sender === 'ai');
 
@@ -1607,7 +1764,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       setError(null);
       
       const regenInputText = userMessageForRegen.text;
-      let currentRegenImageFile: File | null = null; 
+      let currentRegenImageFile: File | null = null; // This would need to be re-fetched or stored if regeneration needs the File object. For now, using preview.
       let currentRegenImagePreview: string | null = userMessageForRegen.imagePreview || null;
       let currentRegenUploadedTextContent: string | null = null; // Need to retrieve this from history if possible
       let currentRegenUploadedTextFileName: string | null = userMessageForRegen.fileName || null;
@@ -1647,7 +1804,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
 
 
   const handleImageUpload = (file: File | null) => {
-    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected) return; 
+    if (isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected ) return; 
+    // Imagen and Flux Kontex need image upload. Standard chat models can also accept it.
     setUploadedImage(file);
     setUploadedTextFileContent(null); 
     setUploadedTextFileName(null);
@@ -1660,7 +1818,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   };
 
   const handleFileUpload = (file: File | null) => {
-    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode) return; // Private mode handles files differently via SettingsPanel
+    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isFluxKontexModelSelected) return; // Private mode handles files differently via SettingsPanel
 
     setUploadedImage(null); 
     setImagePreview(null);
@@ -1688,7 +1846,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         } else if (isPrivateModeSelected) {
             addNotification(`File "${file.name}" logged. Content not displayed for this type.`, "info");
         } else {
-            addNotification(`File "${file.name}" content cannot be displayed/embedded. This model might not process it.`, "info");
+            addNotification(`File "${file.name}" content cannot be displayed/embedded. This model might not process it.`, "warning" as NotificationType);
         }
       }
     } else { setUploadedTextFileContent(null); setUploadedTextFileName(null); }
@@ -1717,15 +1875,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     } else {
       addNotification(`No matches found for "${tempSearchQuery}".`, "info");
     }
-  }, [tempSearchQuery, messages, addNotification]);
-
-  const clearSearch = useCallback(() => {
-    setTempSearchQuery('');
-    setSearchQuery('');
-    setSearchResults([]);
-    setCurrentSearchResultIndex(-1);
-    setIsSearchActive(false);
-  }, []);
+  }, [tempSearchQuery, messages, addNotification, clearSearch]);
 
   const navigateSearchResults = useCallback((direction: 'next' | 'prev') => {
     if (searchResults.length === 0) return;
@@ -1797,7 +1947,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                     setSelectedModel(model); 
                     clearSearch();
                 }} 
-                modelSettings={modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings} 
+                modelSettings={modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings & FluxKontexSettings} 
                 onModelSettingsChange={handleModelSettingsChange}
                 onImageUpload={handleImageUpload}
                 imagePreview={imagePreview}
@@ -1844,6 +1994,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   const currentPromptPlaceholder = () => {
     if (isListening && !isRealTimeTranslationMode) return "Đang nghe..."; 
     if (isImagenModelSelected) return "Enter prompt for image generation...";
+    if (isFluxKontexModelSelected) return "Enter prompt to edit uploaded image...";
     if (isTextToSpeechModelSelected) return "Enter text to synthesize speech...";
     if (isRealTimeTranslationMode) return "Real-Time Translation Active. Use Microphone.";
     if (isAiAgentMode) return "Enter main goal for AI Agent, or upload file...";
@@ -1853,6 +2004,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
 
   const sendButtonLabel = () => {
     if (isImagenModelSelected) return "Generate Image";
+    if (isFluxKontexModelSelected) return "Edit Image";
     if (isTextToSpeechModelSelected) return "Synthesize Speech";
     if (isAiAgentMode) return "Set Goal";
     if (isPrivateModeSelected) return "Log Entry";
@@ -1861,6 +2013,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
 
   const sendButtonIcon = () => {
     if (isImagenModelSelected) return <PromptIcon className="w-6 h-6" />;
+    if (isFluxKontexModelSelected) return <EditIcon className="w-6 h-6" />;
     if (isTextToSpeechModelSelected) return <SpeakerWaveIcon className="w-6 h-6" />;
     if (isAiAgentMode || isPrivateModeSelected) return <PaperAirplaneIcon className="w-6 h-6" />; 
     return <PaperAirplaneIcon className="w-6 h-6" />;
@@ -1912,9 +2065,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
 
   const textareaPaddingRight = useMemo(() => {
     if (isTextToSpeechModelSelected) return '4.5rem'; // For TTS counter
-    if (isImagenModelSelected && input.trim() && !isLoading && !isListening) return '2.5rem'; // For Imagen clear button
+    if ((isImagenModelSelected || isFluxKontexModelSelected) && input.trim() && !isLoading && !isListening) return '2.5rem'; // For Imagen/Flux clear button
     return '0.75rem'; // Default
-  }, [isTextToSpeechModelSelected, isImagenModelSelected, input, isLoading, isListening]);
+  }, [isTextToSpeechModelSelected, isImagenModelSelected, isFluxKontexModelSelected, input, isLoading, isListening]);
 
 
   return (
@@ -1943,12 +2096,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                     <Bars3Icon className="w-6 h-6" />
                 </button>
                 <h2 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light truncate">
-                    {isRealTimeTranslationMode ? <LanguageIcon className="w-5 h-5 inline-block mr-2 align-text-bottom"/> : <ChatBubbleLeftRightIcon className="w-5 h-5 inline-block mr-2 align-text-bottom"/>}
-                    {isRealTimeTranslationMode ? "Real-Time Translation" : (isAiAgentMode ? "AI Agent" : (isPrivateModeSelected ? "Private Mode" : (currentChatName || "New Chat")))}
+                    {isRealTimeTranslationMode ? <LanguageIcon className="w-5 h-5 inline-block mr-2 align-text-bottom"/> : (isFluxKontexModelSelected ? <EditIcon className="w-5 h-5 inline-block mr-2 align-text-bottom" /> : <ChatBubbleLeftRightIcon className="w-5 h-5 inline-block mr-2 align-text-bottom"/>)}
+                    {isRealTimeTranslationMode ? "Real-Time Translation" : (isAiAgentMode ? "AI Agent" : (isPrivateModeSelected ? "Private Mode" : (isFluxKontexModelSelected ? "Flux Image Editor" : (currentChatName || "New Chat"))))}
                 </h2>
             </div>
             {/* Search Bar - Hidden in Real-Time Translation Mode & Private Mode */}
-            {!isRealTimeTranslationMode && !isPrivateModeSelected && (
+            {!isRealTimeTranslationMode && !isPrivateModeSelected && !isFluxKontexModelSelected && (
               <div className="flex items-center space-x-1.5 ml-2">
                   <div className="relative">
                       <input
@@ -2005,7 +2158,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                     <p className="whitespace-pre-wrap text-sm text-neutral-700 dark:text-neutral-200">{liveTranslationDisplay || "Translation will appear here..."}</p>
                 </div>
             </div>
-        ) : ( /* Chat Messages or AI Agent UI or Private Mode UI */
+        ) : ( /* Chat Messages or AI Agent UI or Private Mode UI or Flux Kontex UI */
           <div 
             ref={chatContainerRef}
             className="flex-grow overflow-y-auto mb-4 pr-2 space-y-2 relative" 
@@ -2021,7 +2174,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                             message={msg}
                             showAvatar={showAvatar}
                             onImageClick={msg.sender === 'ai' && msg.imagePreviews && msg.imagePreviews.length > 0 ? handleOpenImageModal : undefined}
-                            onRegenerate={msg.sender === 'ai' && msg.promptedByMessageId && !msg.isRegenerating && !isAiAgentMode && !isPrivateModeSelected ? handleRegenerateResponse : undefined}
+                            onRegenerate={msg.sender === 'ai' && msg.promptedByMessageId && !msg.isRegenerating && !isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected ? handleRegenerateResponse : undefined}
                             isLoading={isLoading}
                             onPlayAudio={msg.audioUrl ? () => handlePlayAudio(msg.audioUrl!, msg.id) : undefined}
                             isAudioPlaying={currentPlayingMessageId === msg.id}
@@ -2032,10 +2185,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                 );
             })}
             {isLoading && messages.length > 0 && messages[messages.length-1]?.sender === 'user' && !messages[messages.length-1]?.isRegenerating && !isPrivateModeSelected && ( 
-              <MessageBubble key="loading" message={{id: 'loading', text: isImagenModelSelected ? 'Generating image(s)...' : (isTextToSpeechModelSelected ? 'Synthesizing audio...' : (isAiAgentMode ? 'AI Agent is processing your goal...' : 'Thinking...')), sender: 'ai', model: selectedModel, timestamp: Date.now(), promptedByMessageId: messages[messages.length-1].id }} showAvatar={true} />
+              <MessageBubble key="loading" message={{id: 'loading', text: isImagenModelSelected ? 'Generating image(s)...' : (isFluxKontexModelSelected ? 'Submitting image for editing...' : (isTextToSpeechModelSelected ? 'Synthesizing audio...' : (isAiAgentMode ? 'AI Agent is processing your goal...' : 'Thinking...'))), sender: 'ai', model: selectedModel, timestamp: Date.now(), promptedByMessageId: messages[messages.length-1].id }} showAvatar={true} />
             )}
             {isLoading && messages.length === 0 && !isPrivateModeSelected && ( 
-              <MessageBubble key="loading-initial" message={{id: 'loading-initial', text: isImagenModelSelected ? 'Generating image(s)...' : (isTextToSpeechModelSelected ? 'Synthesizing audio...' : (isAiAgentMode ? 'AI Agent is processing your goal...' : 'Thinking...')), sender: 'ai', model: selectedModel, timestamp: Date.now(), promptedByMessageId: 'initial' }} showAvatar={true} />
+              <MessageBubble key="loading-initial" message={{id: 'loading-initial', text: isImagenModelSelected ? 'Generating image(s)...' : (isFluxKontexModelSelected ? 'Submitting image for editing...' : (isTextToSpeechModelSelected ? 'Synthesizing audio...' : (isAiAgentMode ? 'AI Agent is processing your goal...' : 'Thinking...'))), sender: 'ai', model: selectedModel, timestamp: Date.now(), promptedByMessageId: 'initial' }} showAvatar={true} />
             )}
             <div ref={chatEndRef} />
             {/* Scroll to Bottom Button - Only shown if not in RTTM */}
@@ -2108,10 +2261,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             </div>
           ) : (
             <>
-              {(!isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode && !isPrivateModeSelected) && ( 
+              {(!isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected) && ( 
                 <button
                   onClick={handleToggleListen}
-                  disabled={isLoading || !isSpeechRecognitionSupported || isImagenModelSelected || isTextToSpeechModelSelected || isGpt41AccessModalOpen}
+                  disabled={isLoading || !isSpeechRecognitionSupported || isImagenModelSelected || isTextToSpeechModelSelected || isFluxKontexModelSelected || isGpt41AccessModalOpen}
                   className={`mr-2 p-3 rounded-lg transition-colors self-stretch flex items-center justify-center ${
                     isListening 
                       ? 'bg-red-500 hover:bg-red-600 text-white' 
@@ -2135,12 +2288,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                   disabled={isLoading || isListening || isGpt41AccessModalOpen}
                   aria-label="Chat input"
                 />
-                {isImagenModelSelected && input.trim() && !isLoading && !isListening && (
+                {(isImagenModelSelected || isFluxKontexModelSelected) && input.trim() && !isLoading && !isListening && (
                   <button
                     onClick={() => setInput('')}
                     className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1.5 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 rounded-full hover:bg-secondary/70 dark:hover:bg-neutral-dark/70 focus:outline-none focus:ring-1 focus:ring-neutral-400 dark:focus:ring-neutral-500"
-                    aria-label="Clear image prompt"
-                    title="Clear image prompt"
+                    aria-label={isImagenModelSelected ? "Clear image prompt" : "Clear edit prompt"}
+                    title={isImagenModelSelected ? "Clear image prompt" : "Clear edit prompt"}
                   >
                     <XMarkIcon className="w-4 h-4" />
                   </button>
@@ -2151,7 +2304,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                       ? 'text-red-500 dark:text-red-400 font-semibold'
                       : 'text-neutral-500 dark:text-neutral-400'
                   }`}>
-                    {input.length}/{OPENAI_TTS_MAX_INPUT_LENGTH}
+                    {input.length}/${OPENAI_TTS_MAX_INPUT_LENGTH}
                   </div>
                 )}
               </div>
@@ -2159,10 +2312,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                 onClick={handleSendMessage}
                 disabled={isLoading || isListening || isGpt41AccessModalOpen || 
                     (isImagenModelSelected && !input.trim()) || 
+                    (isFluxKontexModelSelected && (!input.trim() || !uploadedImage)) ||
                     (isTextToSpeechModelSelected && (!input.trim() || input.length > OPENAI_TTS_MAX_INPUT_LENGTH)) ||
                     (isPrivateModeSelected && !input.trim() && !uploadedImage && !uploadedTextFileName) || 
                     ((!input.trim() && !uploadedImage && !uploadedTextFileName) && 
-                        (isAiAgentMode ? (!uploadedImage && !uploadedTextFileName) : (!isImagenModelSelected && !isTextToSpeechModelSelected && !isPrivateModeSelected))) 
+                        (isAiAgentMode ? (!uploadedImage && !uploadedTextFileName) : (!isImagenModelSelected && !isTextToSpeechModelSelected && !isPrivateModeSelected && !isFluxKontexModelSelected))) 
                 }
                 className="ml-2 p-3 bg-primary hover:bg-primary-dark dark:bg-primary-light dark:hover:bg-primary text-white rounded-lg disabled:opacity-50 transition-colors self-stretch flex items-center justify-center" 
                 aria-label={sendButtonLabel()} >

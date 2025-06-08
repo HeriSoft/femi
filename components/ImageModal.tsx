@@ -1,10 +1,11 @@
+
 import React from 'react';
 import { XMarkIcon, ArrowDownTrayIcon } from './Icons.tsx';
 
 interface ImageModalProps {
   isOpen: boolean;
   onClose: () => void;
-  imageBase64: string; 
+  imageBase64: string; // This prop will now receive either a base64 string OR a direct HTTP/HTTPS URL
   prompt: string;
   mimeType: 'image/jpeg' | 'image/png';
 }
@@ -21,13 +22,38 @@ const ImageModal: React.FC<ImageModalProps> = ({ isOpen, onClose, imageBase64, p
     return result;
   };
 
-  const downloadImage = (base64Data: string) => {
+  const getDisplaySrc = () => {
+    if (imageBase64.startsWith('http')) {
+      return imageBase64;
+    }
+    if (imageBase64.startsWith('data:image')) {
+        return imageBase64; // It's already a full data URL
+    }
+    // Assume it's raw base64 data otherwise
+    return `data:${mimeType};base64,${imageBase64}`;
+  };
+
+  const downloadImage = () => {
     const extension = mimeType === 'image/jpeg' ? 'jpg' : 'png';
+    // Use a more descriptive name, including part of the prompt if possible
+    const safePrompt = prompt.replace(/[^a-z0-9_.-]/gi, '_').substring(0, 30);
     const randomChars = generateRandomAlphanumeric(4);
-    const fileName = `imagen3_${randomChars}.${extension}`;
+    const fileName = `${safePrompt || 'ai_image'}_${randomChars}.${extension}`;
 
     const link = document.createElement('a');
-    link.href = `data:${mimeType};base64,${base64Data}`;
+    
+    if (imageBase64.startsWith('http')) {
+      // For direct URLs, set href and download attribute.
+      // Browser will handle fetching. May be subject to CORS if cross-origin.
+      link.href = imageBase64;
+    } else if (imageBase64.startsWith('data:image')) {
+      // If it's already a full data URL
+      link.href = imageBase64;
+    } else {
+      // Assume it's raw base64 data
+      link.href = `data:${mimeType};base64,${imageBase64}`;
+    }
+    
     link.download = fileName;
     document.body.appendChild(link);
     link.click();
@@ -62,12 +88,12 @@ const ImageModal: React.FC<ImageModalProps> = ({ isOpen, onClose, imageBase64, p
         <div className="overflow-y-auto flex-grow flex items-center justify-center">
             <div className="relative">
               <img
-                src={`data:${mimeType};base64,${imageBase64}`}
+                src={getDisplaySrc()}
                 alt={`Generated image for prompt: ${prompt}`}
                 className="max-w-full max-h-[calc(80vh-120px)] object-contain rounded-md" // Adjusted max height
               />
               <button
-                onClick={() => downloadImage(imageBase64)}
+                onClick={downloadImage}
                 className="absolute bottom-3 right-3 bg-black/40 hover:bg-black/60 text-white p-2.5 rounded-full transition-colors duration-150 ease-in-out"
                 aria-label="Download image"
                 title="Download image"
