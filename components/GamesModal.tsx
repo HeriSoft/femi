@@ -47,7 +47,7 @@ const GamesModal: React.FC<LocalGamesModalProps> = ({ isOpen, onClose, onPlayWeb
       aria-labelledby="games-modal-title"
     >
       <div
-        className="bg-neutral-light dark:bg-neutral-darker rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col transform transition-all duration-300 scale-100 opacity-100"
+        className="bg-neutral-light dark:bg-neutral-darker rounded-lg shadow-xl w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-xl max-h-[90vh] flex flex-col transform transition-all duration-300 scale-100 opacity-100"
         onClick={(e) => e.stopPropagation()} 
       >
         <div className="flex justify-between items-center p-4 sm:p-6 border-b border-secondary dark:border-neutral-darkest">

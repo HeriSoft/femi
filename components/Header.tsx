@@ -224,11 +224,11 @@ const Header: React.FC<HeaderProps> = ({
 
   return (
     <>
-      <header className="bg-neutral-light dark:bg-neutral-darker shadow-md p-4 flex justify-between items-center sticky top-0 z-50">
-        <h1 className="text-3xl font-bold text-primary dark:text-primary-light">
+      <header className="bg-neutral-light dark:bg-neutral-darker shadow-md p-3 sm:p-4 flex justify-between items-center sticky top-0 z-50">
+        <h1 className="text-2xl sm:text-3xl font-bold text-primary dark:text-primary-light">
           femi
         </h1>
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-1.5 sm:space-x-2 md:space-x-3">
           <button
             onClick={onToggleLanguageLearningModal} 
             disabled={!currentUser} 
@@ -236,7 +236,7 @@ const Header: React.FC<HeaderProps> = ({
             aria-label="Open language learning module"
             title="Language Learning Hub"
           >
-            <AcademicCapIcon className="w-6 h-6" />
+            <AcademicCapIcon className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
            <button
             onClick={onToggleGamesModal}
@@ -245,7 +245,7 @@ const Header: React.FC<HeaderProps> = ({
             aria-label="Open mini games arcade"
             title="Mini Games Arcade"
           >
-            <PuzzlePieceIcon className="w-6 h-6" />
+            <PuzzlePieceIcon className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
           <button
             onClick={onToggleVoiceAgentWidget}
@@ -254,7 +254,7 @@ const Header: React.FC<HeaderProps> = ({
             aria-label="Open Voice Agent"
             title="Voice Agent (Beta)"
           >
-            <ChatBubbleLeftEllipsisIcon className="w-6 h-6" />
+            <ChatBubbleLeftEllipsisIcon className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
           <div className="relative">
             <button
@@ -264,7 +264,7 @@ const Header: React.FC<HeaderProps> = ({
               aria-label="Toggle notifications panel"
               aria-expanded={isNotificationPanelOpen}
             >
-              <BellIcon className="w-6 h-6" />
+              <BellIcon className="w-5 h-5 sm:w-6 sm:h-6" />
               {unreadCount > 0 && (
                 <span className="notification-badge">
                   {unreadCount > 9 ? '9+' : unreadCount}
@@ -282,7 +282,7 @@ const Header: React.FC<HeaderProps> = ({
             className="p-2 rounded-full hover:bg-secondary dark:hover:bg-neutral-darkest text-neutral-darker dark:text-secondary-light transition-colors"
             aria-label="Toggle theme"
           >
-            {theme === 'light' ? <MoonIcon className="w-6 h-6" /> : <SunIcon className="w-6 h-6" />}
+            {theme === 'light' ? <MoonIcon className="w-5 h-5 sm:w-6 sm:h-6" /> : <SunIcon className="w-5 h-5 sm:w-6 sm:h-6" />}
           </button>
 
           <div className="relative">
@@ -295,8 +295,8 @@ const Header: React.FC<HeaderProps> = ({
                   aria-label="User menu"
                   aria-expanded={isLoginDropdownOpen}
                 >
-                  <AvatarIcon className="w-8 h-8 text-neutral-darker dark:text-secondary-light" />
-                  <span className="text-sm font-medium text-neutral-darker dark:text-secondary-light hidden sm:block">{currentUser.name}</span>
+                  <AvatarIcon className="w-7 h-7 sm:w-8 sm:h-8 text-neutral-darker dark:text-secondary-light" />
+                  <span className="text-sm font-medium text-neutral-darker dark:text-secondary-light hidden sm:block truncate max-w-[100px]">{currentUser.name}</span>
                 </button>
                 {isLoginDropdownOpen && (
                   <div

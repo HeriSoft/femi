@@ -863,7 +863,7 @@ Another example for no handwriting: {"accuracyScore": 0, "feedback": "No handwri
     >
       <audio ref={audioPlayerRef} className="hidden" />
       <div 
-        className="bg-neutral-light dark:bg-neutral-darker rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col transform transition-all duration-300 scale-100 opacity-100"
+        className="bg-neutral-light dark:bg-neutral-darker rounded-lg shadow-xl w-full max-w-xs sm:max-w-md md:max-w-lg lg:max-w-xl max-h-[90vh] flex flex-col transform transition-all duration-300 scale-100 opacity-100"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center p-4 sm:p-6 border-b border-secondary dark:border-neutral-darkest">

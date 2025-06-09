@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { LoginDeviceLog, AccountSettingsModalProps as LocalAccountSettingsModalProps, AccountTabType, BackgroundOption, UserGlobalProfile, CreditPackage } from '../types.ts';
 import { XMarkIcon, ComputerDesktopIcon, ClockIcon, PhotoIcon, UserCircleIcon as AvatarIcon, CreditCardIcon, CheckCircleIcon, UserCogIcon, ArrowUpTrayIcon, IdentificationIcon, BanknotesIcon as CreditsCoinIcon, PayPalIcon, StripeIcon, QrCodeIcon, BuildingStorefrontIcon, BillingIcon } from './Icons.tsx';
@@ -410,7 +408,7 @@ const AccountSettingsModal: React.FC<LocalAccountSettingsModalProps> = ({
       aria-labelledby="account-settings-modal-title"
     >
       <div
-        className="bg-neutral-light dark:bg-neutral-darker rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] sm:max-h-[85vh] flex flex-col transform transition-all duration-300 scale-100 opacity-100"
+        className="bg-neutral-light dark:bg-neutral-darker rounded-lg shadow-xl w-full max-w-xs sm:max-w-md md:max-w-lg lg:max-w-2xl max-h-[90vh] sm:max-h-[85vh] flex flex-col transform transition-all duration-300 scale-100 opacity-100"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center p-4 sm:p-5 border-b border-secondary dark:border-neutral-darkest sticky top-0 bg-neutral-light dark:bg-neutral-darker z-10">
