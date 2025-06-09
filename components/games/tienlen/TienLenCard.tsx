@@ -29,19 +29,22 @@ const CardDisplay: React.FC<CardDisplayProps> = ({
   };
 
   const baseClasses = `
-    w-11 h-[77px] sm:w-12 sm:h-[84px] md:w-14 md:h-[98px] lg:w-16 lg:h-24
-    border-2 rounded-lg shadow-md flex flex-col items-center justify-center 
-    p-0.5 sm:p-1 transition-all duration-150 ease-in-out
+    w-[38px] h-[53px] sm:w-[44px] sm:h-[61px] md:w-[50px] md:h-[70px] lg:w-[56px] lg:h-[78px] xl:w-[64px] xl:h-[89px]
+    border rounded-md shadow-md flex flex-col items-center justify-center 
+    p-0.5 transition-all duration-150 ease-in-out
     ${className}
   `;
+  // Reduced padding: p-0.5
+  // Adjusted border to border (1px) from border-2. Rounded to rounded-md.
 
   const interactiveClasses = onClick && !isFaceDown && isPlayable && !isDimmed
-    ? 'cursor-pointer hover:shadow-lg hover:-translate-y-1'
+    ? 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5 sm:hover:-translate-y-1'
     : 'cursor-default';
   
-  const selectionClasses = isSelected ? 'ring-2 ring-blue-500 dark:ring-blue-400 ring-offset-1 sm:ring-offset-2 ring-offset-green-600 dark:ring-offset-green-700 -translate-y-1 sm:-translate-y-1.5 md:-translate-y-2' : '';
+  const selectionClasses = isSelected ? 'ring-2 ring-blue-500 dark:ring-blue-400 ring-offset-1 sm:ring-offset-2 ring-offset-green-600 dark:ring-offset-green-700 -translate-y-0.5 sm:-translate-y-1 md:-translate-y-1.5' : '';
+  // Reduced translate-y values for selection
   const dimmedClasses = isDimmed ? 'opacity-50 filter grayscale' : '';
-  const playabilityClasses = !isPlayable && !isFaceDown ? 'opacity-60' : ''; // Dim if not playable but not completely greyed out
+  const playabilityClasses = !isPlayable && !isFaceDown ? 'opacity-60' : ''; 
 
   if (isFaceDown) {
     return (
@@ -49,9 +52,9 @@ const CardDisplay: React.FC<CardDisplayProps> = ({
         className={`${baseClasses} bg-blue-500 border-blue-700 dark:bg-blue-700 dark:border-blue-900 relative`}
         aria-label="Facedown card"
       >
-        <div className="absolute inset-0.5 sm:inset-1 border-2 border-blue-300 dark:border-blue-500 rounded-md opacity-50"></div>
+        <div className="absolute inset-0.5 border border-blue-300 dark:border-blue-500 rounded opacity-50"></div>
         {/* You can add a more detailed card back design here */}
-        <span className="text-white text-opacity-80 text-[8px] sm:text-xs">CARD</span>
+        <span className="text-white text-opacity-80 text-[6px] sm:text-[7px] md:text-[8px]">CARD</span>
       </div>
     );
   }
@@ -73,11 +76,14 @@ const CardDisplay: React.FC<CardDisplayProps> = ({
       tabIndex={onClick && isPlayable && !isDimmed ? 0 : -1}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick?.();}}
     >
-      <div className={`text-xs sm:text-sm md:text-base lg:text-lg font-bold ${suitColor} self-start`}>{card.rank}</div>
-      <div className={`text-base sm:text-lg md:text-xl lg:text-2xl ${suitColor}`}>{card.suit}</div>
-      <div className={`text-xs sm:text-sm md:text-base lg:text-lg font-bold ${suitColor} self-end transform rotate-180`}>{card.rank}</div>
+      <div className={`text-[0.6rem] xs:text-xs sm:text-xs md:text-sm font-bold ${suitColor} self-start`}>{card.rank}</div>
+      <div className={`text-xs xs:text-sm sm:text-base md:text-lg ${suitColor}`}>{card.suit}</div>
+      <div className={`text-[0.6rem] xs:text-xs sm:text-xs md:text-sm font-bold ${suitColor} self-end transform rotate-180`}>{card.rank}</div>
     </div>
   );
 };
+// Added xs: prefix for Tailwind for finer control if available, otherwise sm: will be the first step up from base.
+// If xs: is not configured in tailwind.config.js, it will be ignored.
+// Assuming standard Tailwind, non-prefixed classes are the smallest, then sm:, md:, etc.
 
 export default CardDisplay;

@@ -437,45 +437,37 @@ const TienLenGame: React.FC = () => {
     const Icon = playerType === 'player' ? UserIcon : RobotIcon;
     const name = playerType === 'player' ? 'You' : 'AI';
     return (
-      <div className={`flex flex-col items-center p-1 sm:p-1.5 rounded-lg transition-all duration-300 ease-in-out w-16 sm:w-20 md:w-24
+      <div className={`flex flex-col items-center p-0.5 xs:p-1 sm:p-1.5 rounded-lg transition-all duration-300 ease-in-out w-12 xs:w-14 sm:w-16 md:w-20
                        ${isCurrent ? 'bg-yellow-400 dark:bg-yellow-600 shadow-lg scale-105' : 'bg-green-500 dark:bg-green-800 opacity-80'}`}>
-        <Icon className="w-4 h-4 sm:w-5 md:w-6 text-white mb-0.5" />
-        <p className="text-xs font-semibold text-white">{name}</p>
-        <p className="text-xs text-white/90">Cards: {cardCount}</p>
+        <Icon className="w-3 h-3 xs:w-4 xs:h-4 sm:w-5 md:w-6 text-white mb-0.5" />
+        <p className="text-[0.6rem] xs:text-xs font-semibold text-white">{name}</p>
+        <p className="text-[0.6rem] xs:text-xs text-white/90">Cards: {cardCount}</p>
       </div>
     );
   };
 
   const renderHandLayout = (hand: PlayerHand, isPlayer: boolean) => {
-    const rows: [TienLenCard[], TienLenCard[]] = [[], []];
     const displayHand = [...hand]; 
     sortHand(displayHand); 
-
-    displayHand.forEach((card, index) => {
-        rows[index < Math.ceil(displayHand.length / 2) ? 0 : 1].push(card); 
-    });
     
     return (
-        <div className={`flex flex-col items-center gap-px sm:gap-0.5 md:gap-1 p-0.5 sm:p-1 rounded-md w-full max-w-full sm:max-w-sm md:max-w-md lg:max-w-lg mx-auto 
-                        min-h-[160px] sm:min-h-[172px] md:min-h-[200px] lg:min-h-[200px] justify-center 
+        <div className={`flex flex-col items-center gap-px sm:gap-0.5 p-0.5 rounded-md w-full max-w-full mx-auto 
+                        min-h-[100px] xs:min-h-[120px] sm:min-h-[140px] md:min-h-[160px] justify-center overflow-x-auto
                         ${isPlayer ? 'bg-green-500/30 dark:bg-green-900/30' : 'bg-gray-500/30 dark:bg-gray-800/30'}`}>
-            {rows.map((row, rowIndex) => (
-                row.length > 0 && 
-                <div key={rowIndex} className="flex flex-nowrap justify-center items-end gap-px sm:gap-0.5">
-                    {row.map(card => (
-                         <CardDisplay
-                            key={card.id}
-                            card={card}
-                            isFaceDown={!isPlayer && !gameState.winner} 
-                            onClick={isPlayer ? () => handleCardSelect(card) : undefined}
-                            isSelected={isPlayer && selectedPlayerCards.some(sc => sc.id === card.id)}
-                            isPlayable={gameState.currentPlayer === 'player' && !gameState.isPaused && !gameState.isDealing && !gameState.winner && gameState.turnTimer > 0}
-                            isDimmed={(gameState.currentPlayer !== 'player' || gameState.isPaused || gameState.isDealing || !!gameState.winner || gameState.turnTimer <= 0) && isPlayer}
-                            className="transform hover:scale-105"
-                        />
-                    ))}
-                </div>
-            ))}
+            <div className="flex flex-wrap justify-center items-end gap-px sm:gap-0.5"> {/* Changed to flex-wrap */}
+                {displayHand.map(card => (
+                     <CardDisplay
+                        key={card.id}
+                        card={card}
+                        isFaceDown={!isPlayer && !gameState.winner} 
+                        onClick={isPlayer ? () => handleCardSelect(card) : undefined}
+                        isSelected={isPlayer && selectedPlayerCards.some(sc => sc.id === card.id)}
+                        isPlayable={gameState.currentPlayer === 'player' && !gameState.isPaused && !gameState.isDealing && !gameState.winner && gameState.turnTimer > 0}
+                        isDimmed={(gameState.currentPlayer !== 'player' || gameState.isPaused || gameState.isDealing || !!gameState.winner || gameState.turnTimer <= 0) && isPlayer}
+                        className="transform hover:scale-105"
+                    />
+                ))}
+            </div>
             {hand.length === 0 && !gameState.winner && <p className="text-white/70 text-xs sm:text-sm italic">No cards</p>}
         </div>
     );
@@ -483,21 +475,21 @@ const TienLenGame: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full w-full text-white select-none">
-        <div className="w-full flex justify-between items-center px-1 sm:px-2 py-0.5 sm:py-1 bg-black/20 rounded-t-md mb-1 flex-shrink-0">
-            <div className="text-xs sm:text-sm md:text-base font-semibold">
+        <div className="w-full flex justify-between items-center px-1 py-0.5 bg-black/20 rounded-t-md mb-1 flex-shrink-0">
+            <div className="text-[0.65rem] xs:text-xs sm:text-sm font-semibold">
                 Score: You {gameState.playerScore} - AI {gameState.aiScore}
             </div>
             <button 
                 onClick={handleTogglePause} 
-                className="p-1 sm:p-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-full shadow-md" 
+                className="p-1 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-full shadow-md" 
                 title={gameState.isPaused ? "Resume Game" : "Pause Game"}
             >
-                {gameState.isPaused ? <PlayIcon className="w-3 h-3 sm:w-4 md:w-5" /> : <PauseIcon className="w-3 h-3 sm:w-4 md:w-5" />}
+                {gameState.isPaused ? <PlayIcon className="w-3 h-3 sm:w-4" /> : <PauseIcon className="w-3 h-3 sm:w-4" />}
             </button>
         </div>
 
         <div className="flex flex-grow overflow-hidden w-full">
-            <div className="flex-grow flex flex-col items-center justify-between p-0.5 sm:p-1 space-y-1">
+            <div className="flex-grow flex flex-col items-center justify-between p-0.5 space-y-1">
                 <div className="w-full flex flex-col items-center">
                     <PlayerInfo playerType="ai" cardCount={gameState.aiHand.length} isCurrent={gameState.currentPlayer === 'ai' && !gameState.winner && !gameState.isPaused && !gameState.isDealing} />
                     <div className="mt-0.5 w-full">
@@ -505,22 +497,22 @@ const TienLenGame: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="w-full flex-grow flex flex-col items-center justify-center my-0.5 sm:my-1">
-                    <div className="text-center mb-0.5 sm:mb-1 flex items-center">
-                        <p className={`text-xs sm:text-sm font-semibold p-1 sm:p-1.5 rounded-md transition-colors
+                <div className="w-full flex-grow flex flex-col items-center justify-center my-0.5">
+                    <div className="text-center mb-0.5 flex items-center">
+                        <p className={`text-[0.65rem] xs:text-xs sm:text-sm font-semibold p-1 rounded-md transition-colors
                             ${gameState.winner === 'player' ? 'bg-blue-500' : gameState.winner === 'ai' ? 'bg-red-700' : 
                             (gameState.currentPlayer === 'player' && !gameState.isPaused && !gameState.isDealing ? 'bg-yellow-500 animate-pulse' : 'bg-neutral-600')} `}>
                             {gameState.isDealing ? "Dealing..." : (gameState.isPaused ? "Game Paused" : gameState.statusMessage)}
                         </p>
                         {gameState.currentPlayer === 'player' && !gameState.winner && !gameState.isPaused && !gameState.isDealing && (
-                            <div className="ml-1 text-[10px] sm:text-xs flex items-center bg-black/30 p-0.5 sm:p-1 rounded">
-                                <ClockIcon className="w-3 h-3 mr-0.5 sm:mr-1"/> {gameState.turnTimer}s
+                            <div className="ml-1 text-[0.55rem] xs:text-[0.6rem] sm:text-xs flex items-center bg-black/30 p-0.5 rounded">
+                                <ClockIcon className="w-2 h-2 xs:w-3 xs:h-3 mr-0.5"/> {gameState.turnTimer}s
                             </div>
                         )}
                     </div>
-                    <div className="flex flex-wrap justify-center items-center gap-0.5 p-0.5 sm:p-1 rounded-md bg-black/20 min-h-[100px] sm:min-h-[112px] md:min-h-[120px] w-full max-w-xs sm:max-w-sm md:max-w-md border border-white/20 shadow-inner">
+                    <div className="flex flex-wrap justify-center items-center gap-0.5 p-0.5 rounded-md bg-black/20 min-h-[75px] xs:min-h-[85px] sm:min-h-[100px] w-full max-w-[200px] xs:max-w-xs sm:max-w-sm border border-white/20 shadow-inner">
                     {gameState.table.length > 0 ? gameState.table.map(card => (
-                        <CardDisplay key={card.id} card={card} className="shadow-xl transform scale-75 sm:scale-85 md:scale-90 lg:scale-100"/>
+                        <CardDisplay key={card.id} card={card} className="shadow-xl transform scale-75 xs:scale-80 sm:scale-90"/>
                     )) : <p className="text-xs text-white/60 italic">Table is empty</p>}
                     </div>
                 </div>
@@ -533,35 +525,35 @@ const TienLenGame: React.FC = () => {
                 </div>
             </div>
 
-            <div className="w-24 sm:w-32 md:w-40 flex-shrink-0 p-0.5 sm:p-1 flex flex-col items-center justify-center space-y-1.5 sm:space-y-2 md:space-y-3 border-l-2 border-white/10 bg-black/10 rounded-r-md">
+            <div className="w-20 xs:w-24 sm:w-auto flex-shrink-0 p-0.5 flex flex-col items-center justify-center space-y-1 sm:space-y-1.5 border-l-2 border-white/10 bg-black/10 rounded-r-md">
                 <button
                     onClick={handlePlaySelectedCards}
                     disabled={gameState.currentPlayer !== 'player' || selectedPlayerCards.length === 0 || !!gameState.winner || gameState.isDealing || gameState.isPaused || gameState.turnTimer <= 0}
-                    className="w-full px-1 py-1 sm:px-2 sm:py-1.5 md:px-3 md:py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-xs"
+                    className="w-full px-1 py-1 text-[0.65rem] xs:text-xs sm:text-sm bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-md shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                    Play Selected
+                    Play
                 </button>
                 <button
                     onClick={() => handlePassTurn(false)}
                     disabled={gameState.currentPlayer !== 'player' || !!gameState.winner || gameState.isDealing || gameState.isPaused || gameState.turnTimer <= 0}
-                    className="w-full px-1 py-1 sm:px-2 sm:py-1.5 md:px-3 md:py-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-lg shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-xs"
+                    className="w-full px-1 py-1 text-[0.65rem] xs:text-xs sm:text-sm bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-md shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                    Pass Turn
+                    Pass
                 </button>
                 <button
                     onClick={handleSortPlayerHand}
                     disabled={!!gameState.winner || gameState.isDealing || gameState.isPaused || gameState.playerHand.length === 0}
-                    className="w-full p-1 sm:p-1.5 md:p-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg shadow-md transition-colors disabled:opacity-50 flex items-center justify-center text-xs"
+                    className="w-full p-1 text-[0.65rem] xs:text-xs sm:text-sm bg-purple-500 hover:bg-purple-600 text-white rounded-md shadow-md transition-colors disabled:opacity-50 flex items-center justify-center"
                     title="Sort Hand"
                 >
-                    <ArrowsUpDownIcon className="w-3 h-3 sm:w-4 md:w-5 mr-1" /> Sort
+                    <ArrowsUpDownIcon className="w-3 h-3 sm:w-4 mr-0.5 xs:mr-1" /> Sort
                 </button>
                 <button
                     onClick={() => resetGame(gameState.winner !== null)} 
-                    className="w-full p-1 sm:p-1.5 md:p-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg shadow-md transition-colors flex items-center justify-center text-xs"
+                    className="w-full p-1 text-[0.65rem] xs:text-xs sm:text-sm bg-gray-500 hover:bg-gray-600 text-white rounded-md shadow-md transition-colors flex items-center justify-center"
                     title={gameState.winner ? "Next Round" : "Restart Game"}
                 >
-                    <ArrowPathIcon className="w-3 h-3 sm:w-4 md:w-5 mr-1" /> {gameState.winner ? "Next" : "Restart"}
+                    <ArrowPathIcon className="w-3 h-3 sm:w-4 mr-0.5 xs:mr-1" /> {gameState.winner ? "Next" : "Restart"}
                 </button>
             </div>
         </div>
