@@ -3,10 +3,10 @@
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo, useContext } from 'react';
 // Update to .ts/.tsx extensions
-import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType, UserGlobalProfile, AiAgentSettings, PrivateModeSettings, FluxKontexSettings, NotificationType } from '../types.ts';
+import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType, UserGlobalProfile, AiAgentSettings, PrivateModeSettings, FluxKontexSettings, NotificationType, UserSessionState, DemoUserLimits, PaidUserLimits } from '../types.ts'; // Added UserSessionState, DemoUserLimits, PaidUserLimits
 import type { Content } from '@google/genai'; // For constructing Gemini history
-import { ALL_MODEL_DEFAULT_SETTINGS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY, TRANSLATION_TARGET_LANGUAGES, MAX_SAVED_CHAT_SESSIONS, OPENAI_TTS_MAX_INPUT_LENGTH } from '../constants.ts';
-import MessageBubble from './MessageBubble.tsx';
+import { ALL_MODEL_DEFAULT_SETTINGS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY, TRANSLATION_TARGET_LANGUAGES, MAX_SAVED_CHAT_SESSIONS, OPENAI_TTS_MAX_INPUT_LENGTH, PAID_USER_LIMITS_CONFIG } from '../constants.ts';
+import { MessageBubble } from './MessageBubble.tsx'; // Changed to named import
 import SettingsPanel from './SettingsPanel.tsx';
 import HistoryPanel from './HistoryPanel.tsx'; // Import HistoryPanel
 import ImageModal from './ImageModal.tsx'; // Import ImageModal
@@ -18,7 +18,7 @@ import { sendMockMessageStream } from '../services/mockApiService.ts';
 import { generateOpenAITTS } from "../services/openaiTTSService"; // Changed this line
 import { editImageWithFluxKontexProxy, checkFluxKontexStatusProxy } from '../services/falService.ts'; // Added Fal.ai service
 // Added MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon, ChevronDownIcon
-import { PaperAirplaneIcon, CogIcon, XMarkIcon, PromptIcon, Bars3Icon, ChatBubbleLeftRightIcon, ClockIcon as HistoryIcon, MicrophoneIcon, StopCircleIcon, SpeakerWaveIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon, ChevronDownIcon, ArrowDownTrayIcon, PencilIcon as EditIcon } from './Icons.tsx'; // Added EditIcon
+import { PaperAirplaneIcon, CogIcon, XMarkIcon, PromptIcon, Bars3Icon, ChatBubbleLeftRightIcon, ClockIcon as HistoryIcon, MicrophoneIcon, StopCircleIcon, SpeakerWaveIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon, ChevronDownIcon, ArrowDownTrayIcon, PencilIcon as EditIcon, PhotoIcon, ArrowUpTrayIcon, DocumentTextIcon } from './Icons.tsx'; // Added EditIcon, PhotoIcon, ArrowUpTrayIcon, DocumentTextIcon
 import { ThemeContext } from '../App.tsx'; // Import ThemeContext
 
 // Helper to deep merge settings, useful for loading from localStorage
@@ -27,11 +27,11 @@ const mergeSettings = (target: AllModelSettings, source: Partial<AllModelSetting
   for (const keyString in source) {
     if (Object.prototype.hasOwnProperty.call(source, keyString)) {
       if (Object.values(Model).includes(keyString as Model)) {
-        const modelKey = keyString as Model; 
-        const sourceModelSettings = source[modelKey]; 
-        
+        const modelKey = keyString as Model;
+        const sourceModelSettings = source[modelKey];
+
         if (sourceModelSettings) {
-          const targetModelSettings = output[modelKey]; 
+          const targetModelSettings = output[modelKey];
           if (targetModelSettings) {
             output[modelKey] = { ...targetModelSettings, ...sourceModelSettings };
           } else {
@@ -45,10 +45,10 @@ const mergeSettings = (target: AllModelSettings, source: Partial<AllModelSetting
 };
 
 const TEXT_READABLE_EXTENSIONS = [
-  '.txt', '.md', '.json', '.js', '.ts', '.jsx', '.tsx', 
-  '.py', '.java', '.c', '.cpp', '.h', '.hpp', '.cs', '.go', '.rs', 
-  '.rb', '.php', '.html', '.htm', '.css', '.scss', '.less', 
-  '.xml', '.yaml', '.yml', '.ini', '.sh', '.bat', '.ps1', 
+  '.txt', '.md', '.json', '.js', '.ts', '.jsx', '.tsx',
+  '.py', '.java', '.c', '.cpp', '.h', '.hpp', '.cs', '.go', '.rs',
+  '.rb', '.php', '.html', '.htm', '.css', '.scss', '.less',
+  '.xml', '.yaml', '.yml', '.ini', '.sh', '.bat', '.ps1',
   '.sql', '.csv', '.log'
 ];
 
@@ -97,13 +97,12 @@ declare global {
     readonly error: SpeechRecognitionErrorCode;
     readonly message: string;
   }
-  
-  // SpeechGrammarList and SpeechGrammar (if grammars property is used, good to have)
+
   interface SpeechGrammar {
     src: string;
     weight: number;
   }
-  
+
   interface SpeechGrammarList {
     readonly length: number;
     addFromString(string: string, weight?: number): void;
@@ -112,7 +111,6 @@ declare global {
     [index: number]: SpeechGrammar;
   }
 
-  // The main SpeechRecognition interface
   interface SpeechRecognition extends EventTarget {
     continuous: boolean;
     grammars: SpeechGrammarList;
@@ -137,43 +135,57 @@ declare global {
     stop(): void;
   }
 
-  // Constructor for SpeechRecognition
   var SpeechRecognition: {
     prototype: SpeechRecognition;
     new(): SpeechRecognition;
   };
-  
-  // Constructor for SpeechGrammarList
+
   var SpeechGrammarList: {
     prototype: SpeechGrammarList;
     new(): SpeechGrammarList;
   };
 
-  // Augment window object
   interface Window {
     SpeechRecognition: typeof SpeechRecognition;
     webkitSpeechRecognition: typeof SpeechRecognition;
     SpeechGrammarList: typeof SpeechGrammarList;
-    webkitSpeechGrammarList: typeof SpeechGrammarList; 
+    webkitSpeechGrammarList: typeof SpeechGrammarList;
   }
 }
 
 
 interface SearchResult {
   messageId: string;
-  // Potentially add matchIndex within message in future if needed
 }
 
 interface ChatPageProps {
   chatBackgroundUrl: string | null;
-  userProfile: UserGlobalProfile; // Added userProfile prop
+  userProfile: UserGlobalProfile;
+  userSession: UserSessionState;
+  onUpdateDemoLimits: (updatedLimits: Partial<DemoUserLimits>) => void;
 }
 
-const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) => {
+async function safeResponseJson(response: Response): Promise<any> {
+  const text = await response.text();
+  try {
+    if (!text) { // Handle empty response string
+      return { error: `Empty response from server. Status: ${response.status} ${response.statusText}` };
+    }
+    return JSON.parse(text);
+  } catch (e) {
+    console.error("Failed to parse JSON response. Raw text (first 500 chars):", text.substring(0, 500));
+    return {
+      error: `Failed to parse JSON from server. Status: ${response.status} ${response.statusText}. Response (partial): ${text.substring(0,100)}...`
+    };
+  }
+}
+
+
+const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, userSession, onUpdateDemoLimits }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [selectedModel, setSelectedModel] = useState<Model>(Model.GEMINI);
-  const { addNotification } = useNotification(); 
+  const { addNotification } = useNotification();
   const themeContext = useContext(ThemeContext);
 
   const [personas, setPersonas] = useState<Persona[]>(() => {
@@ -186,7 +198,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     }
   });
   const [activePersonaId, setActivePersonaId] = useState<string | null>(null);
-  
+
   const [allSettings, setAllSettings] = useState<AllModelSettings>(() => {
     try {
       const storedSettings = localStorage.getItem(LOCAL_STORAGE_SETTINGS_KEY);
@@ -207,13 +219,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     });
     return initialSettings;
   });
-  
+
   const modelSettings = useMemo(() => {
     const baseSettings = allSettings[selectedModel] || ALL_MODEL_DEFAULT_SETTINGS[Model.GEMINI]!;
     const aboutMeText = userProfile?.aboutMe?.trim();
     const activePersona = activePersonaId ? personas.find(p => p.id === activePersonaId) : null;
 
-    // For non-special models, construct system instruction with About Me and Persona
     if (selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS && selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.AI_AGENT && selectedModel !== Model.PRIVATE && selectedModel !== Model.FLUX_KONTEX) {
         let finalSystemInstruction = baseSettings.systemInstruction;
 
@@ -223,13 +234,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                 finalSystemInstruction = `Background information about the user you are interacting with: "${aboutMeText}".\n\nYour current persona/task based on user's selection: "${activePersona.instruction}"`;
             }
         } else if (aboutMeText) {
-            // No persona, but "About Me" exists
             finalSystemInstruction = `Background information about the user you are interacting with: "${aboutMeText}".\n\nYour task: "${baseSettings.systemInstruction}"`;
         }
-        // If neither persona nor aboutMeText, finalSystemInstruction remains baseSettings.systemInstruction
         return { ...baseSettings, systemInstruction: finalSystemInstruction };
     }
-    // For special models (Imagen, TTS, RTTM, AiAgent, Private, Flux Kontex), just return base settings for that model
     return baseSettings;
   }, [allSettings, selectedModel, activePersonaId, personas, userProfile]);
 
@@ -242,12 +250,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   const [uploadedTextFileContent, setUploadedTextFileContent] = useState<string | null>(null);
   const [uploadedTextFileName, setUploadedTextFileName] = useState<string | null>(null);
   const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false);
-  
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
+
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>('settings');
 
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const chatContainerRef = useRef<HTMLDivElement>(null); 
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const [showScrollToBottomButton, setShowScrollToBottomButton] = useState(false);
 
   const isImagenModelSelected = selectedModel === Model.IMAGEN3;
@@ -256,6 +264,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   const isAiAgentMode = selectedModel === Model.AI_AGENT;
   const isPrivateModeSelected = selectedModel === Model.PRIVATE;
   const isFluxKontexModelSelected = selectedModel === Model.FLUX_KONTEX;
+  const isClaudeModelSelected = selectedModel === Model.CLAUDE;
 
 
   const pruneChatSessions = useCallback((sessions: ChatSession[], maxSessions: number): { prunedSessions: ChatSession[], numPruned: number } => {
@@ -264,27 +273,24 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     }
 
     const originalLength = sessions.length;
-    const pinned = sessions.filter(s => s.isPinned).sort((a, b) => b.timestamp - a.timestamp); // newest pinned first
-    const unpinned = sessions.filter(s => !s.isPinned).sort((a, b) => b.timestamp - a.timestamp); // newest unpinned first
+    const pinned = sessions.filter(s => s.isPinned).sort((a, b) => b.timestamp - a.timestamp);
+    const unpinned = sessions.filter(s => !s.isPinned).sort((a, b) => b.timestamp - a.timestamp);
     let finalSessions: ChatSession[];
 
     if (pinned.length >= maxSessions) {
-      // Keep only the most recent 'maxSessions' pinned ones
       finalSessions = pinned.slice(0, maxSessions);
     } else {
-      // Keep all pinned, and fill the rest with the newest unpinned ones
       const numUnpinnedToKeep = maxSessions - pinned.length;
       const keptUnpinned = unpinned.slice(0, numUnpinnedToKeep);
       finalSessions = [...pinned, ...keptUnpinned];
     }
-    
-    // Re-sort the final list to ensure pinned items come first, then by timestamp for overall display consistency.
+
     finalSessions.sort((a, b) => {
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
       return b.timestamp - a.timestamp;
     });
-    
+
     const numPruned = originalLength - finalSessions.length;
     return { prunedSessions: finalSessions, numPruned };
   }, []);
@@ -297,7 +303,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         let sessions: ChatSession[] = JSON.parse(storedHistory);
         const { prunedSessions: initiallyPrunedSessions, numPruned } = pruneChatSessions(sessions, MAX_SAVED_CHAT_SESSIONS);
         if (numPruned > 0) {
-          // Notification will be handled by a useEffect after initial render
           console.warn(`[ChatPage Init] Pruned ${numPruned} session(s) on load to meet storage limit.`);
         }
         return initiallyPrunedSessions;
@@ -305,18 +310,15 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     } catch (error: any) {
       console.error("Error loading/pruning chat history from localStorage during init:", error);
     }
-    return []; 
+    return [];
   });
 
   useEffect(() => {
-    // This effect runs once after initial mount to check if pruning happened during useState initialization
-    // and shows a notification if necessary. This avoids calling addNotification from within useState initializer.
     const checkInitialPruning = () => {
         try {
             const storedHistory = localStorage.getItem(LOCAL_STORAGE_HISTORY_KEY);
             if (storedHistory) {
                 const sessionsInStorage: ChatSession[] = JSON.parse(storedHistory);
-                 // Calculate how many *would have been* pruned if logic ran on raw storage.
                 const numThatWouldBePruned = sessionsInStorage.length - pruneChatSessions(sessionsInStorage, MAX_SAVED_CHAT_SESSIONS).prunedSessions.length;
                 if (numThatWouldBePruned > 0) {
                      addNotification(
@@ -331,26 +333,30 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     };
     checkInitialPruning();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty dependency array ensures this runs only once on mount
+  }, []);
 
 
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [currentChatName, setCurrentChatName] = useState<string>("New Chat");
 
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
-  const [modalImage, setModalImage] = useState<string | null>(null); 
+  const [modalImage, setModalImage] = useState<string | null>(null);
   const [modalPrompt, setModalPrompt] = useState<string>('');
   const [modalMimeType, setModalMimeType] = useState<'image/jpeg' | 'image/png'>('image/jpeg');
 
-  // Speech-to-Text state (shared between chat input and real-time translation)
-  const [isListening, setIsListening] = useState(false); // General listening state
+  const [isListening, setIsListening] = useState(false);
   const [isSpeechRecognitionSupported, setIsSpeechRecognitionSupported] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  // For regular chat input STT:
-  const inputBeforeSpeechRef = useRef<string>(""); 
-  const currentRecognizedTextSegmentRef = useRef<string>(""); 
-  // For Real-Time Translation Mode:
-  const liveTranscriptionRef = useRef<string>("");
+  const inputBeforeSpeechRef = useRef<string>("");
+  const currentRecognizedTextSegmentRef = useRef<string>("");
+
+  // Refs for Real-Time Translation
+  const liveTranscriptionRef = useRef<string>(""); // Stores all text *sent for translation*
+  const currentInterimVisualRef = useRef<string>(""); // Stores the latest visual part of the current utterance (not yet sent for translation)
+  const interimTranslationBufferRef = useRef<string>(""); // Accumulates interim speech before debounced translation
+  const translationDebounceTimerRef = useRef<number | null>(null);
+  const DEBOUNCE_TRANSLATION_MS = 750; // Time to wait for more speech before translating interim
+
   const [liveTranscriptionDisplay, setLiveTranscriptionDisplay] = useState<string>("");
   const liveTranslationAccumulatorRef = useRef<string>("");
   const [liveTranslationDisplay, setLiveTranslationDisplay] = useState<string>("");
@@ -359,23 +365,20 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   const [liveTranslationAudioUrl, setLiveTranslationAudioUrl] = useState<string | null>(null);
 
 
-  // Audio playback state
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
   const [currentPlayingMessageId, setCurrentPlayingMessageId] = useState<string | null>(null);
-  
-  // Search state
+
   const [searchQuery, setSearchQuery] = useState('');
-  const [tempSearchQuery, setTempSearchQuery] = useState(''); // For input field before search is executed
+  const [tempSearchQuery, setTempSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [currentSearchResultIndex, setCurrentSearchResultIndex] = useState(-1);
   const [isSearchActive, setIsSearchActive] = useState(false);
   const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // GPT-4.1 Access Modal State
   const [isGpt41AccessModalOpen, setIsGpt41AccessModalOpen] = useState(false);
   const [gpt41AccessCodeInput, setGpt41AccessCodeInput] = useState('');
   const [isGpt41Unlocked, setIsGpt41Unlocked] = useState(false);
-  const gpt41ModalInteractionFlagRef = useRef(false); // Tracks if modal has been shown for current GPT4O selection
+  const gpt41ModalInteractionFlagRef = useRef(false);
   const previousModelBeforeGpt41ModalRef = useRef<Model | null>(null);
 
   const clearSearch = useCallback(() => {
@@ -384,52 +387,66 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     setTempSearchQuery('');
     setSearchResults([]);
     setCurrentSearchResultIndex(-1);
-    // Optional: Notify user if search was active and they expect a notification
-    // if (searchQuery) { // Check if search was actually active before clearing
-    //   addNotification("Search cleared.", "info");
-    // }
   }, []);
 
 
   const apiKeyStatuses = React.useMemo((): Record<Model, ApiKeyStatus> => {
-    const isProxyExpectedToHaveKey = true; 
+    const isProxyExpectedToHaveKey = true;
 
     return {
       [Model.GEMINI]: {isSet: isProxyExpectedToHaveKey, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Gemini Flash', isMock: false, isGeminiPlatform: true},
       [Model.GEMINI_ADVANCED]: {isSet: isProxyExpectedToHaveKey, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Gemini Advanced', isMock: false, isGeminiPlatform: true},
       [Model.GPT4O]: {isSet: isProxyExpectedToHaveKey, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'ChatGPT (gpt-4.1)', isMock: false, isGeminiPlatform: false},
-      [Model.GPT4O_MINI]: {isSet: isProxyExpectedToHaveKey, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'ChatGPT (gpt-4.1-mini)', isMock: false, isGeminiPlatform: false}, // Updated
+      [Model.GPT4O_MINI]: {isSet: isProxyExpectedToHaveKey, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'ChatGPT (gpt-4.1-mini)', isMock: false, isGeminiPlatform: false},
       [Model.DEEPSEEK]: { isSet: isProxyExpectedToHaveKey, envVarName: 'DEEPSEEK_API_KEY (on proxy)', modelName: 'Deepseek', isMock: false, isGeminiPlatform: false},
-      [Model.CLAUDE]: { isSet: true, envVarName: 'N/A (Mock)', modelName: 'Claude', isMock: true, isGeminiPlatform: false}, 
+      [Model.CLAUDE]: { isSet: true, envVarName: 'N/A (Mock)', modelName: 'Claude', isMock: true, isGeminiPlatform: false},
       [Model.IMAGEN3]: {isSet: isProxyExpectedToHaveKey, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Imagen3 Image Gen', isMock: false, isGeminiPlatform: true, isImageGeneration: true},
       [Model.OPENAI_TTS]: {isSet: isProxyExpectedToHaveKey, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'OpenAI TTS', isMock: false, isGeminiPlatform: false, isTextToSpeech: true },
       [Model.REAL_TIME_TRANSLATION]: {isSet: isProxyExpectedToHaveKey, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Real-Time Translation (Gemini)', isMock: false, isGeminiPlatform: true, isRealTimeTranslation: true },
       [Model.AI_AGENT]: {
         isSet: isProxyExpectedToHaveKey,
-        envVarName: 'GEMINI_API_KEY (on proxy)', 
-        modelName: 'AI Agent (gemini-2.5-flash-preview-04-17)', 
-        isMock: false, 
-        isGeminiPlatform: true, 
+        envVarName: 'GEMINI_API_KEY (on proxy)',
+        modelName: 'AI Agent (gemini-2.5-flash-preview-04-17)',
+        isMock: false,
+        isGeminiPlatform: true,
         isAiAgent: true,
       },
       [Model.PRIVATE]: {
         isSet: true,
         envVarName: 'N/A (Local)',
         modelName: 'Private (Local Data Storage)',
-        isMock: true, 
+        isMock: true,
         isGeminiPlatform: false,
         isPrivateMode: true,
       },
       [Model.FLUX_KONTEX]: {
-        isSet: isProxyExpectedToHaveKey, 
-        envVarName: 'FAL_KEY (on proxy)', 
-        modelName: 'Flux Kontext Image Edit', 
-        isMock: false, 
-        isGeminiPlatform: false, 
-        isImageEditing: true 
+        isSet: isProxyExpectedToHaveKey,
+        envVarName: 'FAL_KEY (on proxy)',
+        modelName: 'Flux Kontext Image Edit',
+        isMock: false,
+        isGeminiPlatform: false,
+        isImageEditing: true
       },
     };
   }, []);
+
+  const displayedChatTitle = useMemo(() => {
+    if (!activeSessionId) { // It's a new chat or not yet saved
+      switch (selectedModel) {
+        case Model.FLUX_KONTEX:
+          return "Flux Kontext Editor";
+        case Model.PRIVATE:
+          return "Private Mode";
+        case Model.AI_AGENT:
+          return "AI Agent";
+        case Model.REAL_TIME_TRANSLATION:
+          return "Real-Time Translation";
+        default:
+          return currentChatName; // This would be "New Chat" from initial state or handleStartNewChat
+      }
+    }
+    return currentChatName; // This is the name of the loaded/saved session
+  }, [activeSessionId, selectedModel, currentChatName]);
 
 
   useEffect(() => {
@@ -442,8 +459,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   }, [allSettings, addNotification]);
 
   useEffect(() => {
-    // The `savedSessions` state is already pruned by operations that modify it.
-    // This useEffect just handles writing the current state to localStorage.
     try {
       localStorage.setItem(LOCAL_STORAGE_HISTORY_KEY, JSON.stringify(savedSessions));
     } catch (error: any) {
@@ -465,60 +480,89 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     }
   }, [personas, addNotification]);
 
-  // Scroll to bottom for new messages OR show "scroll to bottom" button
   useEffect(() => {
     const chatDiv = chatContainerRef.current;
     if (chatDiv && !isSearchActive && !isRealTimeTranslationMode && messages.length > 0) {
         const lastMessage = messages[messages.length - 1];
         const isUserMessage = lastMessage.sender === 'user';
-        
-        // Heuristic: if the scrollbar is not significantly far from bottom, auto-scroll.
-        // This helps if AI message makes content taller but user was near bottom.
-        const nearBottomThreshold = chatDiv.clientHeight * 0.3; // e.g., if within 30% of viewport from bottom
+
+        const nearBottomThreshold = chatDiv.clientHeight * 0.3;
         const isNearBottom = (chatDiv.scrollHeight - chatDiv.scrollTop - chatDiv.clientHeight) < nearBottomThreshold;
 
         if (isUserMessage || isNearBottom) {
             chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-            // The scroll event from scrollIntoView will trigger handleScroll, which typically hides the button.
         }
-        // If user is scrolled up significantly, DO NOTHING to scroll.
-        // `handleScroll` will ensure the button is visible if they are not at the bottom.
     }
   }, [messages, isSearchActive, isRealTimeTranslationMode]);
-  
-  // Effect for model selection changes, including GPT-4.1 access modal
+
   useEffect(() => {
     const currentModelStatus = apiKeyStatuses[selectedModel];
-    // Disable web search if current model is not Gemini platform chat or if AI Agent (which handles its own search) or Flux Kontex
     if ((!currentModelStatus?.isGeminiPlatform || currentModelStatus?.isImageGeneration || currentModelStatus?.isTextToSpeech || currentModelStatus?.isRealTimeTranslation || currentModelStatus?.isAiAgent || currentModelStatus?.isPrivateMode || currentModelStatus?.isImageEditing) && isWebSearchEnabled) {
         setIsWebSearchEnabled(false);
     }
-    
-    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || isFluxKontexModelSelected) { 
-        if (!isFluxKontexModelSelected) { // Flux Kontext needs an image upload
-          setUploadedImages([]);
-          setImagePreviews([]); 
-        }
+
+    // Clear image attachments
+    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || isClaudeModelSelected || isAiAgentMode) {
+      if (uploadedImages.length > 0 || imagePreviews.length > 0) {
+        setUploadedImages([]);
+        setImagePreviews([]);
+      }
+    }
+    // Note: FluxKontext manages its own images, so not cleared here on model switch.
+
+    // Clear text file attachments
+    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isFluxKontexModelSelected || isClaudeModelSelected || isPrivateModeSelected) {
+      if (uploadedTextFileContent || uploadedTextFileName) {
         setUploadedTextFileContent(null);
         setUploadedTextFileName(null);
-        if (!isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected) setActivePersonaId(null); // AI Agent, Private Mode, Flux Kontext don't use personas, but other special models do clear it
-        if (isListening && !isRealTimeTranslationMode) { // Stop chat STT if switching to special mode
-            recognitionRef.current?.stop();
-        }
+      }
     }
+    // Note: AI Agent KEEPS text files.
+
+    // Clear personas
+    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || isFluxKontexModelSelected || isClaudeModelSelected) {
+      if (activePersonaId) {
+        setActivePersonaId(null);
+      }
+    }
+    // Note: AI Agent KEEPS personas.
+
+    // Microphone stopping logic
+    if (isListening && recognitionRef.current) {
+      const stopMicForModel =
+        (isImagenModelSelected && !isRealTimeTranslationMode) ||
+        (isTextToSpeechModelSelected && !isRealTimeTranslationMode) ||
+        (isClaudeModelSelected && !isRealTimeTranslationMode);
+
+      if (stopMicForModel) {
+        recognitionRef.current.stop();
+      } else if (
+          !isRealTimeTranslationMode &&
+          selectedModel !== Model.GPT4O && // Original condition for GPT4O
+          !isGpt41AccessModalOpen && // Original condition for GPT4O modal
+          selectedModel !== Model.AI_AGENT // AI Agent KEEPS mic if it was on
+      ) {
+        // Fallback stop for other models (e.g. Gemini, Deepseek), excluding AI Agent.
+        recognitionRef.current.stop();
+      }
+    }
+
+
+    if (currentPlayingMessageId && audioPlayerRef.current) {
+        audioPlayerRef.current.pause();
+        setCurrentPlayingMessageId(null);
+    }
+
     if (isRealTimeTranslationMode) {
-      setInput(''); // Clear chat input when entering translation mode
-      if (audioPlayerRef.current && currentPlayingMessageId) {
-          audioPlayerRef.current.pause();
-          setCurrentPlayingMessageId(null);
-      }
+      setInput('');
+      // Existing RTT audio stop already handled by general currentPlayingMessageId check above
     } else {
-      if (isListening && recognitionRef.current && selectedModel !== Model.GPT4O && !isGpt41AccessModalOpen) { // only stop if not opening GPT4.1 modal
-          recognitionRef.current.stop(); 
-      }
+      // Existing non-RTT GPT4O mic stop logic is covered by the refined microphone stopping logic above
       setLiveTranscriptionDisplay("");
       setLiveTranslationDisplay("");
       liveTranscriptionRef.current = "";
+      currentInterimVisualRef.current = "";
+      interimTranslationBufferRef.current = "";
       liveTranslationAccumulatorRef.current = "";
       currentTranslationStreamControllerRef.current?.abort();
       if (audioPlayerRef.current && isSpeakingLiveTranslation) {
@@ -528,44 +572,39 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       }
     }
 
-    if (currentPlayingMessageId && audioPlayerRef.current) {
-        audioPlayerRef.current.pause(); 
-        setCurrentPlayingMessageId(null);  
-    }
 
-    // GPT-4.1 Access Modal Logic
     if (selectedModel === Model.GPT4O) {
       if (!isGpt41Unlocked && !gpt41ModalInteractionFlagRef.current) {
-        previousModelBeforeGpt41ModalRef.current = selectedModel; // Store current selection context
+        previousModelBeforeGpt41ModalRef.current = selectedModel;
         setIsGpt41AccessModalOpen(true);
-        gpt41ModalInteractionFlagRef.current = true; // Mark that we've attempted to show the modal for this selection
+        gpt41ModalInteractionFlagRef.current = true;
       }
     } else {
-      // If navigating away from GPT4O, reset the interaction flag so it can pop up again if re-selected
       gpt41ModalInteractionFlagRef.current = false;
-      if (isGpt41AccessModalOpen) setIsGpt41AccessModalOpen(false); // Close modal if open and model changed
+      if (isGpt41AccessModalOpen) setIsGpt41AccessModalOpen(false);
     }
-    clearSearch(); // Clear search when model changes
+    clearSearch();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedModel, clearSearch]); // Dependencies intentionally simplified for this specific logic, added clearSearch
+  }, [selectedModel, clearSearch]);
 
 
   const translateLiveSegment = useCallback(async (text: string, targetLangCode: string) => {
       if (!text.trim() || !targetLangCode) return;
 
       const targetLangName = TRANSLATION_TARGET_LANGUAGES.find(l => l.code === targetLangCode)?.name || targetLangCode;
-      const translationPlaceholder = `Translating to ${targetLangName}: "${text.substring(0, 20)}..."\n`;
-      
+      const translationPlaceholderId = `translate-${Date.now()}`;
+      const translationPlaceholder = `Translating to ${targetLangName}: "${text.substring(0, 20)}..." [ID: ${translationPlaceholderId}]\n`;
+
       setLiveTranslationDisplay(prev => prev + translationPlaceholder);
 
-      currentTranslationStreamControllerRef.current?.abort(); // Cancel previous stream if any
+      currentTranslationStreamControllerRef.current?.abort();
       currentTranslationStreamControllerRef.current = new AbortController();
       const signal = currentTranslationStreamControllerRef.current.signal;
 
       try {
           const prompt = `Translate the following text to ${targetLangName}. Output only the translated text directly, without any introductory phrases or explanations: "${text}"`;
           const history: Content[] = [{ role: 'user', parts: [{ text: prompt }] }];
-          const geminiModelId = getActualModelIdentifier(Model.GEMINI); // Use Gemini Flash for translation
+          const geminiModelId = getActualModelIdentifier(Model.GEMINI);
 
           const stream = sendGeminiMessageStream({
               historyContents: history,
@@ -587,9 +626,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                   setLiveTranslationDisplay(prev => prev.replace(translationPlaceholder, `[${targetLangName}]: ${segmentTranslation}\n`));
               }
           }
-          // Final update for the segment, replacing placeholder entirely
+          // Append to accumulator and then set display to accumulator ensures final consistency
           liveTranslationAccumulatorRef.current += `[${targetLangName}]: ${segmentTranslation.trim()}\n`;
-          setLiveTranslationDisplay(liveTranslationAccumulatorRef.current); // Show full accumulated history
+          setLiveTranslationDisplay(liveTranslationAccumulatorRef.current);
 
       } catch (error: any) {
           if (error.name === 'AbortError') {
@@ -597,54 +636,80 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
           } else {
             console.error("Error translating segment:", error);
             addNotification(`Translation error: ${error.message}`, "error");
-            setLiveTranslationDisplay(prev => prev.replace(translationPlaceholder, `[Error translating: ${error.message}]\n`));
             liveTranslationAccumulatorRef.current += `[Error translating: ${error.message}]\n`;
+            setLiveTranslationDisplay(liveTranslationAccumulatorRef.current);
           }
       }
   }, [addNotification]);
 
-  // Speech-to-Text Effect
   useEffect(() => {
     const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognitionAPI) {
       setIsSpeechRecognitionSupported(false);
       return;
     }
-    
+
     setIsSpeechRecognitionSupported(true);
     recognitionRef.current = new SpeechRecognitionAPI() as SpeechRecognition;
     const recognition = recognitionRef.current;
 
-    recognition.continuous = true; 
+    recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = isRealTimeTranslationMode ? (navigator.language || 'en-US') : (navigator.language.startsWith('vi') ? 'vi-VN' : (navigator.language || 'en-US'));
 
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let finalTranscriptForSegment = "";
-      let currentInterimTranscript = "";
+      let newFinalTranscriptThisEvent = "";
+      let latestInterimForDisplay = "";
 
       for (let i = event.resultIndex; i < event.results.length; ++i) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscriptForSegment += transcript;
-        } else {
-          currentInterimTranscript += transcript;
-        }
+          const transcriptPart = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+              newFinalTranscriptThisEvent += transcriptPart;
+              currentInterimVisualRef.current = "";
+          } else {
+              latestInterimForDisplay = transcriptPart;
+          }
       }
 
       if (isRealTimeTranslationMode) {
-          setLiveTranscriptionDisplay(liveTranscriptionRef.current + finalTranscriptForSegment + currentInterimTranscript);
-          if (finalTranscriptForSegment.trim()) {
-              liveTranscriptionRef.current += finalTranscriptForSegment.trim() + "\n"; 
-              const targetLangCode = (modelSettings as RealTimeTranslationSettings).targetLanguage || 'en';
-              translateLiveSegment(finalTranscriptForSegment.trim(), targetLangCode);
+          if (!newFinalTranscriptThisEvent.trim() && latestInterimForDisplay.trim()) {
+            currentInterimVisualRef.current = latestInterimForDisplay;
           }
-      } else { // Regular chat input STT
-          currentRecognizedTextSegmentRef.current = finalTranscriptForSegment.trim() + 
-              (finalTranscriptForSegment.trim() && currentInterimTranscript.trim() ? " " : "") + 
-              currentInterimTranscript.trim();
+          setLiveTranscriptionDisplay(liveTranscriptionRef.current + currentInterimVisualRef.current);
 
+          if (newFinalTranscriptThisEvent.trim()) {
+              if (translationDebounceTimerRef.current) {
+                  clearTimeout(translationDebounceTimerRef.current);
+                  translationDebounceTimerRef.current = null;
+              }
+              const textToTranslate = newFinalTranscriptThisEvent.trim();
+              liveTranscriptionRef.current += textToTranslate + "\n";
+              setLiveTranscriptionDisplay(liveTranscriptionRef.current);
+              currentInterimVisualRef.current = "";
+              translateLiveSegment(textToTranslate, (modelSettings as RealTimeTranslationSettings).targetLanguage || 'en');
+              interimTranslationBufferRef.current = "";
+          } else if (latestInterimForDisplay.trim()) {
+              interimTranslationBufferRef.current = latestInterimForDisplay; // Buffer the latest full interim
+              if (translationDebounceTimerRef.current) {
+                  clearTimeout(translationDebounceTimerRef.current);
+              }
+              translationDebounceTimerRef.current = window.setTimeout(() => {
+                  if (interimTranslationBufferRef.current.trim()) {
+                      const textToTranslate = interimTranslationBufferRef.current.trim();
+                      liveTranscriptionRef.current += textToTranslate + "\n";
+                      setLiveTranscriptionDisplay(liveTranscriptionRef.current);
+                      currentInterimVisualRef.current = "";
+                      translateLiveSegment(textToTranslate, (modelSettings as RealTimeTranslationSettings).targetLanguage || 'en');
+                      interimTranslationBufferRef.current = "";
+                  }
+                  translationDebounceTimerRef.current = null;
+              }, DEBOUNCE_TRANSLATION_MS);
+          }
+      } else { // Non-real-time mode
+          currentRecognizedTextSegmentRef.current = newFinalTranscriptThisEvent.trim() +
+              (newFinalTranscriptThisEvent.trim() && latestInterimForDisplay.trim() ? " " : "") +
+              latestInterimForDisplay.trim();
           let displayInput = inputBeforeSpeechRef.current;
           if (displayInput.trim() && currentRecognizedTextSegmentRef.current) {
             displayInput += " ";
@@ -655,16 +720,35 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     };
 
     recognition.onend = () => {
-      setIsListening(false);
-      if (!isRealTimeTranslationMode) { // Finalize chat input
-        let finalInputText = inputBeforeSpeechRef.current;
-         if (finalInputText.trim() && currentRecognizedTextSegmentRef.current.trim()) {
-          finalInputText += " ";
-        }
-        finalInputText += currentRecognizedTextSegmentRef.current.trim();
-        setInput(finalInputText);
+      setIsListening(false); // Ensure isListening is set to false when recognition ends
+      if (translationDebounceTimerRef.current) {
+          clearTimeout(translationDebounceTimerRef.current);
+          translationDebounceTimerRef.current = null;
       }
-      // For RTTM, onend just means recording stopped, display is already updated.
+      if (isRealTimeTranslationMode) {
+          let remainingTextToTranslate = "";
+          if (interimTranslationBufferRef.current.trim()) {
+              remainingTextToTranslate = interimTranslationBufferRef.current.trim();
+          } else if (currentInterimVisualRef.current.trim() && !liveTranscriptionRef.current.endsWith(currentInterimVisualRef.current.trim() + "\n")) {
+              remainingTextToTranslate = currentInterimVisualRef.current.trim();
+          }
+
+          if (remainingTextToTranslate) {
+              liveTranscriptionRef.current += remainingTextToTranslate + "\n";
+              setLiveTranscriptionDisplay(liveTranscriptionRef.current);
+              translateLiveSegment(remainingTextToTranslate, (modelSettings as RealTimeTranslationSettings).targetLanguage || 'en');
+          }
+          interimTranslationBufferRef.current = "";
+          currentInterimVisualRef.current = "";
+      } else {
+          let finalInputText = inputBeforeSpeechRef.current;
+          if (finalInputText.trim() && currentRecognizedTextSegmentRef.current.trim()) {
+            finalInputText += " ";
+          }
+          finalInputText += currentRecognizedTextSegmentRef.current.trim();
+          setInput(finalInputText);
+          currentRecognizedTextSegmentRef.current = "";
+      }
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
@@ -672,30 +756,44 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       let errorMessage = `Speech recognition error: ${event.error}.`;
       if (event.error === 'not-allowed') {
         errorMessage = "Microphone access denied. Please allow microphone access in your browser settings.";
-      } else if (event.error === 'no-speech' && isListening) { // Only show no-speech error if actively listening
+      } else if (event.error === 'no-speech' && isListening) {
         errorMessage = "No speech detected. Please try again.";
-      } else if (event.error === 'aborted' && !isListening) { // Expected if user stops it
-        return; 
+      } else if (event.error === 'aborted' && !isListening) {
+        return;
       }
       addNotification(errorMessage, "error", event.message);
-      setIsListening(false);
+      setIsListening(false); // Ensure isListening is set to false on error
+      // Clear buffers on error too
+      if (isRealTimeTranslationMode) {
+        interimTranslationBufferRef.current = "";
+        currentInterimVisualRef.current = "";
+        if (translationDebounceTimerRef.current) {
+            clearTimeout(translationDebounceTimerRef.current);
+            translationDebounceTimerRef.current = null;
+        }
+      }
     };
 
     return () => {
-      recognition?.abort(); // Use abort instead of stop for faster cleanup
+      recognition?.abort();
+      if (translationDebounceTimerRef.current) {
+        clearTimeout(translationDebounceTimerRef.current);
+      }
     };
-  // Removed `isListening` from dependencies to prevent premature abort/onend.
-  }, [addNotification, isRealTimeTranslationMode, modelSettings, translateLiveSegment]);
+  }, [addNotification, isRealTimeTranslationMode, modelSettings, translateLiveSegment]); // Removed 'isListening'
 
 
   const handleToggleListen = () => {
     if (!isSpeechRecognitionSupported || !recognitionRef.current) return;
 
     if (isListening) {
-      recognitionRef.current.stop(); // Will trigger 'onend' which sets isListening = false
+      recognitionRef.current.stop();
+      // setIsListening(false) will be called by onend or onerror
     } else {
       if (isRealTimeTranslationMode) {
           liveTranscriptionRef.current = "";
+          currentInterimVisualRef.current = "";
+          interimTranslationBufferRef.current = "";
           liveTranslationAccumulatorRef.current = "";
           setLiveTranscriptionDisplay("");
           setLiveTranslationDisplay("");
@@ -706,7 +804,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             setLiveTranslationAudioUrl(null);
           }
       } else {
-          inputBeforeSpeechRef.current = input; 
+          inputBeforeSpeechRef.current = input;
           currentRecognizedTextSegmentRef.current = "";
       }
       try {
@@ -735,7 +833,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       if ('guidance_scale' in processedNewSettings && typeof processedNewSettings.guidance_scale === 'number') {
         processedNewSettings.guidance_scale = Math.max(0, Math.min(20, processedNewSettings.guidance_scale));
       }
-      
+
       const activeP = activePersonaId ? personas.find(p => p.id === activePersonaId) : null;
       if (activeP && 'systemInstruction' in processedNewSettings && selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS && selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.AI_AGENT && selectedModel !== Model.PRIVATE && selectedModel !== Model.FLUX_KONTEX) {
           delete processedNewSettings.systemInstruction;
@@ -770,7 +868,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     const personaToDelete = personas.find(p => p.id === personaId);
     setPersonas(prev => prev.filter(p => p.id !== personaId));
     if (activePersonaId === personaId) {
-      setActivePersonaId(null); 
+      setActivePersonaId(null);
     }
     if (personaToDelete) {
       addNotification(`Persona "${personaToDelete.name}" deleted.`, "info");
@@ -794,7 +892,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     if (firstUserMessage) {
         if (firstUserMessage.isImageQuery && firstUserMessage.text) {
             sessionName = `Image: ${firstUserMessage.text.substring(0, 30)}${firstUserMessage.text.length > 30 ? '...' : ''}`;
-        } else if (firstUserMessage.isTaskGoal && firstUserMessage.text) { 
+        } else if (firstUserMessage.isTaskGoal && firstUserMessage.text) {
             sessionName = `Agent Goal: ${firstUserMessage.text.substring(0, 30)}${firstUserMessage.text.length > 30 ? '...' : ''}`;
         } else if (firstUserMessage.isNote && firstUserMessage.text) {
             sessionName = `Note: ${firstUserMessage.text.substring(0, 30)}${firstUserMessage.text.length > 30 ? '...' : ''}`;
@@ -812,21 +910,20 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         setSavedSessions(prev => {
             const updatedSession = {
                 ...prev.find(s => s.id === activeSessionId)!,
-                name: prev.find(s => s.id === activeSessionId)?.name || sessionName, // Keep existing name on update unless it's new
+                name: prev.find(s => s.id === activeSessionId)?.name || sessionName,
                 messages: [...messages],
                 model: selectedModel,
-                modelSettingsSnapshot: {...modelSettings}, 
-                timestamp: sessionTimestamp, // Update timestamp on save
-                activePersonaIdSnapshot: activePersonaId, 
+                modelSettingsSnapshot: {...modelSettings},
+                timestamp: sessionTimestamp,
+                activePersonaIdSnapshot: activePersonaId,
             };
             const otherSessions = prev.filter(s => s.id !== activeSessionId);
             const { prunedSessions } = pruneChatSessions([updatedSession, ...otherSessions], MAX_SAVED_CHAT_SESSIONS);
-             // No specific notification for pruning on update, as it's less direct.
             return prunedSessions.sort((a, b) => b.timestamp - a.timestamp);
         });
         setCurrentChatName(savedSessions.find(s => s.id === activeSessionId)?.name || sessionName);
         addNotification(`Chat "${currentChatName}" updated in browser.`, "success");
-    } else { // Saving a new chat
+    } else {
         const newSessionId = `session-${sessionTimestamp}`;
         const newSession: ChatSession = {
             id: newSessionId,
@@ -834,7 +931,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             timestamp: sessionTimestamp,
             model: selectedModel,
             messages: [...messages],
-            modelSettingsSnapshot: {...modelSettings}, 
+            modelSettingsSnapshot: {...modelSettings},
             isPinned: false,
             activePersonaIdSnapshot: activePersonaId,
         };
@@ -844,9 +941,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             const { prunedSessions, numPruned } = pruneChatSessions(updatedSessions, MAX_SAVED_CHAT_SESSIONS);
             if (numPruned > 0) {
                 const removedSession = prev.find(s => !s.isPinned && !prunedSessions.some(ps => ps.id === s.id && s.id !== newSession.id));
-                 if (removedSession && newSession.id !== removedSession.id) { // Ensure we don't announce removal of the session just saved if it was part of a complex prune
+                 if (removedSession && newSession.id !== removedSession.id) {
                     addNotification(`Storage limit: Oldest unpinned chat "${removedSession.name}" removed from browser to make space.`, "info");
-                } else if (numPruned > 0) { // Generic if specific removed session not easily identifiable or it was the new one (should not happen)
+                } else if (numPruned > 0) {
                     addNotification(`Storage limit: ${numPruned} oldest unpinned chat(s) removed from browser to save new chat.`, "info");
                 }
             }
@@ -867,14 +964,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
           return;
       }
       setMessages([...sessionToLoad.messages]);
-      setSelectedModel(sessionToLoad.model); // This might trigger the GPT-4.1 modal
+      setSelectedModel(sessionToLoad.model);
       setActivePersonaId(sessionToLoad.activePersonaIdSnapshot || null);
-      
+
       setAllSettings(prevAllSettings => ({
           ...prevAllSettings,
           [sessionToLoad.model]: {
-            ...(prevAllSettings[sessionToLoad.model] || ALL_MODEL_DEFAULT_SETTINGS[sessionToLoad.model]!), 
-            ...sessionToLoad.modelSettingsSnapshot 
+            ...(prevAllSettings[sessionToLoad.model] || ALL_MODEL_DEFAULT_SETTINGS[sessionToLoad.model]!),
+            ...sessionToLoad.modelSettingsSnapshot
           }
       }));
 
@@ -884,9 +981,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       setImagePreviews([]);
       setUploadedTextFileContent(null);
       setUploadedTextFileName(null);
-      setIsWebSearchEnabled(false); 
+      setIsWebSearchEnabled(false);
       setError(null);
-      setIsSidebarOpen(false); 
+      setIsSidebarOpen(false);
       addNotification(`Loaded chat from browser: "${sessionToLoad.name}".`, "info");
       clearSearch();
     } else {
@@ -897,35 +994,39 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   const handleStartNewChat = useCallback(() => {
     setMessages([]);
     setActiveSessionId(null);
+    // currentChatName will be updated by the displayedChatTitle logic via useMemo
+    // but ensure the base is "New Chat" if no special model is active
     setCurrentChatName("New Chat");
     setUploadedImages([]);
     setImagePreviews([]);
     setUploadedTextFileContent(null);
     setUploadedTextFileName(null);
     setIsWebSearchEnabled(false);
-    
-    if (selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.PRIVATE && selectedModel !== Model.FLUX_KONTEX && !(selectedModel === Model.GPT4O && !isGpt41Unlocked)) { // AI Agent & Private mode settings reset normally
+
+    if (selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.PRIVATE && selectedModel !== Model.FLUX_KONTEX && !(selectedModel === Model.GPT4O && !isGpt41Unlocked)) {
         setAllSettings(prev => ({
             ...prev,
             [selectedModel]: { ...(ALL_MODEL_DEFAULT_SETTINGS[selectedModel] || ALL_MODEL_DEFAULT_SETTINGS[Model.GEMINI]!) }
         }));
-    } else if (selectedModel === Model.GPT4O && isGpt41Unlocked) { 
+    } else if (selectedModel === Model.GPT4O && isGpt41Unlocked) {
          setAllSettings(prev => ({
             ...prev,
             [selectedModel]: { ...(ALL_MODEL_DEFAULT_SETTINGS[selectedModel] || ALL_MODEL_DEFAULT_SETTINGS[Model.GEMINI]!) }
         }));
     }
 
-    if (!isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected) setActivePersonaId(null); // AI Agent, Private Mode, Flux Kontext don't use personas
+    if (!isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected) setActivePersonaId(null);
     setError(null);
-    setIsSidebarOpen(false); 
+    setIsSidebarOpen(false);
     addNotification("Started new chat.", "info");
     clearSearch();
-     
+
     if (isRealTimeTranslationMode) {
         setLiveTranscriptionDisplay("");
         setLiveTranslationDisplay("");
         liveTranscriptionRef.current = "";
+        currentInterimVisualRef.current = "";
+        interimTranslationBufferRef.current = "";
         liveTranslationAccumulatorRef.current = "";
         if (audioPlayerRef.current && isSpeakingLiveTranslation) {
             audioPlayerRef.current.pause();
@@ -938,23 +1039,20 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     const sessionToDelete = savedSessions.find(s => s.id === sessionId);
     setSavedSessions(prev => {
         const updatedSessions = prev.filter(s => s.id !== sessionId);
-        // Pruning is not strictly necessary on delete unless we have a complex min-sessions rule.
-        // But, for consistency, we can re-apply. The prune function handles cases where length <= max.
         const { prunedSessions } = pruneChatSessions(updatedSessions, MAX_SAVED_CHAT_SESSIONS);
         return prunedSessions;
     });
     if (activeSessionId === sessionId) {
-      handleStartNewChat(); 
+      handleStartNewChat();
     }
     if (sessionToDelete) {
       addNotification(`Deleted chat from browser: "${sessionToDelete.name}".`, "info");
     }
-  }, [activeSessionId, handleStartNewChat, savedSessions, addNotification, pruneChatSessions]); 
-  
+  }, [activeSessionId, handleStartNewChat, savedSessions, addNotification, pruneChatSessions]);
+
   const handleRenameSession = useCallback((sessionId: string, newName: string) => {
     setSavedSessions(prev => {
         const updatedSessions = prev.map(s => s.id === sessionId ? { ...s, name: newName } : s);
-        // No pruning needed on rename itself as count doesn't change.
         return updatedSessions;
     });
     if (activeSessionId === sessionId) {
@@ -975,12 +1073,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             }
             return s;
         });
-        // Re-apply pruning after pinning/unpinning as it might affect which sessions are kept
         const { prunedSessions, numPruned } = pruneChatSessions(newSessions, MAX_SAVED_CHAT_SESSIONS);
         if (numPruned > 0) {
             addNotification(`Storage limit: ${numPruned} oldest unpinned chat(s) removed from browser due to pinning changes.`, "info");
         }
-        return prunedSessions.sort((a, b) => { // Ensure pinned come first, then by time
+        return prunedSessions.sort((a, b) => {
             if (a.isPinned && !b.isPinned) return -1;
             if (!a.isPinned && b.isPinned) return 1;
             return b.timestamp - a.timestamp;
@@ -1000,25 +1097,36 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       addNotification("Cannot save an empty chat to device.", "info");
       return;
     }
-    
+
     const sessionTimestamp = Date.now();
-    let sessionName = currentChatName === "New Chat" ? `Chat-${sessionTimestamp}` : currentChatName;
-    
-    // Ensure a name if it's still "New Chat" or empty
+    let determinedSessionName: string;
+
     if (currentChatName === "New Chat" || !currentChatName.trim()) {
         const firstUserMessage = messages.find(m => m.sender === 'user');
         if (firstUserMessage) {
-            if (firstUserMessage.text) sessionName = firstUserMessage.text.substring(0, 30);
-            else if (firstUserMessage.imagePreview) sessionName = "Chat_with_Image";
-            else if (firstUserMessage.fileName) sessionName = `Chat_with_File_${firstUserMessage.fileName.substring(0,20)}`;
+            if (firstUserMessage.text && firstUserMessage.text.trim()) {
+                determinedSessionName = firstUserMessage.text.substring(0, 30);
+            } else if (firstUserMessage.imagePreview) {
+                determinedSessionName = "Chat_with_Image";
+            } else if (firstUserMessage.fileName) {
+                determinedSessionName = `Chat_with_File_${firstUserMessage.fileName.substring(0,20)}`;
+            } else {
+                determinedSessionName = `Chat-${sessionTimestamp}`;
+            }
+        } else {
+            determinedSessionName = `Chat-${sessionTimestamp}`;
         }
-        if (!sessionName || sessionName === "New Chat") sessionName = `Chat-${sessionTimestamp}`;
+        // Ensure determinedSessionName is not empty
+        if (!determinedSessionName.trim()) {
+           determinedSessionName = `Chat-${sessionTimestamp}`;
+        }
+    } else {
+        determinedSessionName = currentChatName;
     }
 
-
     const sessionToSave: ChatSession = {
-      id: activeSessionId || `device-session-${sessionTimestamp}`, // Use existing ID if available, or generate one
-      name: sessionName,
+      id: activeSessionId || `device-session-${sessionTimestamp}`,
+      name: determinedSessionName,
       timestamp: sessionTimestamp,
       model: selectedModel,
       messages: [...messages],
@@ -1033,13 +1141,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       const href = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = href;
-      const safeFileName = sessionName.replace(/[^a-z0-9_.-]/gi, '_').substring(0, 50);
+      const safeFileName = determinedSessionName.replace(/[^a-z0-9_.-]/gi, '_').substring(0, 50);
       link.download = `${safeFileName || 'chat_session'}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(href);
-      addNotification(`Chat "${sessionName}" is being saved to your device.`, "success");
+      addNotification(`Chat "${determinedSessionName}" is being saved to your device.`, "success");
     } catch (e: any) {
       console.error("Error saving chat to device:", e);
       addNotification("Failed to save chat to device.", "error", e.message);
@@ -1063,7 +1171,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             }
             const sessionToLoad = JSON.parse(result) as ChatSession;
 
-            // Validate crucial fields
             if (!sessionToLoad.messages || !sessionToLoad.model || !sessionToLoad.modelSettingsSnapshot || !sessionToLoad.name || !sessionToLoad.timestamp) {
                 throw new Error("File is not a valid chat session format. Missing required fields.");
             }
@@ -1075,27 +1182,25 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             setMessages([...sessionToLoad.messages]);
             setSelectedModel(sessionToLoad.model);
             setActivePersonaId(sessionToLoad.activePersonaIdSnapshot || null);
-            
+
             setAllSettings(prevAllSettings => ({
                 ...prevAllSettings,
                 [sessionToLoad.model]: {
-                  ...(prevAllSettings[sessionToLoad.model] || ALL_MODEL_DEFAULT_SETTINGS[sessionToLoad.model]!), 
-                  ...sessionToLoad.modelSettingsSnapshot 
+                  ...(prevAllSettings[sessionToLoad.model] || ALL_MODEL_DEFAULT_SETTINGS[sessionToLoad.model]!),
+                  ...sessionToLoad.modelSettingsSnapshot
                 }
             }));
-            
-            // This chat is loaded but NOT yet saved to localStorage, so activeSessionId is null.
-            // User can choose to "Save to Browser" later if they wish.
-            setActiveSessionId(null); 
-            setCurrentChatName(sessionToLoad.name + " (from device)"); // Indicate it's from device
+
+            setActiveSessionId(null);
+            setCurrentChatName(sessionToLoad.name + " (from device)");
 
             setUploadedImages([]);
             setImagePreviews([]);
             setUploadedTextFileContent(null);
             setUploadedTextFileName(null);
-            setIsWebSearchEnabled(false); 
+            setIsWebSearchEnabled(false);
             setError(null);
-            setIsSidebarOpen(false); 
+            setIsSidebarOpen(false);
             addNotification(`Loaded chat from device: "${sessionToLoad.name}".`, "info");
             clearSearch();
 
@@ -1111,7 +1216,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   }, [addNotification, clearSearch]);
 
 
-  const handleOpenImageModal = useCallback((imageData: string, promptText: string, mime: 'image/jpeg' | 'image/png') => { // Renamed imageB64 to imageData
+  const handleOpenImageModal = useCallback((imageData: string, promptText: string, mime: 'image/jpeg' | 'image/png') => {
     setModalImage(imageData);
     setModalPrompt(promptText);
     setModalMimeType(mime);
@@ -1122,14 +1227,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     if (!audioPlayerRef.current) return;
     const player = audioPlayerRef.current;
 
-    // Stop live translation audio if it's playing
     if (isSpeakingLiveTranslation) {
         player.pause();
         setIsSpeakingLiveTranslation(false);
         setLiveTranslationAudioUrl(null);
     }
 
-    if (currentPlayingMessageId === messageId) { 
+    if (currentPlayingMessageId === messageId) {
       if (player.paused) {
         player.play().catch(e => {
           if ((e as DOMException).name === 'AbortError') {
@@ -1138,19 +1242,18 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             console.error("Error resuming audio:", e);
             addNotification("Error resuming audio.", "error", (e as Error).message);
           }
-          setCurrentPlayingMessageId(null); 
+          setCurrentPlayingMessageId(null);
         });
       } else {
-        player.pause(); 
-        // onpause listener will set currentPlayingMessageId to null
+        player.pause();
       }
-    } else { 
-      if (!player.paused) { // If playing something else (another message)
-          player.pause(); 
+    } else {
+      if (!player.paused) {
+          player.pause();
       }
       player.src = audioUrl;
-      setCurrentPlayingMessageId(messageId); 
-      
+      setCurrentPlayingMessageId(messageId);
+
       player.play().catch(e => {
         if ((e as DOMException).name === 'AbortError') {
            console.log('Audio play() request was aborted.');
@@ -1158,7 +1261,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
           console.error("Error playing new audio:", e);
           addNotification("Error playing new audio.", "error", (e as Error).message);
         }
-        if (currentPlayingMessageId === messageId) { 
+        if (currentPlayingMessageId === messageId) {
           setCurrentPlayingMessageId(null);
         }
       });
@@ -1167,25 +1270,31 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
 
   const handleSpeakLiveTranslation = useCallback(async () => {
     if (!audioPlayerRef.current || !liveTranslationDisplay.trim() || isListening) return;
+
+    if (userSession.isDemoUser && !userSession.isPaidUser) { // Check if demo AND not paid
+        addNotification("Chức năng này chỉ hoạt động cho người dùng trả phí", "info");
+        return;
+    }
+
     const player = audioPlayerRef.current;
 
-    if (currentPlayingMessageId) { // If message audio is playing, stop it
+    if (currentPlayingMessageId) {
         player.pause();
         setCurrentPlayingMessageId(null);
     }
-    if (isSpeakingLiveTranslation) { // If already speaking live translation
-        player.pause(); // This will trigger onpause, setting isSpeakingLiveTranslation to false
+    if (isSpeakingLiveTranslation) {
+        player.pause();
         return;
     }
-    
+
     setIsSpeakingLiveTranslation(true);
-    setLiveTranslationAudioUrl(null); // Clear previous URL if any
+    setLiveTranslationAudioUrl(null);
 
     const openAiTtsModelSettings = allSettings[Model.OPENAI_TTS] as OpenAITtsSettings | undefined;
     const ttsParams = {
         modelIdentifier: openAiTtsModelSettings?.modelIdentifier || 'tts-1',
-        textInput: liveTranslationDisplay.replace(/\[.*?\]:\s*/g, '').trim(), // Remove "[Language]: " prefixes
-        voice: 'nova' as OpenAiTtsVoice, // Explicitly female voice
+        textInput: liveTranslationDisplay.replace(/\[.*?\]:\s*/g, '').trim(),
+        voice: 'nova' as OpenAiTtsVoice,
         speed: openAiTtsModelSettings?.speed || 1.0,
     };
 
@@ -1209,7 +1318,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         addNotification(`TTS Error: ${error.message}`, "error");
         setIsSpeakingLiveTranslation(false);
     }
-  }, [liveTranslationDisplay, addNotification, allSettings, isListening, currentPlayingMessageId, isSpeakingLiveTranslation]);
+  }, [liveTranslationDisplay, addNotification, allSettings, isListening, currentPlayingMessageId, isSpeakingLiveTranslation, userSession.isDemoUser, userSession.isPaidUser]);
 
 
   useEffect(() => {
@@ -1226,11 +1335,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             }
         };
         player.addEventListener('ended', handleAudioEndOrPause);
-        player.addEventListener('pause', handleAudioEndOrPause); 
+        player.addEventListener('pause', handleAudioEndOrPause);
         return () => {
             player.removeEventListener('ended', handleAudioEndOrPause);
             player.removeEventListener('pause', handleAudioEndOrPause);
-            if (liveTranslationAudioUrl) { // Clean up blob URL on component unmount if player didn't end
+            if (liveTranslationAudioUrl) {
                 URL.revokeObjectURL(liveTranslationAudioUrl);
             }
         };
@@ -1238,10 +1347,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   }, [currentPlayingMessageId, isSpeakingLiveTranslation, liveTranslationAudioUrl]);
 
   const pollFluxKontexStatus = useCallback(async (requestId: string, aiMessageId: string, userPrompt: string) => {
-    const MAX_TOTAL_POLLS = 30; // Total polls (approx 90s with 3s interval)
-    const POLL_INTERVAL = 3000; // 3 seconds
-    const MAX_NOT_FOUND_POLLS = 12; // Allow 'NOT_FOUND' for first ~36 seconds
-    
+    const MAX_TOTAL_POLLS = 30;
+    const POLL_INTERVAL = 3000;
+    const MAX_NOT_FOUND_POLLS = 12;
+
     let pollCount = 0;
     let notFoundCount = 0;
     let intervalId: number | undefined;
@@ -1266,7 +1375,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
               ...msg,
               text: `Image edited based on your prompt: "${userPrompt}"`,
               imagePreviews: [statusResult.editedImageUrl!],
-              imageMimeType: 'image/png', // Fal default for flux-pro is png
+              imageMimeType: 'image/png',
               originalPrompt: userPrompt,
               isRegenerating: false,
               fluxRequestId: undefined,
@@ -1280,7 +1389,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
           setIsLoading(false);
           return;
         } else if (statusResult.status === 'IN_PROGRESS' || statusResult.status === 'IN_QUEUE') {
-          notFoundCount = 0; // Reset notFoundCount if progress is seen
+          notFoundCount = 0;
           setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Image editing: ${statusResult.status?.toLowerCase()} (ID: ${requestId}). Attempt ${pollCount}/${MAX_TOTAL_POLLS}...` } : msg));
         } else if (statusResult.status === 'NOT_FOUND') {
           notFoundCount++;
@@ -1292,9 +1401,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             setIsLoading(false);
             return;
           }
-          // Still within not_found tolerance, treat as in progress
           setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Image editing: Verifying request (ID: ${requestId}). Attempt ${pollCount}/${MAX_TOTAL_POLLS}...` } : msg));
-        } else { // ERROR or other statuses
+        } else {
           if (intervalId) clearInterval(intervalId);
           const errorMessage = statusResult.error || "Unknown error during image editing.";
           setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error editing image: ${errorMessage}. Prompt: "${userPrompt}"`, isRegenerating: false, fluxRequestId: undefined } : msg));
@@ -1308,26 +1416,26 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         setIsLoading(false);
       }
     };
-    
-    performPoll(); 
+
+    performPoll();
     intervalId = window.setInterval(performPoll, POLL_INTERVAL);
   }, [addNotification, setMessages, setIsLoading]);
 
 
   const internalSendMessage = async (
     currentInputText: string,
-    currentActiveImageFile: File | null,     // The primary image for the message
-    currentActiveImagePreview: string | null, // Preview for the primary image
+    currentActiveImageFile: File | null,
+    currentActiveImagePreview: string | null,
     currentUploadedTextContent: string | null,
     currentUploadedTextFileName: string | null,
-    isRegenerationOfAiMsgId?: string 
+    isRegenerationOfAiMsgId?: string
   ) => {
-    
+
     const messageTimestamp = Date.now();
     const userMessageId = messageTimestamp.toString();
-    let userDisplayedText = currentInputText.trim(); 
+    let userDisplayedText = currentInputText.trim();
     let textForApi = currentInputText.trim();
-    
+
     const fileContextNote = `(System Note: User uploaded a file named '${currentUploadedTextFileName}'. Its content is not directly available to you. Please refer to your system instructions on how to handle this situation.)`;
 
     if (isAiAgentMode) {
@@ -1336,20 +1444,19 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         } else if (currentUploadedTextFileName && !currentUploadedTextContent && !currentActiveImageFile) {
             textForApi = `${fileContextNote}\n\nUser's goal: ${textForApi}`;
         }
-    } else if (currentUploadedTextFileName && currentUploadedTextContent) { // Standard chat with text file
+    } else if (currentUploadedTextFileName && currentUploadedTextContent) {
         textForApi = `The user has uploaded a file named "${currentUploadedTextFileName}".\nThe content of this file is:\n${currentUploadedTextContent}\n\n---\n\n${textForApi}`;
     }
-    // For standard chat models, if a non-text/non-image file is uploaded, `textForApi` might need the fileContextNote later for those specific model handlers.
 
     const newUserMessage: ChatMessage = {
         id: userMessageId,
-        text: userDisplayedText, 
+        text: userDisplayedText,
         sender: 'user',
         timestamp: messageTimestamp,
-        imagePreview: currentActiveImagePreview || undefined, // Uses the single active preview
+        imagePreview: currentActiveImagePreview || undefined,
         fileName: currentUploadedTextFileName || undefined,
         isImageQuery: isImagenModelSelected || isFluxKontexModelSelected,
-        isTaskGoal: isAiAgentMode, 
+        isTaskGoal: isAiAgentMode,
         isNote: isPrivateModeSelected && (!currentActiveImagePreview && !currentUploadedTextFileName),
         model: isPrivateModeSelected ? Model.PRIVATE : undefined,
     };
@@ -1357,10 +1464,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     if (!isRegenerationOfAiMsgId) {
         setMessages((prev) => [...prev, newUserMessage]);
     }
-    
-    const aiMessageTimestamp = Date.now(); 
+
+    const aiMessageTimestamp = Date.now();
     const aiMessageId = isRegenerationOfAiMsgId || (aiMessageTimestamp + 1).toString();
-    
+
     let aiPlaceholderText = isRegenerationOfAiMsgId ? 'Regenerating...' : '';
     if (!isRegenerationOfAiMsgId) {
         if (isImagenModelSelected) aiPlaceholderText = 'Generating image(s)...';
@@ -1379,13 +1486,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         timestamp: aiMessageTimestamp,
         model: selectedModel,
         isRegenerating: !!isRegenerationOfAiMsgId,
-        promptedByMessageId: userMessageId, 
-        isTaskPlan: isAiAgentMode, 
-        originalPrompt: userDisplayedText, 
+        promptedByMessageId: userMessageId,
+        isTaskPlan: isAiAgentMode,
+        originalPrompt: userDisplayedText,
     };
 
-    if (isPrivateModeSelected) { // Private mode doesn't generate an AI response, just logs user message
-        setMessages(prev => prev.map(msg => msg.id === userMessageId ? {...msg, model: Model.PRIVATE} : msg)); // Add model to user message
+    if (isPrivateModeSelected) {
+        setMessages(prev => prev.map(msg => msg.id === userMessageId ? {...msg, model: Model.PRIVATE} : msg));
         setIsLoading(false);
         setInput('');
         setUploadedImages([]);
@@ -1401,209 +1508,190 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     } else {
         setMessages((prev) => [...prev, aiMessagePlaceholder]);
     }
-    
+
+    // User Type Checks and Header Setup
+    let requestHeaders: HeadersInit = { 'Content-Type': 'application/json' };
+    if (userSession.isPaidUser && userSession.paidUsername) { // Use username as a simple token for now
+        requestHeaders['X-Paid-User-Token'] = userSession.paidUsername;
+    } else if (userSession.isDemoUser && userSession.demoUserToken) {
+        if (isFluxKontexModelSelected || isImagenModelSelected || isTextToSpeechModelSelected) {
+             requestHeaders['X-Demo-Token'] = userSession.demoUserToken;
+        }
+    }
+
+    // Check Limits
+    if (!userSession.isPaidUser && userSession.isDemoUser) { // Only apply demo limits if user is demo AND NOT paid
+        const limits = userSession.demoLimits;
+        let limitExceeded = false;
+        let notificationMessage = "";
+
+        if (isFluxKontexModelSelected) {
+            if (!limits || limits.fluxKontextUsesLeft <= 0) {
+                limitExceeded = true;
+                // This specific message is suitable for a fixed 2-use limit.
+                notificationMessage = "Đã hết lượt 2 lần dùng thử Flux Kontext. Vui lòng liên hệ facebook admin Lee Thinh để mua gói hằng tháng giá rẻ.";
+            }
+        } else if (isImagenModelSelected) {
+            const imagenSettings = modelSettings as ImagenSettings;
+            const numImagesToGen = imagenSettings.numberOfImages || 1;
+            if (!limits || limits.imagen3ImagesLeft < numImagesToGen) {
+                limitExceeded = true;
+                notificationMessage = `Not enough Imagen3 demo uses left. Need ${numImagesToGen}, have ${limits?.imagen3ImagesLeft || 0}.`;
+            }
+        } else if (isTextToSpeechModelSelected) {
+            if (!limits || currentInputText.length > limits.openaiTtsCharsLeft) {
+                 limitExceeded = true;
+                 notificationMessage = `OpenAI TTS character limit exceeded for DEMO. Need ${currentInputText.length}, have ${limits?.openaiTtsCharsLeft || 0} left.`;
+            }
+        }
+        if (limitExceeded) {
+            addNotification(notificationMessage, "error");
+            setIsLoading(false);
+            setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
+            return;
+        }
+    }
+    // Paid user limits check (if tracked strictly per request, otherwise proxy handles it)
+    if (userSession.isPaidUser && userSession.paidLimits) {
+        // Example: if (isTextToSpeechModelSelected && currentInputText.length > userSession.paidLimits.openaiTtsCharsLeft) { /* show error */ }
+        // For now, the proxy will allow up to the max defined in PAID_USER_LIMITS for a paid user, without strict per-request decrementing in this iteration.
+    }
+
+
     try {
       const currentModelSpecificSettings = modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings & FluxKontexSettings;
       const currentModelStatus = apiKeyStatuses[selectedModel];
       const actualModelIdentifier = getActualModelIdentifier(selectedModel);
 
+      let apiResponseData: any;
+
       if (currentModelStatus?.isTextToSpeech && !currentModelStatus.isMock) {
-        const ttsResult = await generateOpenAITTS({
+          const ttsBody = {
             modelIdentifier: currentModelSpecificSettings.modelIdentifier || 'tts-1',
-            textInput: userDisplayedText, 
+            textInput: userDisplayedText,
             voice: currentModelSpecificSettings.voice || 'alloy',
             speed: currentModelSpecificSettings.speed || 1.0
-        });
+          };
+          const ttsFetchResponse = await fetch('/api/openai/tts/generate', {
+              method: 'POST', headers: requestHeaders, body: JSON.stringify(ttsBody)
+          });
 
-        if (ttsResult.error) throw new Error(ttsResult.error);
-        if (ttsResult.audioBlob) {
-            const audioBlobUrl = URL.createObjectURL(ttsResult.audioBlob);
-            setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? {
-                ...msg,
-                text: `Audio generated for: "${userDisplayedText}"`,
-                audioUrl: audioBlobUrl,
-                isRegenerating: false,
-                timestamp: msg.timestamp || Date.now() 
-            } : msg));
-             if (audioPlayerRef.current && audioBlobUrl) { 
-                handlePlayAudio(audioBlobUrl, aiMessageId);
-            }
-        } else {
-            throw new Error("TTS generation failed to return audio.");
-        }
+          if (!ttsFetchResponse.ok) {
+              apiResponseData = await safeResponseJson(ttsFetchResponse);
+              throw new Error(apiResponseData.error || `OpenAI TTS Proxy Error: ${ttsFetchResponse.statusText}`);
+          }
+          const audioBlob = await ttsFetchResponse.blob();
 
-      } else if (currentModelStatus?.isImageEditing && !currentModelStatus.isMock) { // Flux Kontext
+          setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? {
+              ...msg, text: `Audio generated for: "${userDisplayedText}"`, audioUrl: URL.createObjectURL(audioBlob), isRegenerating: false, timestamp: msg.timestamp || Date.now()
+          } : msg));
+          if (audioPlayerRef.current) handlePlayAudio(URL.createObjectURL(audioBlob), aiMessageId);
+
+          if (userSession.isDemoUser && !userSession.isPaidUser) {
+              onUpdateDemoLimits({ openaiTtsCharsLeft: (userSession.demoLimits?.openaiTtsCharsLeft || 0) - userDisplayedText.length });
+          }
+          // Paid user TTS char tracking would be done server-side ideally
+
+      } else if (currentModelStatus?.isImageEditing && !currentModelStatus.isMock) {
           if (!currentActiveImageFile || !currentActiveImagePreview) {
             throw new Error("Flux Kontext requires an image to be uploaded and selected.");
           }
-
           const [header, base64Data] = (currentActiveImagePreview || '').split(',');
-          if (!base64Data || !/^[A-Za-z0-9+/=]+$/.test(base64Data)) { // Basic base64 validation
+          if (!base64Data || !/^[A-Za-z0-9+/=]+$/.test(base64Data)) {
             throw new Error("Invalid image data provided for Flux Kontext.");
           }
-          
           const mimeTypeMatch = header?.match(/data:(image\/[a-zA-Z0-9-.+]+);base64/) || [];
           const mimeTypeForFal = (mimeTypeMatch[1] || currentActiveImageFile?.type || 'image/png') as 'image/jpeg' | 'image/png';
 
-
-          const result = await editImageWithFluxKontexProxy({
-            image_base_64: base64Data, // Use the snake_case parameter name
-            imageMimeType: mimeTypeForFal,
-            prompt: textForApi, // Use textForApi which might have more context
-            settings: currentModelSpecificSettings as FluxKontexSettings,
+          const fluxBody = {
+              image_base_64: base64Data,
+              image_mime_type: mimeTypeForFal,
+              prompt: textForApi,
+              ...(currentModelSpecificSettings as FluxKontexSettings)
+          };
+          const fluxFetchResponse = await fetch('/api/fal/image/edit/flux-kontext', {
+              method: 'POST', headers: requestHeaders, body: JSON.stringify(fluxBody)
           });
-          
-          if (result.requestId) {
-            setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? {
-                ...msg,
-                text: result.message || `Image editing submitted (ID: ${result.requestId}). Waiting for results...`,
-                fluxRequestId: result.requestId, // Store request ID
-                isRegenerating: false,
-                timestamp: msg.timestamp || Date.now()
-            } : msg));
-            pollFluxKontexStatus(result.requestId, aiMessageId, userDisplayedText);
-          } else {
-            throw new Error(result.error || "Flux Kontext image submission failed to return a request ID.");
+          apiResponseData = await safeResponseJson(fluxFetchResponse);
+          if (!fluxFetchResponse.ok || apiResponseData.error) {
+              throw new Error(apiResponseData.error || `Flux Kontext Proxy Error: ${fluxFetchResponse.statusText}`);
           }
 
-      } else if (currentModelStatus?.isGeminiPlatform && !currentModelStatus.isMock && !isRealTimeTranslationMode && !isPrivateModeSelected) { 
-        if (isImagenModelSelected) { 
-            const imagenSettings = currentModelSpecificSettings as ImagenSettings;
-            const result = await generateImageWithImagen({
-              prompt: userDisplayedText, modelSettings: imagenSettings, modelName: actualModelIdentifier,
-            });
+          if (apiResponseData.requestId) {
+            setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? {
+                ...msg, text: apiResponseData.message || `Image editing submitted (ID: ${apiResponseData.requestId}). Waiting for results...`, fluxRequestId: apiResponseData.requestId, isRegenerating: false, timestamp: msg.timestamp || Date.now()
+            } : msg));
+            pollFluxKontexStatus(apiResponseData.requestId, aiMessageId, userDisplayedText);
+            if (userSession.isDemoUser && !userSession.isPaidUser) {
+                onUpdateDemoLimits({ fluxKontextUsesLeft: (userSession.demoLimits?.fluxKontextUsesLeft || 0) - 1 });
+            }
+             // Paid user Flux usage tracking would be server-side
+          } else { throw new Error(apiResponseData.error || "Flux Kontext submission failed (no request ID)."); }
 
-            if (result.error) throw new Error(result.error);
-            if (result.imageBases64 && result.imageBases64.length > 0) {
-              const mimeType = imagenSettings.outputMimeType || 'image/jpeg';
-              const imageUrls = result.imageBases64.map(base64 => `data:${mimeType};base64,${base64}`);
-              setMessages((prev) =>
-                prev.map((msg) =>
-                  msg.id === aiMessageId ? { 
-                    ...msg, text: `Generated ${imageUrls.length} image(s) for: "${userDisplayedText}"`, 
+      } else if (isImagenModelSelected && !currentModelStatus.isMock) {
+          const imagenBody = { prompt: userDisplayedText, modelSettings: currentModelSpecificSettings as ImagenSettings, modelName: actualModelIdentifier };
+          const imagenFetchResponse = await fetch('/api/gemini/image/generate', {
+              method: 'POST', headers: requestHeaders, body: JSON.stringify(imagenBody)
+          });
+          apiResponseData = await safeResponseJson(imagenFetchResponse);
+          if (!imagenFetchResponse.ok || apiResponseData.error) {
+              throw new Error(apiResponseData.error || `Imagen Proxy Error: ${imagenFetchResponse.statusText}`);
+          }
+
+          if (apiResponseData.generatedImages && apiResponseData.generatedImages.length > 0) {
+            const mimeType = (currentModelSpecificSettings as ImagenSettings).outputMimeType || 'image/jpeg';
+            const imageUrls = apiResponseData.generatedImages.map((img: any) => `data:${mimeType};base64,${img.image.imageBytes}`);
+            setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? {
+                    ...msg, text: `Generated ${imageUrls.length} image(s) for: "${userDisplayedText}"`,
                     imagePreviews: imageUrls, imageMimeType: mimeType, originalPrompt: userDisplayedText, isRegenerating: false,
-                    timestamp: msg.timestamp || Date.now() 
-                  } : msg
-                )
-              );
-            } else { throw new Error("Image generation failed to return any images. Check proxy logs and original API response for details."); }
-        } else { // Gemini Chat (including AI Agent if it's Gemini-based)
-            const geminiHistory: Content[] = [];
-            
-            if (!isAiAgentMode) { // AI Agent might have different history logic or rely solely on current prompt with context.
-                messages
-                .filter(m => m.id !== aiMessageId && m.id !== newUserMessage.id) 
-                .forEach(msg => {
-                    const messageParts: Part[] = [];
-                    if (msg.text && msg.text.trim()) {
-                        messageParts.push({ text: msg.text.trim() });
-                    }
-                    if (msg.sender === 'user' && msg.fileName && !msg.imagePreview && !TEXT_READABLE_EXTENSIONS.some(ext => msg.fileName?.toLowerCase().endsWith(ext))) {
-                         // For non-AI Agent Gemini, inform about non-readable file name in history
-                        messageParts.push({ text: `(System Note: User previously uploaded a file named '${msg.fileName}'. Its content was not directly available.)` });
-                    }
-                    if (msg.sender === 'user' && msg.imagePreview) {
-                    try {
-                        const [header, base64Data] = msg.imagePreview.split(',');
-                        if (base64Data) {
-                        const mimeTypeMatch = header.match(/data:(image\/[a-zA-Z0-9-.+]+);base64/);
-                        if (mimeTypeMatch && mimeTypeMatch[1]) {
-                            messageParts.push({
-                            inlineData: {
-                                mimeType: mimeTypeMatch[1], 
-                                data: base64Data
-                            }
-                            });
-                        }
-                        }
-                    } catch (e) { console.error("Error processing user imagePreview in history for Gemini:", e); }
-                    }
-                    // AI image previews in history might not be needed or useful for Gemini text chat
-                    // if (msg.sender === 'ai' && msg.imagePreviews && msg.imagePreviews.length > 0) { ... }
-                    
-                    if (messageParts.length > 0) {
-                        geminiHistory.push({ role: msg.sender === 'user' ? 'user' : 'model', parts: messageParts });
-                    }
-                });
+                    timestamp: msg.timestamp || Date.now()
+                  } : msg ));
+            if (userSession.isDemoUser && !userSession.isPaidUser) {
+                const numGenerated = apiResponseData.generatedImages.length;
+                onUpdateDemoLimits({ imagen3ImagesLeft: (userSession.demoLimits?.imagen3ImagesLeft || 0) - numGenerated });
             }
+            // Paid user Imagen usage tracking server-side
+          } else { throw new Error(apiResponseData.error || "Image generation failed (no images returned)."); }
 
+      } else if (currentModelStatus?.isGeminiPlatform && !currentModelStatus.isMock && !isRealTimeTranslationMode && !isPrivateModeSelected) {
+        const geminiHistory: Content[] = messagesToGeminiHistory(messages, aiMessageId, newUserMessage.id, isAiAgentMode);
 
-            const currentUserParts: Part[] = [];
-            if (textForApi.trim()) { 
-                currentUserParts.push({ text: textForApi.trim() });
-            }
-            // Add non-text/non-image file note for non-AI Agent Gemini models if not already in textForApi
-            if (!isAiAgentMode && currentUploadedTextFileName && !currentUploadedTextContent && !currentActiveImageFile) {
-                currentUserParts.push({ text: fileContextNote });
-            }
-            
-            if (currentActiveImageFile && currentActiveImagePreview) { 
-                try {
-                    const base64Image = currentActiveImagePreview.split(',')[1];
-                    if (base64Image) {
-                         currentUserParts.push({ inlineData: { mimeType: currentActiveImageFile.type, data: base64Image } });
-                    }
-                } catch(e) { console.error("Error processing current user uploaded image for Gemini:", e); }
-            }
-            
-            if (currentUserParts.length > 0) {
-                geminiHistory.push({ role: 'user', parts: currentUserParts });
-            } else if (geminiHistory.length === 0 && !isRegenerationOfAiMsgId) {
-                console.error("Attempting to send an empty message to Gemini. Aborting.");
-                throw new Error("Cannot send an empty message to the AI.");
-            }
-
-            const stream = sendGeminiMessageStream({
-              historyContents: geminiHistory, 
-              modelSettings: currentModelSpecificSettings as ModelSettings, 
-              enableGoogleSearch: isAiAgentMode || isWebSearchEnabled, 
-              modelName: actualModelIdentifier, 
-            });
-
-            let currentText = ''; let currentGroundingSources: GroundingSource[] | undefined = undefined;
-            for await (const chunk of stream) {
-              if (chunk.error) throw new Error(chunk.error); 
-              if (chunk.textDelta) currentText += chunk.textDelta;
-              if (chunk.groundingSources && chunk.groundingSources.length > 0) currentGroundingSources = chunk.groundingSources;
-              setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? { ...msg, text: currentText, groundingSources: currentGroundingSources || msg.groundingSources, isRegenerating: false } : msg ));
-            }
+        const currentUserParts: Part[] = [];
+        if (textForApi.trim()) {
+            currentUserParts.push({ text: textForApi.trim() });
         }
-      } else if ((selectedModel === Model.GPT4O || selectedModel === Model.GPT4O_MINI) && !currentModelStatus.isMock) { 
-        const history: ApiChatMessage[] = [{ role: 'system', content: currentModelSpecificSettings.systemInstruction }];
-        messages.filter(m => m.id !== aiMessageId && m.id !== newUserMessage.id).forEach(msg => { 
-            if (msg.sender === 'user') {
-                let userContentText = msg.text || "";
-                if (msg.fileName && !msg.imagePreview && !TEXT_READABLE_EXTENSIONS.some(ext => msg.fileName?.toLowerCase().endsWith(ext))) {
-                    userContentText += `\n(System Note: User previously uploaded a file named '${msg.fileName}'. Its content was not directly available.)`;
+        if (!isAiAgentMode && currentUploadedTextFileName && !currentUploadedTextContent && !currentActiveImageFile) {
+            currentUserParts.push({ text: fileContextNote });
+        }
+        if (currentActiveImageFile && currentActiveImagePreview) {
+            try {
+                const base64Image = currentActiveImagePreview.split(',')[1];
+                if (base64Image) {
+                     currentUserParts.push({ inlineData: { mimeType: currentActiveImageFile.type, data: base64Image } });
                 }
-                const userContentParts: any[] = [];
-                if (userContentText.trim()) userContentParts.push({ type: 'text', text: userContentText.trim() });
-                if (msg.imagePreview && !msg.isImageQuery) userContentParts.push({ type: 'image_url', image_url: { url: msg.imagePreview } });
-                
-                if (userContentParts.length > 0) history.push({ role: 'user', content: userContentParts });
-                else if (msg.text === "") history.push({ role: 'user', content: " " }); // Handle empty string prompts
-            } else if (msg.sender === 'ai') {
-                 history.push({ role: 'assistant', content: msg.text || " " });
-            }
-        });
-        
-        let currentTurnTextForApi = textForApi.trim();
-        if (currentUploadedTextFileName && !currentUploadedTextContent && !currentActiveImageFile) {
-            currentTurnTextForApi = `${currentTurnTextForApi}\n\n${fileContextNote}`;
+            } catch(e) { console.error("Error processing current user uploaded image for Gemini:", e); }
+        }
+        if (currentUserParts.length > 0) {
+            geminiHistory.push({ role: 'user', parts: currentUserParts });
+        } else if (geminiHistory.length === 0 && !isRegenerationOfAiMsgId) {
+            throw new Error("Cannot send an empty message to the AI.");
         }
 
-        const currentUserContent: Array<{type: 'text', text: string} | {type: 'image_url', image_url: {url: string, detail?: "auto" | "low" | "high" }}> = [];
-        if (currentTurnTextForApi.trim()) currentUserContent.push({ type: 'text', text: currentTurnTextForApi.trim() });
-        if (currentActiveImageFile && currentActiveImagePreview) currentUserContent.push({ type: 'image_url', image_url: { url: currentActiveImagePreview, detail: "auto" }});
-
-        if(currentUserContent.length > 0) history.push({ role: 'user', content: currentUserContent });
-        else if (userDisplayedText === "" && !currentActiveImageFile && !currentUploadedTextFileName) history.push({ role: 'user', content: " " }); 
-
-        const stream = sendOpenAIMessageStream({ 
-            modelIdentifier: actualModelIdentifier, 
-            history, 
-            modelSettings: currentModelSpecificSettings as ModelSettings 
+        const stream = sendGeminiMessageStream({
+          historyContents: geminiHistory, modelSettings: currentModelSpecificSettings as ModelSettings, enableGoogleSearch: isAiAgentMode || isWebSearchEnabled, modelName: actualModelIdentifier,
         });
+        let currentText = ''; let currentGroundingSources: GroundingSource[] | undefined = undefined;
+        for await (const chunk of stream) {
+          if (chunk.error) throw new Error(chunk.error);
+          if (chunk.textDelta) currentText += chunk.textDelta;
+          if (chunk.groundingSources && chunk.groundingSources.length > 0) currentGroundingSources = chunk.groundingSources;
+          setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? { ...msg, text: currentText, groundingSources: currentGroundingSources || msg.groundingSources, isRegenerating: false } : msg ));
+        }
+      } else if ((selectedModel === Model.GPT4O || selectedModel === Model.GPT4O_MINI) && !currentModelStatus.isMock) {
+        const isRegen = !!isRegenerationOfAiMsgId;
+        const history: ApiChatMessage[] = messagesToOpenAIHistory(messages, aiMessageId, newUserMessage.id, currentModelSpecificSettings.systemInstruction, textForApi, currentActiveImageFile, currentActiveImagePreview, currentUploadedTextFileName, currentUploadedTextContent, isRegen, isRegenerationOfAiMsgId);
+
+        const stream = sendOpenAIMessageStream({ modelIdentifier: actualModelIdentifier, history, modelSettings: currentModelSpecificSettings as ModelSettings });
         let currentText = '';
         for await (const chunk of stream) {
           if (chunk.error) throw new Error(chunk.error);
@@ -1619,21 +1707,16 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             if (msg.sender === 'user' && msg.fileName && !msg.imagePreview && !TEXT_READABLE_EXTENSIONS.some(ext => msg.fileName?.toLowerCase().endsWith(ext))) {
                 msgContent += `\n(System Note: User previously uploaded a file named '${msg.fileName}'. Its content was not directly available.)`;
             }
-            if (msg.sender === 'user') history.push({ role: 'user', content: msgContent }); 
+            if (msg.sender === 'user') history.push({ role: 'user', content: msgContent });
             else if (msg.sender === 'ai') history.push({ role: 'assistant', content: msgContent });
         });
-        
         let currentTurnTextForDeepseek = textForApi.trim();
         if (currentUploadedTextFileName && !currentUploadedTextContent && !currentActiveImageFile) {
             currentTurnTextForDeepseek = `${currentTurnTextForDeepseek}\n\n${fileContextNote}`;
         }
-        history.push({ role: 'user', content: currentTurnTextForDeepseek || " " }); 
+        history.push({ role: 'user', content: currentTurnTextForDeepseek || " " });
 
-        const stream = sendDeepseekMessageStream({ 
-            modelIdentifier: actualModelIdentifier, 
-            history, 
-            modelSettings: currentModelSpecificSettings as ModelSettings 
-        });
+        const stream = sendDeepseekMessageStream({ modelIdentifier: actualModelIdentifier, history, modelSettings: currentModelSpecificSettings as ModelSettings });
         let currentText = '';
         for await (const chunk of stream) {
           if (chunk.error) throw new Error(chunk.error);
@@ -1641,52 +1724,46 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
           setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? { ...msg, text: currentText, isRegenerating: false } : msg));
           if (chunk.isFinished) break;
         }
-      
-      } else if (currentModelStatus?.isMock && !isRealTimeTranslationMode && !isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected) { 
+
+      } else if (currentModelStatus?.isMock && !isRealTimeTranslationMode && !isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected) {
         const mockParts: Part[] = [];
         if (textForApi.trim()) mockParts.push({ text: textForApi.trim() });
         if (currentUploadedTextFileName && !currentUploadedTextContent && !currentActiveImageFile) {
             mockParts.push({ text: fileContextNote });
         }
-        if (currentActiveImageFile && currentActiveImagePreview) { 
+        if (currentActiveImageFile && currentActiveImagePreview) {
             mockParts.push({ inlineData: { mimeType: currentActiveImageFile.type as 'image/jpeg' | 'image/png', data: currentActiveImagePreview.split(',')[1] } });
         }
-        const stream = sendMockMessageStream(mockParts, selectedModel, currentModelSpecificSettings as ModelSettings); 
+        const stream = sendMockMessageStream(mockParts, selectedModel, currentModelSpecificSettings as ModelSettings);
         let currentText = '';
         for await (const chunk of stream) {
           currentText += chunk;
           setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? { ...msg, text: currentText, isRegenerating: false } : msg));
         }
-      } else if (!isRealTimeTranslationMode && !isPrivateModeSelected && !isFluxKontexModelSelected) { 
-          throw new Error(`API integration for ${selectedModel} is not implemented or API key/Vertex config is missing and it's not a mock model.`); 
+      } else if (!isRealTimeTranslationMode && !isPrivateModeSelected && !isFluxKontexModelSelected) {
+          throw new Error(`API integration for ${selectedModel} is not implemented or API key/Vertex config is missing and it's not a mock model.`);
       }
     } catch (e: any) {
       console.error("Error sending message:", e);
       const errorMessage = e.message || 'Failed to get response from AI (via proxy).';
-      setError(errorMessage); 
-      addNotification(`API Error: ${errorMessage}`, "error", e.stack); 
+      setError(errorMessage);
+      addNotification(`API Error: ${errorMessage}`, "error", e.stack);
       const errorAiMessageId = aiMessageId || `error-${Date.now()}`;
-      setMessages((prev) => prev.filter(msg => msg.id !== aiMessageId)); 
+      setMessages((prev) => prev.filter(msg => msg.id !== aiMessageId));
       setMessages((prev) => [...prev, {
-        id: errorAiMessageId, 
-        text: `Error: ${errorMessage}`, 
-        sender: 'ai', 
-        model: selectedModel, 
-        timestamp: Date.now(), 
-        promptedByMessageId: userMessageId
+        id: errorAiMessageId, text: `Error: ${errorMessage}`, sender: 'ai', model: selectedModel, timestamp: Date.now(), promptedByMessageId: userMessageId
       }]);
     }
 
-    // Only clear inputs if not polling for Flux Kontext or not regenerating, etc.
     if (!isFluxKontexModelSelected || (isFluxKontexModelSelected && !messages.find(m => m.id === aiMessageId)?.fluxRequestId)) {
       setIsLoading(false);
     }
-    
-    if (!isRegenerationOfAiMsgId && !isRealTimeTranslationMode && !isPrivateModeSelected) { 
-        setInput(''); 
-        if (!isFluxKontexModelSelected) { // Keep image for Flux Kontext if user might want to retry or edit again
+
+    if (!isRegenerationOfAiMsgId && !isRealTimeTranslationMode && !isPrivateModeSelected) {
+        setInput('');
+        if (!isFluxKontexModelSelected) {
             setUploadedImages([]);
-            setImagePreviews([]); 
+            setImagePreviews([]);
         }
         setUploadedTextFileContent(null);
         setUploadedTextFileName(null);
@@ -1695,9 +1772,16 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
   };
 
   const handleSendMessage = async () => {
-    if (isRealTimeTranslationMode || isListening) return; 
-    
-    if (isImagenModelSelected && !input.trim()) { 
+    if (isRealTimeTranslationMode || isListening) return;
+
+    let determinedTtsMaxLength = OPENAI_TTS_MAX_INPUT_LENGTH; // Default (usually paid user limit from constants)
+    if (userSession.isDemoUser && !userSession.isPaidUser && userSession.demoLimits) {
+        determinedTtsMaxLength = userSession.demoLimits.openaiTtsMaxChars;
+    } else if (userSession.isPaidUser && userSession.paidLimits) {
+        determinedTtsMaxLength = userSession.paidLimits.openaiTtsMaxChars;
+    }
+
+    if (isImagenModelSelected && !input.trim()) {
         setError("Please enter a prompt for image generation.");
         addNotification("Please enter a prompt for image generation.", "info");
         return;
@@ -1719,9 +1803,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         addNotification("Please enter text for speech synthesis.", "info");
         return;
     }
-    if (isTextToSpeechModelSelected && input.length > OPENAI_TTS_MAX_INPUT_LENGTH) {
-        setError(`Input for TTS exceeds maximum length of ${OPENAI_TTS_MAX_INPUT_LENGTH} characters.`);
-        addNotification(`TTS input too long. Max ${OPENAI_TTS_MAX_INPUT_LENGTH} chars.`, "error");
+    if (isTextToSpeechModelSelected && input.length > determinedTtsMaxLength) {
+        setError(`Input for TTS exceeds maximum length of ${determinedTtsMaxLength} characters for your account type.`);
+        addNotification(`TTS input too long. Max ${determinedTtsMaxLength} chars.`, "error");
         return;
     }
     if (isAiAgentMode && !input.trim() && uploadedImages.length === 0 && !uploadedTextFileName) {
@@ -1734,22 +1818,20 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         addNotification("Please enter text, or upload an image/file to log in Private Mode.", "info");
         return;
     }
-    // General check for other models if input and attachments are empty
     if (!isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected && !input.trim() && uploadedImages.length === 0 && !uploadedTextFileName) {
-        return; // Do nothing if everything is empty for standard chat models
+        return;
     }
 
     setIsLoading(true);
     setError(null);
-    // For Flux Kontext and other models that use a single image, pass the first one.
     const activeImageFile = uploadedImages.length > 0 ? uploadedImages[0] : null;
     const activeImagePreview = imagePreviews.length > 0 ? imagePreviews[0] : null;
 
     await internalSendMessage(input, activeImageFile, activeImagePreview, uploadedTextFileContent, uploadedTextFileName);
   };
-  
+
   const handleRegenerateResponse = async (aiMessageIdToRegenerate: string, promptedByMsgId: string) => {
-      if (isRealTimeTranslationMode || isAiAgentMode || isPrivateModeSelected || isFluxKontexModelSelected) return; 
+      if (isRealTimeTranslationMode || isAiAgentMode || isPrivateModeSelected || isFluxKontexModelSelected) return;
       const userMessageForRegen = messages.find(m => m.id === promptedByMsgId && m.sender === 'user');
       const aiMessageToRegen = messages.find(m => m.id === aiMessageIdToRegenerate && m.sender === 'ai');
 
@@ -1766,17 +1848,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
 
       setIsLoading(true);
       setError(null);
-      
+
       const regenInputText = userMessageForRegen.text;
-      // For regeneration, we assume the image was part of the original userMessageForRegen.
-      // We'd need a more complex way to re-fetch or store the File object if it's strictly required.
-      // For now, using the preview URL. If the model needs the File object again, this might need adjustment.
       const currentRegenImagePreview = userMessageForRegen.imagePreview || null;
-      // This simple approach won't have access to the original File object for regeneration.
-      // If File object is crucial, it would need to be stored with the ChatMessage or re-selected.
-      // For now, sending null for File, relying on preview if that's how model consumes it.
-      const currentRegenImageFile: File | null = null; 
-      let currentRegenUploadedTextContent: string | null = null; // Need to retrieve this from history if possible
+      const currentRegenImageFile: File | null = null;
+      let currentRegenUploadedTextContent: string | null = null;
       let currentRegenUploadedTextFileName: string | null = userMessageForRegen.fileName || null;
 
       setMessages(prev => prev.map(msg => {
@@ -1784,35 +1860,25 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
               let regeneratingText = 'Regenerating...';
               if (msg.model === Model.IMAGEN3) regeneratingText = 'Regenerating image(s)...';
               if (msg.model === Model.OPENAI_TTS) regeneratingText = 'Resynthesizing audio...';
-              
+
               return {
-                  ...msg,
-                  text: regeneratingText,
-                  imagePreviews: undefined, 
-                  groundingSources: undefined, 
-                  audioUrl: undefined, 
-                  isRegenerating: true,
+                  ...msg, text: regeneratingText, imagePreviews: undefined, groundingSources: undefined, audioUrl: undefined, isRegenerating: true,
               };
           }
           return msg;
       }));
-      
+
       await internalSendMessage(
-          regenInputText, 
-          currentRegenImageFile, 
-          currentRegenImagePreview, 
-          currentRegenUploadedTextContent,
-          currentRegenUploadedTextFileName,
-          aiMessageIdToRegenerate 
+          regenInputText, currentRegenImageFile, currentRegenImagePreview, currentRegenUploadedTextContent, currentRegenUploadedTextFileName, aiMessageIdToRegenerate
       );
   };
 
   const handleSetUploadedImages = (newFiles: File[]) => {
     if (isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected ) return;
-    
-    const validFiles = newFiles.slice(0, 4); // Max 4 images
+
+    const validFiles = newFiles.slice(0, imageUploadLimit);
     setUploadedImages(validFiles);
-    setUploadedTextFileContent(null); 
+    setUploadedTextFileContent(null);
     setUploadedTextFileName(null);
 
     const newPreviews: string[] = [];
@@ -1837,9 +1903,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
 
 
   const handleFileUpload = (file: File | null) => {
-    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isFluxKontexModelSelected) return; 
+    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isFluxKontexModelSelected || isClaudeModelSelected) return;
 
-    setUploadedImages([]); 
+    setUploadedImages([]);
     setImagePreviews([]);
 
     if (file) {
@@ -1850,14 +1916,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
       if (TEXT_READABLE_EXTENSIONS.includes(fileExtension)) {
         const reader = new FileReader();
         reader.onload = (e) => { setUploadedTextFileContent(e.target?.result as string); };
-        reader.onerror = () => { 
-          setError(`Error reading the file: ${file.name}`); 
+        reader.onerror = () => {
+          setError(`Error reading the file: ${file.name}`);
           addNotification(`Error reading file: ${file.name}`, "error", (reader.error as Error).message);
-          setUploadedTextFileContent(null); setUploadedTextFileName(null); 
+          setUploadedTextFileContent(null); setUploadedTextFileName(null);
         }
         reader.readAsText(file);
-      } else { 
-        setUploadedTextFileContent(null); 
+      } else {
+        setUploadedTextFileContent(null);
         if (isAiAgentMode) {
             addNotification(`File "${file.name}" content cannot be displayed/embedded. AI Agent will be notified of the filename.`, "info");
         } else if (isPrivateModeSelected) {
@@ -1870,7 +1936,15 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     clearSearch();
   };
 
-  // Search Functions
+  const handleRemoveUploadedImage = (indexToRemove: number) => {
+    setUploadedImages(prevFiles => prevFiles.filter((_, index) => index !== indexToRemove));
+    setImagePreviews(prevPreviews => prevPreviews.filter((_, index) => index !== indexToRemove));
+  };
+
+  const handleRemoveTextFilePreview = () => {
+    handleFileUpload(null); // This already clears text file content and name
+  };
+
   const executeSearch = useCallback(() => {
     if (!tempSearchQuery.trim()) {
       clearSearch();
@@ -1905,7 +1979,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     setCurrentSearchResultIndex(newIndex);
   }, [searchResults, currentSearchResultIndex]);
 
-  // Scroll to current search result
   useEffect(() => {
     if (isSearchActive && currentSearchResultIndex !== -1 && searchResults[currentSearchResultIndex]) {
       const messageId = searchResults[currentSearchResultIndex].messageId;
@@ -1914,13 +1987,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     }
   }, [currentSearchResultIndex, searchResults, isSearchActive]);
 
-  // Scroll to bottom button logic
   const handleScroll = useCallback(() => {
     if (chatContainerRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
-      const atBottomThreshold = 1; // px, effectively any scroll makes it "not at bottom"
+      const atBottomThreshold = 1;
       const isAtBottom = scrollHeight - scrollTop <= clientHeight + atBottomThreshold;
-  
+
       if (isAtBottom) {
         if (showScrollToBottomButton) setShowScrollToBottomButton(false);
       } else {
@@ -1939,9 +2011,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
 
   const scrollToBottomUiButton = useCallback(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    setShowScrollToBottomButton(false); // Hide button after clicking
+    setShowScrollToBottomButton(false);
   }, []);
-  
+
   const sidebarContent = (
     <>
         <div className="flex border-b border-secondary dark:border-neutral-darkest mb-4">
@@ -1959,18 +2031,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         {activeSidebarTab === 'settings' && (
             <SettingsPanel
                 selectedModel={selectedModel}
-                onModelChange={(model) => { 
-                    if (model !== Model.GPT4O) gpt41ModalInteractionFlagRef.current = false; 
-                    setSelectedModel(model); 
+                onModelChange={(model) => {
+                    if (model !== Model.GPT4O) gpt41ModalInteractionFlagRef.current = false;
+                    setSelectedModel(model);
                     clearSearch();
-                }} 
-                modelSettings={modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings & FluxKontexSettings} 
+                }}
+                modelSettings={modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings & FluxKontexSettings}
                 onModelSettingsChange={handleModelSettingsChange}
-                uploadedImages={uploadedImages}
-                imagePreviews={imagePreviews}
-                onSetUploadedImages={handleSetUploadedImages}
-                onFileUpload={handleFileUpload}
-                uploadedTextFileName={uploadedTextFileName}
                 isWebSearchEnabled={isWebSearchEnabled}
                 onWebSearchToggle={setIsWebSearchEnabled}
                 disabled={(isLoading && !isRealTimeTranslationMode ) || isGpt41AccessModalOpen}
@@ -1980,6 +2047,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                 onPersonaChange={handlePersonaChange}
                 onPersonaSave={handlePersonaSave}
                 onPersonaDelete={handlePersonaDelete}
+                userSession={userSession}
             />
         )}
         {activeSidebarTab === 'history' && (
@@ -1989,12 +2057,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
                 onLoadSession={handleLoadSession}
                 onDeleteSession={handleDeleteSession}
                 onRenameSession={handleRenameSession}
-                onSaveCurrentChat={handleSaveCurrentChat} // Saves to LocalStorage
+                onSaveCurrentChat={handleSaveCurrentChat}
                 onStartNewChat={handleStartNewChat}
                 isLoading={(isLoading && !isRealTimeTranslationMode ) || isGpt41AccessModalOpen}
                 onTogglePinSession={handleTogglePinSession}
-                onSaveChatToDevice={handleSaveChatToDevice} // New prop for saving to device
-                onLoadChatFromDevice={handleLoadChatFromDevice} // New prop for loading from device
+                onSaveChatToDevice={handleSaveChatToDevice}
+                onLoadChatFromDevice={handleLoadChatFromDevice}
                 onExportChatWithMediaData={() => {
                     addNotification("Export Chat with Media Data feature is not yet implemented.", "info");
                 }}
@@ -2009,15 +2077,54 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     return Math.min(5, baseLines + endsWithNewlineAdjustment);
   };
 
+  const showMicrophoneButton = useMemo(() => {
+    if (!isSpeechRecognitionSupported) return false;
+    if (isTextToSpeechModelSelected || isImagenModelSelected || isClaudeModelSelected) return false;
+    return true;
+  }, [isSpeechRecognitionSupported, selectedModel, isTextToSpeechModelSelected, isImagenModelSelected, isClaudeModelSelected]);
+
+  const showImageUploadInChatBar = useMemo(() => {
+    return !isTextToSpeechModelSelected &&
+           !isRealTimeTranslationMode &&
+           selectedModel !== Model.DEEPSEEK &&
+           !isImagenModelSelected &&
+           !isAiAgentMode &&
+           !isClaudeModelSelected;
+  }, [selectedModel, isTextToSpeechModelSelected, isRealTimeTranslationMode, isImagenModelSelected, isAiAgentMode, isClaudeModelSelected]);
+
+  const showFileUploadInChatBar = useMemo(() => {
+    return !isImagenModelSelected &&
+           !isTextToSpeechModelSelected &&
+           !isRealTimeTranslationMode &&
+           !isFluxKontexModelSelected &&
+           !isClaudeModelSelected;
+  }, [selectedModel, isImagenModelSelected, isTextToSpeechModelSelected, isRealTimeTranslationMode, isFluxKontexModelSelected, isClaudeModelSelected]);
+
+
   const currentPromptPlaceholder = () => {
-    if (isListening && !isRealTimeTranslationMode) return "Đang nghe..."; 
+    if (isListening && !isRealTimeTranslationMode) return "Đang nghe...";
     if (isImagenModelSelected) return "Enter prompt for image generation...";
     if (isFluxKontexModelSelected) return "Enter prompt to edit uploaded image...";
     if (isTextToSpeechModelSelected) return "Enter text to synthesize speech...";
     if (isRealTimeTranslationMode) return "Real-Time Translation Active. Use Microphone.";
     if (isAiAgentMode) return "Enter main goal for AI Agent, or upload file...";
     if (isPrivateModeSelected) return "Enter text or upload image/file to log locally...";
-    return "Type your message or upload an image/file...";
+    if (isClaudeModelSelected) return "Chat with Claude (Mock)...";
+
+    let placeholder = "Type your message";
+    if (uploadedImages.length === 0 && imagePreviews.length === 0 && !uploadedTextFileName) {
+        const canUploadImage = showImageUploadInChatBar;
+        const canUploadFile = showFileUploadInChatBar;
+        if (canUploadImage && canUploadFile) {
+            placeholder += " or upload image/file";
+        } else if (canUploadImage) {
+            placeholder += " or upload image";
+        } else if (canUploadFile) {
+            placeholder += " or upload file";
+        }
+    }
+    placeholder += "...";
+    return placeholder;
   }
 
   const sendButtonLabel = () => {
@@ -2033,7 +2140,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
     if (isImagenModelSelected) return <PromptIcon className="w-6 h-6" />;
     if (isFluxKontexModelSelected) return <EditIcon className="w-6 h-6" />;
     if (isTextToSpeechModelSelected) return <SpeakerWaveIcon className="w-6 h-6" />;
-    if (isAiAgentMode || isPrivateModeSelected) return <PaperAirplaneIcon className="w-6 h-6" />; 
+    if (isAiAgentMode || isPrivateModeSelected) return <PaperAirplaneIcon className="w-6 h-6" />;
     return <PaperAirplaneIcon className="w-6 h-6" />;
   }
 
@@ -2053,7 +2160,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
         setSelectedModel(Model.GPT4O_MINI);
         if (notificationMessage) addNotification(notificationMessage, "info");
     }
-    // gpt41ModalInteractionFlagRef.current is already true or will be handled by model change effect
   };
 
   const handleGpt41CodeSubmit = () => {
@@ -2076,342 +2182,580 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile }) =
             backgroundRepeat: 'no-repeat',
         };
     }
-    // Default background color based on theme
     const currentTheme = themeContext?.theme || 'light';
     return { backgroundColor: currentTheme === 'dark' ? '#0e1621' : '#ffffff' };
   }, [chatBackgroundUrl, themeContext?.theme]);
 
-  const textareaPaddingRight = useMemo(() => {
-    if (isTextToSpeechModelSelected) return '4.5rem'; // For TTS counter
-    if ((isImagenModelSelected || isFluxKontexModelSelected) && input.trim() && !isLoading && !isListening) return '2.5rem'; // For Imagen/Flux clear button
-    return '0.75rem'; // Default
-  }, [isTextToSpeechModelSelected, isImagenModelSelected, isFluxKontexModelSelected, input, isLoading, isListening]);
+
+   // Function to convert message history to Gemini Content format
+   const messagesToGeminiHistory = (
+    allMessages: ChatMessage[],
+    currentAiMessageId: string | null, // ID of the AI message currently being generated (to exclude it)
+    currentUserMessageId: string | null, // ID of the user message that triggered this AI response (to include it properly)
+    isAgentMode: boolean
+  ): Content[] => {
+    const history: Content[] = [];
+    let systemInstructionUsed = false;
+
+    allMessages.forEach(msg => {
+        // Skip the AI message placeholder that's currently being filled or irrelevant notes
+        if (msg.id === currentAiMessageId || (msg.isNote && !isAgentMode)) return;
+        // Skip AI agent messages if not in agent mode (though this might be too restrictive)
+        if (msg.isTaskPlan && !isAgentMode) return;
+
+
+        let role: 'user' | 'model' = 'user'; // Default to user
+        if (msg.sender === 'ai') role = 'model';
+
+        const parts: Part[] = [];
+        if (msg.text) {
+            let textForHistory = msg.text;
+            if (msg.isTaskGoal && isAgentMode && msg.sender === 'user') {
+                textForHistory = `User's goal: ${msg.text}`;
+            } else if (msg.isTaskPlan && isAgentMode && msg.sender === 'ai') {
+                 textForHistory = `AI Agent's plan/response: ${msg.text}`;
+            }
+            parts.push({ text: textForHistory });
+        }
+
+        // Handle images uploaded by the user for Gemini multimodal
+        if (msg.sender === 'user' && msg.imagePreview && !msg.isImageQuery) { // Exclude if it was an Imagen/Flux prompt
+            try {
+                const base64Data = msg.imagePreview.split(',')[1];
+                const mimeTypeMatch = msg.imagePreview.match(/data:(image\/[a-zA-Z0-9-.+]+);base64/);
+                if (base64Data && mimeTypeMatch && mimeTypeMatch[1]) {
+                    parts.push({ inlineData: { mimeType: mimeTypeMatch[1], data: base64Data } });
+                }
+            } catch (e) { console.error("Error processing image for Gemini history:", e); }
+        }
+        // Note: AI-generated images (msg.imagePreviews) are not sent back in history for Gemini
+
+        if (parts.length > 0) {
+            history.push({ role, parts });
+        }
+    });
+
+    // For Gemini, system instruction is part of the modelSettings/config, not a message role directly.
+    // The main `modelSettings.systemInstruction` is applied in the service call.
+    // This function ensures messages are formatted correctly for the `contents` array.
+
+    return history;
+  };
+
+  const messagesToOpenAIHistory = (
+    allMessages: ChatMessage[],
+    currentAiMessageId: string | null,
+    currentUserMessageId: string | null,
+    systemInstruction: string,
+    currentInputTextForApi: string,
+    currentActiveImageFile: File | null,
+    currentActiveImagePreview: string | null,
+    currentUploadedTextFileName: string | null,
+    currentUploadedTextContent: string | null,
+    isRegeneration: boolean,
+    isRegenerationOfAiMsgId?: string // Added parameter
+  ): ApiChatMessage[] => {
+    const history: ApiChatMessage[] = [{ role: 'system', content: systemInstruction }];
+
+    allMessages.forEach(msg => {
+        if (msg.id === currentAiMessageId || msg.isNote) return;
+        if (!isRegeneration && msg.id === currentUserMessageId) return;
+
+
+        let role: 'user' | 'assistant';
+        if (msg.sender === 'ai') {
+            role = 'assistant';
+        } else {
+            role = 'user';
+        }
+
+        let apiMessageContent: ApiChatMessage['content'];
+
+        const messageParts: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; detail?: "auto" | "low" | "high" } }> = [];
+
+        if (msg.text) {
+            let textForHistory = msg.text;
+            if (role === 'user' && msg.fileName && !TEXT_READABLE_EXTENSIONS.some(ext => msg.fileName?.toLowerCase().endsWith(ext)) && !msg.imagePreview) {
+                textForHistory += `\n(System Note: User previously uploaded a file named '${msg.fileName}'. Its content was not directly available.)`;
+            }
+            messageParts.push({ type: 'text', text: textForHistory });
+        }
+
+        if (role === 'user' && msg.imagePreview && !msg.isImageQuery) {
+            messageParts.push({ type: 'image_url', image_url: { url: msg.imagePreview, detail: "auto" } });
+        }
+
+        if (messageParts.length > 0) {
+            apiMessageContent = messageParts.length === 1 && messageParts[0].type === 'text' ? messageParts[0].text : messageParts;
+            history.push({ role, content: apiMessageContent });
+        } else if (role === 'assistant' && !msg.text) {
+             history.push({ role, content: " "});
+        }
+    });
+
+    if (!isRegeneration) {
+        const currentTurnContentParts: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; detail?: "auto" | "low" | "high" } }> = [];
+        let textForCurrentTurn = currentInputTextForApi.trim();
+
+        if (currentUploadedTextFileName) {
+            if (currentUploadedTextContent) {
+                textForCurrentTurn = `The user has uploaded a file named "${currentUploadedTextFileName}".\nThe content of this file is:\n${currentUploadedTextContent}\n\n---\n\n${textForCurrentTurn}`;
+            } else if (!currentActiveImageFile) {
+                textForCurrentTurn = `${textForCurrentTurn}\n\n(System Note: User uploaded a file named '${currentUploadedTextFileName}'. Its content is not directly available to you.)`;
+            }
+        }
+
+        if (textForCurrentTurn) {
+            currentTurnContentParts.push({ type: 'text', text: textForCurrentTurn });
+        }
+        if (currentActiveImagePreview && currentActiveImageFile) {
+            currentTurnContentParts.push({ type: 'image_url', image_url: { url: currentActiveImagePreview, detail: "auto" } });
+        }
+
+        if (currentTurnContentParts.length > 0) {
+            history.push({ role: 'user', content: currentTurnContentParts.length === 1 && currentTurnContentParts[0].type === 'text' ? currentTurnContentParts[0].text : currentTurnContentParts });
+        }
+    }
+
+    return history;
+  };
+
+  const imageUploadLimit = isFluxKontexModelSelected ? 4 : 1;
+  const imageFileAcceptTypes = "image/jpeg, image/png, image/webp, image/gif, image/avif";
+  const generalFileAcceptTypes = ".txt,.md,.json,.js,.ts,.jsx,.tsx,.py,.java,.c,.cpp,.h,.hpp,.cs,.go,.rs,.rb,.php,.html,.htm,.css,.scss,.less,.xml,.yaml,.yml,.ini,.sh,.bat,.ps1,.sql,.csv,.log,.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation";
+
+  const generalChatBarInteractionDisabled = (isLoading && !isRealTimeTranslationMode) || isListening || (isGpt41AccessModalOpen && selectedModel === Model.GPT4O);
+
+  const handleChatBarImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files) {
+      const newFilesArray = Array.from(files);
+      handleSetUploadedImages(newFilesArray);
+    }
+    event.target.value = '';
+  };
+
+  const handleChatBarGeneralFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    handleFileUpload(file || null);
+    event.target.value = '';
+  };
+
+  const showGenericAttachmentPreview = useMemo(() => {
+    if (isTextToSpeechModelSelected || isRealTimeTranslationMode || isImagenModelSelected || isClaudeModelSelected) {
+        return false;
+    }
+    if (imagePreviews.length > 0 || uploadedTextFileName) {
+        return true;
+    }
+    return false;
+  }, [imagePreviews, uploadedTextFileName, isTextToSpeechModelSelected, isRealTimeTranslationMode, isImagenModelSelected, isClaudeModelSelected]);
 
 
   return (
-    <div className="flex h-full">
-      <audio ref={audioPlayerRef} className="hidden" />
-      <div className={`hidden md:flex flex-col w-96 bg-neutral-light dark:bg-neutral-darker p-4 border-r border-secondary dark:border-neutral-darkest overflow-y-auto transition-all duration-300`}>
-          {sidebarContent}
-      </div>
-
-       {isSidebarOpen && (
-          <div className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-[60] flex justify-start"> {/* Increased z-index */}
-            <div className="w-full max-w-xs sm:max-w-sm h-full bg-neutral-light dark:bg-neutral-darker shadow-xl p-4 overflow-y-auto">
-              <button onClick={() => setIsSidebarOpen(false)} className="absolute top-4 right-4 text-neutral-darker dark:text-secondary-light hover:text-red-500 dark:hover:text-red-400 z-[70]" aria-label="Close sidebar"> {/* Ensure button is above panel */}
-                <XMarkIcon className="w-6 h-6" />
-              </button>
-              {sidebarContent}
-            </div>
-             <div className="flex-1" onClick={() => setIsSidebarOpen(false)}></div> 
-          </div>
-        )}
-
-      <div className="flex-1 flex flex-col p-2 sm:p-4 overflow-hidden">
-        <div className={`flex items-center justify-between sticky top-0 z-30 bg-secondary-light dark:bg-neutral-dark pb-2 sm:pb-4 mb-2 sm:mb-0`}> {/* Added sticky, z-index, bg, and adjusted margin -> padding */}
-            <div className="flex items-center">
-                <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 mr-2 rounded-md text-neutral-darker dark:text-secondary-light hover:bg-secondary dark:hover:bg-neutral-darkest" aria-label="Open sidebar">
-                    <Bars3Icon className="w-6 h-6" />
+    <div className={`h-full flex flex-col relative ${userSession.isDemoUser && userSession.isDemoBlockedByVpn ? 'filter blur-sm pointer-events-none' : ''}`}>
+      {userSession.isDemoUser && userSession.isDemoBlockedByVpn && (
+        <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50">
+            <p className="text-white text-2xl font-bold p-8 bg-red-700 rounded-lg shadow-xl">
+                DEMO Access Restricted (VPN/Proxy Detected)
+            </p>
+        </div>
+      )}
+      {userSession.isPaidUser && userSession.paidSubscriptionEndDate && (
+        <div className="bg-green-600 text-white text-xs text-center py-0.5 px-2 sticky top-0 z-40">
+          Paid User: {userSession.paidUsername} | Subscription ends: {new Date(userSession.paidSubscriptionEndDate).toLocaleDateString()}
+        </div>
+      )}
+      <div className="flex-grow flex overflow-hidden min-h-0"> {/* This is MAIN_CONTENT_AREA in App.tsx */}
+        {/* Sidebar */}
+        <div className={`fixed inset-y-0 left-0 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+                        md:relative md:translate-x-0 md:w-80 lg:w-96
+                        w-full max-w-xs sm:max-w-sm
+                        bg-neutral-light dark:bg-neutral-darker border-r border-secondary dark:border-neutral-darkest
+                        transition-transform duration-300 ease-in-out z-50 md:z-auto
+                        shadow-lg md:shadow-none flex flex-col`}>
+            <div className="relative flex justify-between items-center p-2 md:hidden">
+                <span className="text-lg font-semibold text-neutral-darker dark:text-secondary-light ml-2">Menu</span>
+                <button
+                    onClick={() => setIsSidebarOpen(false)}
+                    className="p-2 rounded-full hover:bg-secondary dark:hover:bg-neutral-dark relative z-10" // Ensure button is clickable
+                    aria-label="Close settings and history panel"
+                >
+                    <XMarkIcon className="w-6 h-6 text-neutral-darker dark:text-secondary-light"/>
                 </button>
-                <h2 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light truncate">
-                    {isRealTimeTranslationMode ? <LanguageIcon className="w-5 h-5 inline-block mr-2 align-text-bottom"/> : (isFluxKontexModelSelected ? <EditIcon className="w-5 h-5 inline-block mr-2 align-text-bottom" /> : <ChatBubbleLeftRightIcon className="w-5 h-5 inline-block mr-2 align-text-bottom"/>)}
-                    {isRealTimeTranslationMode ? "Real-Time Translation" : (isAiAgentMode ? "AI Agent" : (isPrivateModeSelected ? "Private Mode" : (isFluxKontexModelSelected ? "Flux Kontext Editor" : (currentChatName || "New Chat"))))}
+            </div>
+            <div className="flex-grow overflow-y-auto overflow-x-hidden p-3 pt-0 md:pt-3 min-h-0"> {/* Added overflow-x-hidden */}
+                {sidebarContent}
+            </div>
+        </div>
+
+        {/* Main Chat Area */}
+        <div className="flex-1 flex flex-col overflow-hidden" style={chatAreaStyle}>
+           <audio ref={audioPlayerRef} className="hidden" />
+           {/* GPT-4.1 Access Modal */}
+            {isGpt41AccessModalOpen && (
+                <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[100] p-4" onClick={() => handleGpt41AccessModalClose(true, "Switched to gpt-4.1-mini due to modal closure.")}>
+                    <div className="bg-neutral-light dark:bg-neutral-darker p-6 rounded-lg shadow-xl w-full max-w-md text-center" onClick={(e) => e.stopPropagation()}>
+                        <KeyIcon className="w-12 h-12 text-primary dark:text-primary-light mx-auto mb-4"/>
+                        <h3 className="text-xl font-semibold text-neutral-darker dark:text-secondary-light mb-3">Access GPT-4.1</h3>
+                        <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+                            You've selected gpt-4.1. This model may have usage costs. Please enter the secret access code or it will default to gpt-4.1-mini.
+                        </p>
+                        <input
+                            type="password"
+                            value={gpt41AccessCodeInput}
+                            onChange={(e) => setGpt41AccessCodeInput(e.target.value)}
+                            onKeyPress={(e) => { if (e.key === 'Enter') handleGpt41CodeSubmit(); }}
+                            placeholder="Secret Code"
+                            className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none mb-4"
+                            autoFocus
+                        />
+                        <div className="flex justify-center space-x-3">
+                            <button onClick={handleGpt41CodeSubmit} className="px-5 py-2 bg-primary hover:bg-primary-dark text-white rounded-md">Submit Code</button>
+                            <button onClick={() => handleGpt41AccessModalClose(true, "Switched to gpt-4.1-mini.")} className="px-4 py-2 bg-secondary dark:bg-neutral-darkest text-neutral-darker dark:text-secondary-light rounded-md">Use gpt-4.1-mini</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+          <div className="flex items-center p-3 border-b border-secondary dark:border-neutral-darkest bg-neutral-light dark:bg-neutral-darker backdrop-blur-sm sticky top-0 z-30">
+            <button onClick={() => setIsSidebarOpen(true)} className="p-2 rounded-full hover:bg-secondary dark:hover:bg-neutral-dark md:hidden mr-2">
+                <Bars3Icon className="w-6 h-6 text-neutral-darker dark:text-secondary-light"/>
+            </button>
+            <div className="flex-grow flex items-center min-w-0">
+                <ChatBubbleLeftRightIcon className="w-6 h-6 text-primary dark:text-primary-light mr-2 flex-shrink-0"/>
+                <h2 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light truncate" title={displayedChatTitle}>
+                    {displayedChatTitle}
                 </h2>
             </div>
-            {/* Search Bar - Hidden in Real-Time Translation Mode & Private Mode */}
-            {!isRealTimeTranslationMode && !isPrivateModeSelected && !isFluxKontexModelSelected && (
-              <div className="flex items-center space-x-1.5 ml-2">
-                  <div className="relative">
-                      <input
-                          type="search"
-                          placeholder="Search messages..."
-                          value={tempSearchQuery}
-                          onChange={(e) => setTempSearchQuery(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') executeSearch(); }}
-                          className="pl-8 pr-2 py-1.5 border border-secondary dark:border-neutral-darkest rounded-md text-sm bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none w-32 sm:w-48"
-                          aria-label="Search messages in current chat"
-                      />
-                      <MagnifyingGlassIcon className="w-4 h-4 absolute left-2 top-1/2 transform -translate-y-1/2 text-neutral-400 dark:text-neutral-500" />
-                  </div>
-                  {isSearchActive && (
-                      <>
-                          <button onClick={() => navigateSearchResults('prev')} disabled={searchResults.length === 0} className="p-1.5 rounded-md text-neutral-darker dark:text-secondary-light hover:bg-secondary/70 dark:hover:bg-neutral-darkest disabled:opacity-50" aria-label="Previous search result" >
-                              <ChevronLeftIcon className="w-4 h-4" />
-                          </button>
-                          <span className="text-xs text-neutral-500 dark:text-neutral-400">
-                              {searchResults.length > 0 ? `${currentSearchResultIndex + 1}/${searchResults.length}` : '0/0'}
-                          </span>
-                          <button onClick={() => navigateSearchResults('next')} disabled={searchResults.length === 0} className="p-1.5 rounded-md text-neutral-darker dark:text-secondary-light hover:bg-secondary/70 dark:hover:bg-neutral-darkest disabled:opacity-50" aria-label="Next search result" >
-                              <ChevronRightIcon className="w-4 h-4" />
-                          </button>
-                          <button onClick={clearSearch} className="p-1.5 rounded-md text-neutral-darker dark:text-secondary-light hover:bg-secondary/70 dark:hover:bg-neutral-darkest" aria-label="Clear search" >
-                              <XMarkIcon className="w-4 h-4" />
-                          </button>
-                      </>
-                  )}
+            {!isRealTimeTranslationMode && (
+              <div className="relative flex items-center ml-2">
+                  <input
+                      type="text"
+                      placeholder="Search chat..."
+                      value={tempSearchQuery}
+                      onChange={(e) => setTempSearchQuery(e.target.value)}
+                      onKeyPress={(e) => { if (e.key === 'Enter') executeSearch(); }}
+                      className="px-2 py-1.5 text-xs border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark w-28 sm:w-36 focus:ring-1 focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none transition-all duration-200 ease-in-out focus:w-36 sm:focus:w-48"
+                      disabled={isLoading}
+                  />
+                  <button onClick={executeSearch} className="p-1.5 text-neutral-500 hover:text-primary dark:hover:text-primary-light absolute right-0 top-1/2 -translate-y-1/2 mr-1" aria-label="Execute search">
+                      <MagnifyingGlassIcon className="w-4 h-4"/>
+                  </button>
               </div>
             )}
-        </div>
-
-        {/* Main Content Area: Chat Messages OR Real-Time Translation UI */}
-        {isRealTimeTranslationMode ? (
-            <div className="flex-grow grid grid-rows-2 gap-2 sm:gap-4 overflow-hidden mb-4">
-                <div className="bg-neutral-light dark:bg-neutral-darker p-3 rounded-lg shadow-sm overflow-y-auto border border-secondary dark:border-neutral-darkest">
-                    <h3 className="font-semibold text-neutral-darker dark:text-secondary-light mb-2 sticky top-0 bg-neutral-light dark:bg-neutral-darker py-1">Your Speech (Transcription)</h3>
-                    <p className="whitespace-pre-wrap text-sm text-neutral-700 dark:text-neutral-200">{liveTranscriptionDisplay || "Waiting for speech..."}</p>
-                </div>
-                <div className="bg-neutral-light dark:bg-neutral-darker p-3 rounded-lg shadow-sm overflow-y-auto border border-secondary dark:border-neutral-darkest">
-                    <div className="flex justify-between items-center sticky top-0 bg-neutral-light dark:bg-neutral-darker py-1 mb-2">
-                        <h3 className="font-semibold text-neutral-darker dark:text-secondary-light">Translation ({targetTranslationLangName})</h3>
-                        <button
-                            onClick={handleSpeakLiveTranslation}
-                            disabled={!liveTranslationDisplay.trim() || isSpeakingLiveTranslation || isListening}
-                            className="p-1.5 rounded-full text-primary dark:text-primary-light hover:bg-secondary/70 dark:hover:bg-neutral-dark disabled:opacity-50 disabled:cursor-not-allowed"
-                            aria-label={isSpeakingLiveTranslation ? "Stop speaking translation" : "Speak translation"}
-                            title={isSpeakingLiveTranslation ? "Stop speaking translation" : "Speak translation"}
-                        >
-                            {isSpeakingLiveTranslation ? <StopCircleIcon className="w-5 h-5" /> : <SpeakerWaveIcon className="w-5 h-5" />}
-                        </button>
-                    </div>
-                    <p className="whitespace-pre-wrap text-sm text-neutral-700 dark:text-neutral-200">{liveTranslationDisplay || "Translation will appear here..."}</p>
-                </div>
-            </div>
-        ) : ( /* Chat Messages or AI Agent UI or Private Mode UI or Flux Kontex UI */
-          <div 
-            ref={chatContainerRef}
-            className="flex-grow overflow-y-auto mb-4 pr-2 space-y-2 relative" 
-            style={chatAreaStyle}
-          >
-            {messages.map((msg, index) => {
-                const nextMessage = messages[index + 1];
-                
-                const showAvatar = !nextMessage || nextMessage.sender !== msg.sender;
-                return (
-                    <div key={msg.id} ref={(el: HTMLDivElement | null) => { if(el) messageRefs.current[msg.id] = el; }}>
-                        <MessageBubble 
-                            message={msg}
-                            showAvatar={showAvatar}
-                            onImageClick={msg.sender === 'ai' && msg.imagePreviews && msg.imagePreviews.length > 0 ? handleOpenImageModal : undefined}
-                            onRegenerate={msg.sender === 'ai' && msg.promptedByMessageId && !msg.isRegenerating && !isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected ? handleRegenerateResponse : undefined}
-                            isLoading={isLoading}
-                            onPlayAudio={msg.audioUrl ? () => handlePlayAudio(msg.audioUrl!, msg.id) : undefined}
-                            isAudioPlaying={currentPlayingMessageId === msg.id}
-                            searchQuery={isSearchActive ? searchQuery : ''}
-                            isCurrentSearchResult={isSearchActive && searchResults[currentSearchResultIndex]?.messageId === msg.id}
-                        />
-                    </div>
-                );
-            })}
-            {isLoading && messages.length > 0 && messages[messages.length-1]?.sender === 'user' && !messages[messages.length-1]?.isRegenerating && !isPrivateModeSelected && ( 
-              <MessageBubble key="loading" message={{id: 'loading', text: isImagenModelSelected ? 'Generating image(s)...' : (isFluxKontexModelSelected ? 'Submitting image for editing...' : (isTextToSpeechModelSelected ? 'Synthesizing audio...' : (isAiAgentMode ? 'AI Agent is processing your goal...' : 'Thinking...'))), sender: 'ai', model: selectedModel, timestamp: Date.now(), promptedByMessageId: messages[messages.length-1].id }} showAvatar={true} />
-            )}
-            {isLoading && messages.length === 0 && !isPrivateModeSelected && ( 
-              <MessageBubble key="loading-initial" message={{id: 'loading-initial', text: isImagenModelSelected ? 'Generating image(s)...' : (isFluxKontexModelSelected ? 'Submitting image for editing...' : (isTextToSpeechModelSelected ? 'Synthesizing audio...' : (isAiAgentMode ? 'AI Agent is processing your goal...' : 'Thinking...'))), sender: 'ai', model: selectedModel, timestamp: Date.now(), promptedByMessageId: 'initial' }} showAvatar={true} />
-            )}
-            <div ref={chatEndRef} />
-            {/* Scroll to Bottom Button - Only shown if not in RTTM */}
-            {!isRealTimeTranslationMode &&(
-                <button
-                    onClick={scrollToBottomUiButton}
-                    className={`
-                        fixed bottom-20 right-6 sm:bottom-24 sm:right-10 z-20 p-2.5 
-                        bg-primary dark:bg-primary-light text-white 
-                        rounded-full shadow-lg 
-                        hover:bg-primary-dark dark:hover:bg-primary 
-                        focus:outline-none focus:ring-2 focus:ring-primary-dark dark:focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-neutral-darker 
-                        transition-all duration-300 ease-in-out transform
-                        ${showScrollToBottomButton ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-4 pointer-events-none'}
-                    `}
-                    aria-label="Scroll to latest messages"
-                    title="Scroll to Bottom"
-                    aria-hidden={!showScrollToBottomButton}
-                >
-                    <ChevronDownIcon className="w-5 h-5" />
+            {isSearchActive && !isRealTimeTranslationMode && (
+                <button onClick={clearSearch} className="p-1.5 text-red-500 hover:text-red-700 ml-1" aria-label="Clear search">
+                    <XMarkIcon className="w-4 h-4"/>
                 </button>
             )}
           </div>
-        )}
-
-        {error && !isRealTimeTranslationMode && <div className="text-red-500 dark:text-red-400 p-2 my-2 bg-red-100 dark:bg-red-900 border border-red-500 dark:border-red-400 rounded-md text-sm">{error}</div>}
-
-        {/* Attachments Preview - Hidden in Real-Time Translation Mode */}
-        {!isRealTimeTranslationMode && (!isImagenModelSelected && !isTextToSpeechModelSelected && (imagePreviews.length > 0 || uploadedTextFileName)) && (
-            <div className="mb-2 p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-secondary-light dark:bg-neutral-darker">
-                {imagePreviews.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                        {imagePreviews.map((previewUrl, index) => (
-                             <div key={index} className="relative group w-16 h-16 sm:w-20 sm:h-20">
-                                <img src={previewUrl} alt={`Preview ${index + 1}`} className="w-full h-full object-cover rounded-md border border-neutral-300 dark:border-neutral-600"/>
-                                <button 
-                                    onClick={() => handleSetUploadedImages(uploadedImages.filter((_, i) => i !== index))} 
-                                    className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" 
-                                    aria-label={`Remove image ${index + 1}`}
-                                >
-                                <XMarkIcon className="w-3.5 h-3.5" />
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                )}
-                {uploadedTextFileName && (
-                     <div className="inline-block align-top text-sm text-neutral-darker dark:text-secondary-light mt-1">
-                        <span className="mr-2">Attached File: {uploadedTextFileName}</span>
-                        <button onClick={() => { handleFileUpload(null); }} className="text-red-500 hover:text-red-700 inline-flex items-center" aria-label="Remove file" >
-                           <XMarkIcon className="w-4 h-4" />
-                        </button>
-                        {!uploadedTextFileContent && uploadedTextFileName && !isPrivateModeSelected && <p className="text-xs italic">(Content not displayed for this file type)</p>}
-                        {!uploadedTextFileContent && uploadedTextFileName && isPrivateModeSelected && <p className="text-xs italic">(File logged. Content not displayed for this type in preview.)</p>}
-                    </div>
-                )}
-            </div>
-        )}
-
-        {/* Input Area: Standard Chat Input OR Real-Time Translation Controls OR AI Agent Input OR Private Mode Input */}
-        <div className="flex items-end border-t border-secondary dark:border-neutral-darkest pt-2 sm:pt-4">
-          {isRealTimeTranslationMode ? (
-            <div className="w-full flex justify-center">
-                <button
-                  onClick={handleToggleListen}
-                  disabled={!isSpeechRecognitionSupported || isSpeakingLiveTranslation}
-                  className={`p-3 rounded-lg transition-colors self-stretch flex items-center justify-center text-xl ${
-                    isListening 
-                      ? 'bg-red-500 hover:bg-red-600 text-white' 
-                      : 'bg-green-500 hover:bg-green-600 text-white' 
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
-                  aria-label={isListening ? "Stop Real-Time Translation" : "Start Real-Time Translation"}
-                  aria-pressed={isListening}
-                >
-                  {isListening ? <StopCircleIcon className="w-8 h-8" /> : <MicrophoneIcon className="w-8 h-8" />}
-                  <span className="ml-2 text-lg">{isListening ? "Stop Recording" : "Start Recording"}</span>
+          {isSearchActive && searchResults.length > 0 && !isRealTimeTranslationMode && (
+            <div className="sticky top-[calc(theme(spacing.16)_-_1px)] sm:top-[calc(theme(spacing.18)_-_1px)] md:top-0 z-20 bg-white dark:bg-neutral-darker/90 backdrop-blur-sm p-1.5 text-xs flex items-center justify-center space-x-2 border-b border-secondary dark:border-neutral-darkest">
+                <span>{currentSearchResultIndex + 1} of {searchResults.length}</span>
+                <button onClick={() => navigateSearchResults('prev')} className="p-1 rounded-full hover:bg-secondary dark:hover:bg-neutral-dark disabled:opacity-50" disabled={searchResults.length <= 1} aria-label="Previous search result">
+                    <ChevronLeftIcon className="w-4 h-4"/>
+                </button>
+                <button onClick={() => navigateSearchResults('next')} className="p-1 rounded-full hover:bg-secondary dark:hover:bg-neutral-dark disabled:opacity-50" disabled={searchResults.length <= 1} aria-label="Next search result">
+                    <ChevronRightIcon className="w-4 h-4"/>
                 </button>
             </div>
-          ) : (
-            <>
-              {(!isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected) && ( 
-                <button
-                  onClick={handleToggleListen}
-                  disabled={isLoading || !isSpeechRecognitionSupported || isImagenModelSelected || isTextToSpeechModelSelected || isFluxKontexModelSelected || isGpt41AccessModalOpen}
-                  className={`mr-2 p-3 rounded-lg transition-colors self-stretch flex items-center justify-center ${
-                    isListening 
-                      ? 'bg-red-500 hover:bg-red-600 text-white' 
-                      : 'bg-secondary dark:bg-neutral-darkest hover:bg-secondary-dark dark:hover:bg-neutral-dark text-primary dark:text-primary-light'
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
-                  aria-label={isListening ? "Stop voice input" : "Start voice input"}
-                  aria-pressed={isListening}
-                >
-                  {isListening ? <StopCircleIcon className="w-6 h-6" /> : <MicrophoneIcon className="w-6 h-6" />}
-                </button>
-              )}
-              <div className="flex-grow relative">
-                <textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey && !isLoading && !isListening) { e.preventDefault(); handleSendMessage(); }}}
-                  placeholder={currentPromptPlaceholder()}
-                  className="w-full p-3 border border-secondary dark:border-neutral-darkest rounded-lg focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:border-transparent outline-none resize-none bg-neutral-light dark:bg-neutral-darker text-neutral-darker dark:text-secondary-light"
-                  style={{ paddingRight: textareaPaddingRight }}
-                  rows={calculateTextareaRows()}
-                  disabled={isLoading || isListening || isGpt41AccessModalOpen}
-                  aria-label="Chat input"
-                />
-                {(isImagenModelSelected || isFluxKontexModelSelected) && input.trim() && !isLoading && !isListening && (
-                  <button
-                    onClick={() => setInput('')}
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1.5 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 rounded-full hover:bg-secondary/70 dark:hover:bg-neutral-dark/70 focus:outline-none focus:ring-1 focus:ring-neutral-400 dark:focus:ring-neutral-500"
-                    aria-label={isImagenModelSelected ? "Clear image prompt" : "Clear edit prompt"}
-                    title={isImagenModelSelected ? "Clear image prompt" : "Clear edit prompt"}
-                  >
-                    <XMarkIcon className="w-4 h-4" />
-                  </button>
-                )}
-                {isTextToSpeechModelSelected && (
-                  <div className={`absolute bottom-2 right-3 text-xs pointer-events-none ${
-                    input.length > OPENAI_TTS_MAX_INPUT_LENGTH
-                      ? 'text-red-500 dark:text-red-400 font-semibold'
-                      : 'text-neutral-500 dark:text-neutral-400'
-                  }`}>
-                    {input.length}/${OPENAI_TTS_MAX_INPUT_LENGTH}
-                  </div>
-                )}
-              </div>
-              <button
-                onClick={handleSendMessage}
-                disabled={isLoading || isListening || isGpt41AccessModalOpen || 
-                    (isImagenModelSelected && !input.trim()) || 
-                    (isFluxKontexModelSelected && (!input.trim() || uploadedImages.length === 0)) ||
-                    (isTextToSpeechModelSelected && (!input.trim() || input.length > OPENAI_TTS_MAX_INPUT_LENGTH)) ||
-                    (isPrivateModeSelected && !input.trim() && uploadedImages.length === 0 && !uploadedTextFileName) || 
-                    ((!input.trim() && uploadedImages.length === 0 && !uploadedTextFileName) && 
-                        (isAiAgentMode ? (uploadedImages.length === 0 && !uploadedTextFileName) : (!isImagenModelSelected && !isTextToSpeechModelSelected && !isPrivateModeSelected && !isFluxKontexModelSelected))) 
-                }
-                className="ml-2 p-3 bg-primary hover:bg-primary-dark dark:bg-primary-light dark:hover:bg-primary text-white rounded-lg disabled:opacity-50 transition-colors self-stretch flex items-center justify-center" 
-                aria-label={sendButtonLabel()} >
-                {sendButtonIcon()}
-              </button>
-            </>
           )}
+
+          {/* Conditional rendering for chat messages OR Real-Time Translation UI */}
+            {isRealTimeTranslationMode ? (
+                <div className="flex-grow p-3 border-t border-secondary dark:border-neutral-darkest bg-neutral-light dark:bg-neutral-darker max-h-full overflow-y-auto text-sm">
+                    <div className="mb-2">
+                        <h4 className="font-semibold text-neutral-600 dark:text-neutral-300">Live Transcription ({navigator.language || 'en-US'}):</h4>
+                        <pre className="whitespace-pre-wrap text-neutral-700 dark:text-neutral-200">{liveTranscriptionDisplay || (isListening ? "Listening..." : "Start microphone to see transcription.")}</pre>
+                    </div>
+                    <div>
+                        <h4 className="font-semibold text-neutral-600 dark:text-neutral-300">Live Translation ({targetTranslationLangName}):</h4>
+                        <pre className="whitespace-pre-wrap text-neutral-700 dark:text-neutral-200">{liveTranslationDisplay || (isListening && liveTranscriptionDisplay ? "Translating..." : "Translation will appear here.")}</pre>
+                    </div>
+                </div>
+            ) : (
+                <div ref={chatContainerRef} className="flex-grow min-h-0 p-4 space-y-4 overflow-y-auto">
+                    {messages.map((msg, index) => (
+                        <div ref={(el: HTMLDivElement | null) => { messageRefs.current[msg.id] = el; }} key={msg.id} className="flex justify-start"> {/* All messages justify-start */}
+                            <MessageBubble
+                            message={msg}
+                            showAvatar={index === 0 || messages[index-1]?.sender !== msg.sender}
+                            onImageClick={handleOpenImageModal}
+                            onRegenerate={handleRegenerateResponse}
+                            isLoading={isLoading && msg.id === messages.find(m => m.isRegenerating)?.id}
+                            onPlayAudio={msg.audioUrl ? () => handlePlayAudio(msg.audioUrl!, msg.id) : undefined}
+                            isAudioPlaying={currentPlayingMessageId === msg.id}
+                            searchQuery={searchQuery}
+                            isCurrentSearchResult={isSearchActive && searchResults[currentSearchResultIndex]?.messageId === msg.id}
+                            />
+                        </div>
+                    ))}
+                    <div ref={chatEndRef} /> {/* For scrolling to bottom */}
+                </div>
+            )}
+           {showScrollToBottomButton && !isRealTimeTranslationMode && (
+              <button
+                onClick={scrollToBottomUiButton}
+                className="absolute bottom-24 right-6 sm:bottom-28 sm:right-10 p-2.5 bg-primary dark:bg-primary-light text-white rounded-full shadow-lg hover:bg-primary-dark dark:hover:bg-primary transition-colors z-20"
+                aria-label="Scroll to bottom"
+              >
+                <ChevronDownIcon className="w-5 h-5" />
+              </button>
+            )}
+          {error && <p className="p-4 text-red-500 dark:text-red-400 bg-red-100 dark:bg-red-900/30 border-t border-red-200 dark:border-red-700 text-sm">{error}</p>}
+
+          {/* Attachment Previews Area */}
+          {showGenericAttachmentPreview && (imagePreviews.length > 0 || uploadedTextFileName) && (
+            <div className="p-2 border-t border-b border-secondary dark:border-neutral-darkest bg-neutral-light dark:bg-neutral-darker flex-shrink-0">
+                <div className="flex flex-wrap items-center gap-2 max-h-24 overflow-y-auto">
+                    {imagePreviews.map((previewUrl, index) => (
+                        <div key={`preview-${index}`} className="relative group w-16 h-16">
+                            <img
+                                src={previewUrl}
+                                alt={`Preview ${index + 1}`}
+                                className="w-full h-full object-cover rounded-md border border-secondary dark:border-neutral-darkest"
+                                title={uploadedImages[index]?.name || `Image ${index + 1}`}
+                            />
+                            <button
+                                onClick={() => handleRemoveUploadedImage(index)}
+                                className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                                aria-label={`Remove image ${index + 1}`}
+                                title="Remove image"
+                            >
+                                <XMarkIcon className="w-3 h-3" />
+                            </button>
+                        </div>
+                    ))}
+                    {uploadedTextFileName && (
+                        <div className="flex items-center p-2 bg-secondary/50 dark:bg-neutral-dark/50 rounded-md text-xs text-neutral-700 dark:text-neutral-300">
+                            <DocumentTextIcon className="w-4 h-4 mr-1.5 flex-shrink-0 text-primary dark:text-primary-light" />
+                            <span className="truncate max-w-[150px] sm:max-w-[200px]" title={uploadedTextFileName}>
+                                {uploadedTextFileName}
+                            </span>
+                            <button
+                                onClick={handleRemoveTextFilePreview}
+                                className="ml-2 text-red-500 hover:text-red-600"
+                                aria-label="Remove file"
+                                title="Remove file"
+                            >
+                                <XMarkIcon className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+          )}
+
+
+          {/* Hidden file inputs for chat bar buttons */}
+          <input type="file" id="image-upload-chatbar" className="hidden" onChange={handleChatBarImageUpload} accept={imageFileAcceptTypes} multiple={isFluxKontexModelSelected} />
+          <input type="file" id="file-upload-chatbar" className="hidden" onChange={handleChatBarGeneralFileUpload} accept={generalFileAcceptTypes} />
+
+          {/* Input Area */}
+          <div className="p-3 border-t border-secondary dark:border-neutral-darkest bg-neutral-light dark:bg-neutral-darker flex items-end flex-shrink-0">
+            {showMicrophoneButton && (
+                <button onClick={handleToggleListen} disabled={generalChatBarInteractionDisabled}
+                    className={`p-2.5 rounded-full transition-colors flex-shrink-0 mr-2
+                                ${isListening ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse' : 'bg-secondary dark:bg-neutral-darkest hover:bg-secondary-dark dark:hover:bg-neutral-dark text-neutral-darker dark:text-secondary-light'}
+                                disabled:opacity-50`}
+                    aria-label={isListening ? "Stop voice input" : "Start voice input"}
+                    title={isListening ? "Stop Listening" : "Start Voice Input"}
+                >
+                    {isListening ? <StopCircleIcon className="w-5 h-5"/> : <MicrophoneIcon className="w-5 h-5"/>}
+                </button>
+            )}
+
+            {/* Attachment Buttons */}
+            {!isRealTimeTranslationMode && showImageUploadInChatBar && (
+              <button
+                onClick={() => document.getElementById('image-upload-chatbar')?.click()}
+                disabled={generalChatBarInteractionDisabled || uploadedImages.length >= imageUploadLimit }
+                className="p-2.5 rounded-full transition-colors flex-shrink-0 mr-1.5 text-neutral-darker dark:text-secondary-light hover:bg-secondary dark:hover:bg-neutral-dark disabled:opacity-50"
+                aria-label="Upload image"
+                title="Upload Image"
+              >
+                <PhotoIcon className="w-5 h-5"/>
+              </button>
+            )}
+            {!isRealTimeTranslationMode && showFileUploadInChatBar && (
+              <button
+                onClick={() => document.getElementById('file-upload-chatbar')?.click()}
+                disabled={generalChatBarInteractionDisabled}
+                className="p-2.5 rounded-full transition-colors flex-shrink-0 mr-2 text-neutral-darker dark:text-secondary-light hover:bg-secondary dark:hover:bg-neutral-dark disabled:opacity-50"
+                aria-label="Upload file"
+                title="Upload File"
+              >
+                <ArrowUpTrayIcon className="w-5 h-5"/>
+              </button>
+            )}
+
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey && !isListening && !isRealTimeTranslationMode) { e.preventDefault(); handleSendMessage(); } }}
+              placeholder={currentPromptPlaceholder()}
+              rows={calculateTextareaRows()}
+              className="flex-grow p-3 pr-2 border border-secondary dark:border-neutral-darkest rounded-lg resize-none focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none bg-white dark:bg-neutral-dark disabled:opacity-70"
+              style={{ paddingLeft: '0.75rem' }}
+              disabled={generalChatBarInteractionDisabled || (isRealTimeTranslationMode && !isSpeechRecognitionSupported)}
+            />
+            <div className="flex items-center space-x-1.5 flex-shrink-0 ml-2">
+                {isRealTimeTranslationMode && (
+                    <button onClick={handleSpeakLiveTranslation} disabled={isLoading || isListening || !liveTranslationDisplay.trim() || isSpeakingLiveTranslation || (userSession.isDemoUser && !userSession.isPaidUser)}
+                        className={`p-2.5 rounded-full transition-colors
+                                    ${isSpeakingLiveTranslation ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse' : 'bg-accent hover:bg-accent-dark text-white'}
+                                    disabled:opacity-50 disabled:cursor-not-allowed`}
+                        aria-label={isSpeakingLiveTranslation ? "Stop speaking translation" : "Speak live translation"}
+                        title={(userSession.isDemoUser && !userSession.isPaidUser) ? "Feature for paid users" : (isSpeakingLiveTranslation ? "Stop Speaking" : "Speak Translation")}
+                    >
+                         {isSpeakingLiveTranslation ? <StopCircleIcon className="w-5 h-5"/> : <SpeakerWaveIcon className="w-5 h-5"/>}
+                    </button>
+                )}
+                {!isRealTimeTranslationMode && (
+                    <button onClick={handleSendMessage} disabled={generalChatBarInteractionDisabled || (input.trim() === '' && uploadedImages.length === 0 && !uploadedTextFileName && !isImagenModelSelected && !isFluxKontexModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode && !isPrivateModeSelected)}
+                        className="p-2.5 bg-primary hover:bg-primary-dark dark:bg-primary-light dark:hover:bg-primary text-white dark:text-neutral-darker rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        aria-label={sendButtonLabel()} title={sendButtonLabel()}
+                    >
+                        {isLoading && !(messages.find(m => m.isRegenerating)?.id) ? (
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        ) : (
+                            sendButtonIcon()
+                        )}
+                    </button>
+                )}
+            </div>
+          </div>
         </div>
       </div>
-      {isImageModalOpen && modalImage && (
-        <ImageModal isOpen={isImageModalOpen} onClose={() => setIsImageModalOpen(false)} imageBase64={modalImage} prompt={modalPrompt} mimeType={modalMimeType} />
-      )}
-
-      {/* GPT-4.1 Access Modal */}
-      {isGpt41AccessModalOpen && (
-        <div 
-            className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 transition-opacity duration-300"
-            onClick={() => handleGpt41AccessModalClose(true, "gpt-4.1 requires a code to use. Switched to gpt-4.1-mini.")}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="gpt41-access-modal-title"
-        >
-            <div 
-                className="bg-neutral-light dark:bg-neutral-darker rounded-lg shadow-xl p-6 w-full max-w-md transform transition-all duration-300 scale-100 opacity-100"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="flex justify-between items-center mb-4">
-                    <h3 id="gpt41-access-modal-title" className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
-                        <KeyIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light"/> Access gpt-4.1 Model
-                    </h3>
-                    <button
-                        onClick={() => handleGpt41AccessModalClose(true, "gpt-4.1 requires a code to use. Switched to gpt-4.1-mini.")}
-                        className="p-1 rounded-full hover:bg-secondary dark:hover:bg-neutral-dark"
-                        aria-label="Close"
-                    >
-                        <XMarkIcon className="w-5 h-5 text-neutral-darker dark:text-secondary-light" />
-                    </button>
-                </div>
-                <p className="text-sm text-neutral-600 dark:text-neutral-300 mb-4">
-                    This is a new test model, will soon debut. If you have a secret code, enter below to use.
-                </p>
-                <input
-                    type="password"
-                    value={gpt41AccessCodeInput}
-                    onChange={(e) => setGpt41AccessCodeInput(e.target.value)}
-                    onKeyPress={(e) => { if (e.key === 'Enter') handleGpt41CodeSubmit(); }}
-                    placeholder="Secret Code"
-                    className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none mb-4"
-                    autoFocus
-                />
-                <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2">
-                    <button
-                        onClick={() => handleGpt41AccessModalClose(true, "Switched to gpt-4.1-mini.")}
-                        className="px-4 py-2 text-sm font-medium text-neutral-darker dark:text-secondary-light bg-secondary dark:bg-neutral-darkest hover:bg-secondary-dark dark:hover:bg-neutral-dark rounded-md transition-colors w-full sm:w-auto"
-                    >
-                        Use gpt-4.1-mini instead
-                    </button>
-                    <button
-                        onClick={handleGpt41CodeSubmit}
-                        className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary-dark dark:bg-primary-light dark:text-neutral-darker dark:hover:bg-primary rounded-md transition-colors w-full sm:w-auto"
-                    >
-                        Submit Code
-                    </button>
-                </div>
-            </div>
-        </div>
+       {isImageModalOpen && modalImage && (
+        <ImageModal
+            isOpen={isImageModalOpen}
+            onClose={() => setIsImageModalOpen(false)}
+            imageBase64={modalImage}
+            prompt={modalPrompt}
+            mimeType={modalMimeType}
+        />
       )}
     </div>
   );
 };
 
+// Helper: Check if message history needs system instruction for Gemini (currently not used directly in message array for Gemini)
+function shouldAddSystemInstructionForGemini(history: Content[]): boolean {
+  return history.length === 0 || history.every(msg => msg.role !== 'user'); // Simplistic check
+}
+
+
 export default ChatPage;
+
+function messagesToGeminiHistory(messages: ChatMessage[], currentAiMessageId: string | null, id: string, isAiAgentMode: boolean): Content[] {
+    const history: Content[] = [];
+    // Filter out the current AI message being generated and any notes if not in agent mode
+    messages.filter(msg => msg.id !== currentAiMessageId && (!msg.isNote || isAiAgentMode))
+        .forEach(msg => {
+            const role = msg.sender === 'user' ? 'user' : 'model';
+            const parts: Part[] = [];
+            if (msg.text) {
+                let textForHistory = msg.text;
+                if (isAiAgentMode) {
+                    if (msg.isTaskGoal && msg.sender === 'user') textForHistory = `User's goal: ${msg.text}`;
+                    else if (msg.isTaskPlan && msg.sender === 'ai') textForHistory = `AI Agent's plan/response: ${msg.text}`;
+                }
+                parts.push({ text: textForHistory });
+            }
+            if (msg.sender === 'user' && msg.imagePreview && !msg.isImageQuery) {
+                 try {
+                    const base64Data = msg.imagePreview.split(',')[1];
+                    const mimeTypeMatch = msg.imagePreview.match(/data:(image\/[a-zA-Z0-9-.+]+);base64/);
+                    if (base64Data && mimeTypeMatch && mimeTypeMatch[1]) {
+                        parts.push({ inlineData: { mimeType: mimeTypeMatch[1], data: base64Data } });
+                    }
+                } catch (e) { console.error("Error processing image for Gemini history:", e); }
+            }
+            if (parts.length > 0) {
+                history.push({ role, parts });
+            }
+        });
+    return history;
+}
+
+function messagesToOpenAIHistory(
+    allMessages: ChatMessage[],
+    currentAiMessageId: string | null,
+    currentUserMessageId: string | null,
+    systemInstruction: string,
+    currentInputTextForApi: string,
+    currentActiveImageFile: File | null,
+    currentActiveImagePreview: string | null,
+    currentUploadedTextFileName: string | null,
+    currentUploadedTextContent: string | null,
+    isRegeneration: boolean,
+    isRegenerationOfAiMsgId?: string // Added parameter
+): ApiChatMessage[] {
+    const history: ApiChatMessage[] = [{ role: 'system', content: systemInstruction }];
+
+    allMessages.forEach(msg => {
+        if (msg.id === currentAiMessageId || msg.isNote) return;
+        if (!isRegeneration && msg.id === currentUserMessageId) return;
+
+
+        let role: 'user' | 'assistant';
+        if (msg.sender === 'ai') {
+            role = 'assistant';
+        } else {
+            role = 'user';
+        }
+
+        let apiMessageContent: ApiChatMessage['content'];
+
+        const messageParts: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; detail?: "auto" | "low" | "high" } }> = [];
+
+        if (msg.text) {
+            let textForHistory = msg.text;
+            if (role === 'user' && msg.fileName && !TEXT_READABLE_EXTENSIONS.some(ext => msg.fileName?.toLowerCase().endsWith(ext)) && !msg.imagePreview) {
+                textForHistory += `\n(System Note: User previously uploaded a file named '${msg.fileName}'. Its content was not directly available.)`;
+            }
+            messageParts.push({ type: 'text', text: textForHistory });
+        }
+
+        if (role === 'user' && msg.imagePreview && !msg.isImageQuery) {
+            messageParts.push({ type: 'image_url', image_url: { url: msg.imagePreview, detail: "auto" } });
+        }
+
+        if (messageParts.length > 0) {
+            apiMessageContent = messageParts.length === 1 && messageParts[0].type === 'text' ? messageParts[0].text : messageParts;
+            history.push({ role, content: apiMessageContent });
+        } else if (role === 'assistant' && !msg.text) {
+             history.push({ role, content: " "});
+        }
+    });
+
+    if (!isRegeneration) {
+        const currentTurnContentParts: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; detail?: "auto" | "low" | "high" } }> = [];
+        let textForCurrentTurn = currentInputTextForApi.trim();
+
+        if (currentUploadedTextFileName) {
+            if (currentUploadedTextContent) {
+                textForCurrentTurn = `The user has uploaded a file named "${currentUploadedTextFileName}".\nThe content of this file is:\n${currentUploadedTextContent}\n\n---\n\n${textForCurrentTurn}`;
+            } else if (!currentActiveImageFile) { // If no image, then the file context note applies
+                textForCurrentTurn = `${textForCurrentTurn}\n\n(System Note: User uploaded a file named '${currentUploadedTextFileName}'. Its content is not directly available to you.)`;
+            }
+        }
+
+        if (textForCurrentTurn) {
+            currentTurnContentParts.push({ type: 'text', text: textForCurrentTurn });
+        }
+        if (currentActiveImagePreview && currentActiveImageFile) { // Only include image if it's actually there
+            currentTurnContentParts.push({ type: 'image_url', image_url: { url: currentActiveImagePreview, detail: "auto" } });
+        }
+
+        if (currentTurnContentParts.length > 0) {
+            history.push({ role: 'user', content: currentTurnContentParts.length === 1 && currentTurnContentParts[0].type === 'text' ? currentTurnContentParts[0].text : currentTurnContentParts });
+        } else if (history.length === 1 && !isRegeneration) {
+            // If only system prompt and nothing from user (and not a regeneration), it's an empty message.
+            // The handleSendMessage checks should prevent sending a completely empty message (no text, no image).
+        }
+    }
+
+    return history;
+}

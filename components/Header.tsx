@@ -1,12 +1,12 @@
 
 import React, { useContext, useState, useRef, useEffect } from 'react';
 import { ThemeContext } from '../App.tsx';
-import { ThemeContextType, UserGlobalProfile, LoginDeviceLog, CreditPackage } from '../types.ts'; // Added CreditPackage
+import { ThemeContextType, UserGlobalProfile, LoginDeviceLog, CreditPackage } from '../types.ts'; 
 import { SunIcon, MoonIcon, BellIcon, UserCircleIcon as AvatarIcon, KeyIcon, XMarkIcon, AcademicCapIcon, PuzzlePieceIcon, UserCogIcon, ComputerDesktopIcon, IdentificationIcon, ChatBubbleLeftEllipsisIcon } from './Icons.tsx';
 import { useNotification } from '../contexts/NotificationContext.tsx';
 import NotificationPanel from './NotificationPanel.tsx';
 import AccountSettingsModal from './AccountSettingsModal.tsx';
-import { LOCAL_STORAGE_DEVICE_LOGS_KEY, MAX_DEVICE_LOGS } from '../constants.ts';
+import { LOCAL_STORAGE_DEVICE_LOGS_KEY, MAX_DEVICE_LOGS, DEMO_USER_KEY } from '../constants.ts';
 
 
 export interface MockUser {
@@ -16,17 +16,15 @@ export interface MockUser {
 
 interface HeaderProps {
   currentUser: MockUser | null;
-  onLogin: (user: MockUser) => void;
+  onLogin: (code: string) => void; // Changed to accept code string
   onLogout: () => void;
   openLoginModalInitially?: boolean;
   onLoginModalOpened?: () => void; 
   onToggleLanguageLearningModal: () => void; 
   onToggleGamesModal: () => void; 
   onToggleVoiceAgentWidget: () => void;
-  // Props for Account Settings background feature
   chatBackgroundUrl: string | null;
   onChatBackgroundChange: (newUrl: string | null) => void;
-  // Props for Account Settings "About Me" feature & Credits
   userProfile: UserGlobalProfile | null;
   onUpdateUserProfile: (updatedProfile: UserGlobalProfile) => void;
   currentUserCredits: number;
@@ -142,38 +140,38 @@ const Header: React.FC<HeaderProps> = ({
       return;
     }
     setIsLoginLoading(true);
-    try {
-      const response = await fetch('/api/auth/verify-code', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ code: loginCodeInput }),
-      });
+    // App.tsx will handle the actual API call and user state update
+    onLogin(loginCodeInput.trim()); 
 
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        onLogin({ name: "Authenticated User" });
-        addNotification("Login successful!", "success");
-        setIsLoginModalOpen(false);
-        recordLoginDevice(); 
-      } else {
-        addNotification(data.message || "Invalid login code or server error.", "error");
-        setLoginCodeInput(''); 
-      }
-    } catch (error) {
-      console.error("Login API call failed:", error);
-      addNotification("Login request failed. Please check your connection or contact support.", "error");
-    } finally {
-      setIsLoginLoading(false);
+    // App.tsx is now responsible for setting currentUser and notifications.
+    // This modal will close, and App.tsx will re-render Header with new currentUser if login is successful.
+    setIsLoginModalOpen(false);
+    setIsLoginLoading(false);
+    
+    // Record device only if it's not a DEMO login, or if DEMO login is also considered a "login event" for device tracking.
+    // For now, assume admin login records device. Demo login device tracking can be decided.
+    if (loginCodeInput.trim().toUpperCase() !== DEMO_USER_KEY) {
+        // This part might be redundant if App.tsx handles successful login state update and device recording
+        // For admin login success, App.tsx should ideally trigger this.
+        // For simplicity, if the input code isn't DEMO, we *assume* it might be an admin code
+        // and the success will be handled by onLogin -> App.tsx -> currentUser update.
+        // Let's rely on App.tsx to call recordLoginDevice upon successful *admin* login.
+    }
+     if (loginCodeInput.trim().toUpperCase() !== DEMO_USER_KEY) {
+        // Assuming App.tsx handles the actual success and calls recordLoginDevice
+        // This is a bit tricky here since Header doesn't know if admin login was successful.
+        // Best practice: App.tsx calls recordLoginDevice after successful admin login.
+        // For now, to keep it simple, we won't call recordLoginDevice directly here for admin.
+    } else {
+        // For DEMO login, App.tsx will also handle its specific logic.
+        // Device recording for DEMO can be added in App.tsx's DEMO login path if needed.
     }
   };
 
   const handleSignOut = () => { 
     onLogout(); 
     setIsLoginDropdownOpen(false);
-    addNotification("You have been logged out.", "info");
+    // addNotification("You have been logged out.", "info"); // Moved to App.tsx for consistency
   };
   
   const handleOpenAccountSettings = () => {
@@ -365,7 +363,7 @@ const Header: React.FC<HeaderProps> = ({
                 value={loginCodeInput}
                 onChange={(e) => setLoginCodeInput(e.target.value)}
                 onKeyPress={(e) => { if (e.key === 'Enter' && !isLoginLoading) handleLoginSubmit(); }}
-                placeholder="Login Code"
+                placeholder="Login Code (try 'DEMO')"
                 className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none mb-4"
                 autoFocus
                 disabled={isLoginLoading}

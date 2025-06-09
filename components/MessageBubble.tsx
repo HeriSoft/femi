@@ -211,7 +211,7 @@ const EnhancedMessageContent: React.FC<EnhancedMessageContentProps> = React.memo
 interface MessageBubbleProps {
   message: ChatMessage;
   showAvatar: boolean; 
-  onImageClick?: (imageData: string, promptText: string, mimeType: 'image/jpeg' | 'image/png') => void; // Renamed imageB64 to imageData
+  onImageClick?: (imageData: string, promptText: string, mimeType: 'image/jpeg' | 'image/png') => void;
   onRegenerate?: (aiMessageId: string, promptedByMessageId: string) => void;
   isLoading?: boolean;
   onPlayAudio?: () => void;
@@ -230,7 +230,7 @@ const formatTime = (timestamp: number): string => {
   });
 };
 
-const MessageBubble: React.FC<MessageBubbleProps> = ({ 
+export const MessageBubble: React.FC<MessageBubbleProps> = ({ 
   message, 
   showAvatar,
   onImageClick, 
@@ -256,14 +256,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   if (currentTheme === 'light') {
     if (isUser) {
-      bubbleBackgroundColor = message.isTaskGoal ? '#e0f2fe' : (message.model === Model.PRIVATE ? '#e2e8f0' : '#effdde'); 
+      bubbleBackgroundColor = message.isTaskGoal ? '#e0f2fe' : (message.model === Model.PRIVATE ? '#e2e8f0' : '#dcfce7'); // User messages light green/blue
       bubbleTextColor = '#374151';    
       audioButtonClasses = 'bg-black/10 hover:bg-black/20 text-neutral-700'; 
       timestampColor = 'rgba(75, 85, 99, 0.7)'; 
       if (message.isTaskGoal) specialBorderClass = 'border-l-4 border-blue-400';
       else if (message.model === Model.PRIVATE) specialBorderClass = 'border-l-4 border-slate-400';
     } else { // AI in light theme
-      bubbleBackgroundColor = message.isTaskPlan ? '#dcfce7' : '#ffffff'; // Light green for AI Agent plan, white for normal AI
+      bubbleBackgroundColor = message.isTaskPlan ? '#d1fae5' : '#ffffff'; // Lighter green for AI Agent plan, white for normal AI
       bubbleTextColor = '#374151';    
       audioButtonClasses = 'bg-gray-200 hover:bg-gray-300 text-neutral-700'; 
       timestampColor = 'rgba(107, 114, 128, 0.9)'; 
@@ -271,14 +271,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     }
   } else { // Dark theme
     if (isUser) {
-      bubbleBackgroundColor = message.isTaskGoal ? '#1e3a8a' : (message.model === Model.PRIVATE ? '#374151' : '#2b5278');
+      bubbleBackgroundColor = message.isTaskGoal ? '#1e3a8a' : (message.model === Model.PRIVATE ? '#374151' : '#1e40af'); // User messages dark blueish
       bubbleTextColor = '#FFFFFF';    
       audioButtonClasses = 'bg-white/20 hover:bg-white/30 text-white'; 
       timestampColor = 'rgba(209, 213, 219, 0.7)'; 
       if (message.isTaskGoal) specialBorderClass = 'border-l-4 border-blue-500';
       else if (message.model === Model.PRIVATE) specialBorderClass = 'border-l-4 border-slate-500';
     } else { // AI in dark theme
-      bubbleBackgroundColor = message.isTaskPlan ? '#14532d' : '#182533'; // Darker green for AI Agent plan, standard dark gray/blue for normal AI
+      bubbleBackgroundColor = message.isTaskPlan ? '#065f46' : '#182533'; // Darker green for AI Agent plan, standard dark gray/blue for normal AI
       bubbleTextColor = '#FFFFFF';    
       audioButtonClasses = 'bg-white/20 hover:bg-white/30 text-white'; 
       timestampColor = 'rgba(156, 163, 175, 0.8)'; 
@@ -301,7 +301,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const searchHighlightStyle = isCurrentSearchResult ? 'ring-2 ring-accent dark:ring-accent-light ring-offset-2 ring-offset-secondary-light dark:ring-offset-neutral-dark' : '';
   
   const bubbleContentClasses = [
-    "max-w-md sm:max-w-lg md:max-w-xl p-3 rounded-xl shadow relative z-10",
+    "max-w-md sm:max-w-lg md:max-w-xl p-3 rounded-xl shadow relative z-10", // Changed from rounded-xl
     message.isRegenerating ? 'opacity-75' : '',
     searchHighlightStyle,
     specialBorderClass 
@@ -350,7 +350,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     if (message.model !== Model.FLUX_KONTEX || !message.imagePreviews || message.imagePreviews.length === 0) return;
 
     const jsonData = {
-      model: message.model.toString(), // Display name from enum
+      model: message.model.toString(), 
       originalPrompt: message.originalPrompt || '',
       editedImageUrl: message.imagePreviews[0],
       timestamp: message.timestamp,
@@ -410,7 +410,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
 
   return (
-    <div className={`flex items-end space-x-2 group justify-start`}> 
+    <div className="flex items-end space-x-2 group justify-start"> 
       <div className="w-8 h-8 flex-shrink-0"> 
         {showAvatar && (
           <div className={`w-full h-full rounded-full flex items-center justify-center ${
@@ -432,7 +432,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           aria-live={message.isRegenerating ? "polite" : "off"}
           aria-atomic="true"
         >
-           {!isUser && showAvatar && <div className={tailClasses} style={tailStyle}></div>}
+           {showAvatar && <div className={tailClasses} style={tailStyle}></div>}
           
           <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
             <EnhancedMessageContent text={finalDisplayText} searchQuery={searchQuery} />
@@ -445,18 +445,20 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           )}
 
           {message.imagePreviews && !isUser && message.imagePreviews.length > 0 && (
-            <div className={`mt-2 grid gap-2 ${message.imagePreviews.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+             <div className={`mt-2 grid gap-2 ${message.imagePreviews.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} place-items-center`}>
               {message.imagePreviews.map((imgStr, index) => ( 
                 <div 
                   key={index} 
-                  className="relative group/image rounded-md overflow-hidden" // Added rounded-md and overflow-hidden here
+                  className="inline-block align-middle" // Let the inner div size itself
                   onClick={() => onImageClick && onImageClick(imgStr, message.originalPrompt || '', message.imageMimeType || 'image/jpeg')}
                   role="button" tabIndex={0} aria-label={`View generated image ${index + 1}`}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onImageClick && onImageClick(imgStr, message.originalPrompt || '', message.imageMimeType || 'image/jpeg'); }}
                 >
-                  <img src={imgStr} alt={`Generated art ${index + 1}`} className="max-w-full h-auto max-h-60 rounded-md object-contain cursor-pointer" />
-                   <div className="absolute inset-0 bg-black bg-opacity-0 group-hover/image:bg-opacity-20 transition-opacity flex items-center justify-center">
-                      <PhotoIcon className="w-8 h-8 text-white opacity-0 group-hover/image:opacity-80 transform scale-75 group-hover/image:scale-100 transition-all" />
+                  <div className="relative group/image inline-block rounded-md overflow-hidden"> {/* This div will shrink-wrap the image and contain the overlay */}
+                    <img src={imgStr} alt={`Generated art ${index + 1}`} className="block max-w-full h-auto max-h-60 rounded-md object-contain cursor-pointer" />
+                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover/image:bg-opacity-20 transition-opacity flex items-center justify-center">
+                        <PhotoIcon className="w-8 h-8 text-white opacity-0 group-hover/image:opacity-80 transform scale-75 group-hover/image:scale-100 transition-all" />
+                    </div>
                   </div>
                 </div>
               ))}
@@ -511,7 +513,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
              </div>
           )}
 
-          {/* Action Buttons Row */}
            <div className="absolute -top-1 -right-1 sm:top-0 sm:right-0 flex items-center p-0.5 sm:p-1 rounded-full transition-opacity duration-150">
               {message.text.trim() && !message.isRegenerating && (
                 <ActionButton onClick={handleCopyText} title={isTextCopied ? "Copied!" : "Copy Text"} ariaLabel="Copy message text">
@@ -535,8 +536,15 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
               )}
           </div>
         </div>
-        {showAvatar && message.timestamp && (
-            <p className="text-xs mt-0.5" style={{ color: timestampColor, paddingLeft: isUser ? '0' : '0.75rem', paddingRight: isUser ? '0.75rem' : '0' }}>
+        {message.timestamp && (
+            <p 
+                className="text-xs mt-0.5" 
+                style={{ 
+                    color: timestampColor, 
+                    paddingLeft: showAvatar ? '0.75rem' : '0', 
+                    paddingRight: '0'
+                }}
+            >
                 {formatTime(message.timestamp)}
             </p>
         )}
@@ -545,4 +553,3 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   );
 };
 
-export default MessageBubble;

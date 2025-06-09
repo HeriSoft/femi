@@ -1,20 +1,15 @@
 
 import React, { useState } from 'react';
-import { Model, ModelSettings, SettingsPanelProps as LocalSettingsPanelProps, ApiKeyStatus, getActualModelIdentifier, ImagenSettings, Persona, OpenAITtsSettings, OpenAiTtsVoice, RealTimeTranslationSettings, AiAgentSettings, FluxKontexSettings, FluxKontexAspectRatio } from '../types.ts';
+import { Model, ModelSettings, SettingsPanelProps, ApiKeyStatus, getActualModelIdentifier, ImagenSettings, Persona, OpenAITtsSettings, OpenAiTtsVoice, RealTimeTranslationSettings, AiAgentSettings, FluxKontexSettings, FluxKontexAspectRatio } from '../types.ts';
 import { ArrowUpTrayIcon, PhotoIcon, XMarkIcon, MagnifyingGlassIcon, KeyIcon, InformationCircleIcon, UserCircleIcon, PlusCircleIcon, TrashIcon, PencilSquareIcon, SpeakerWaveIcon, LanguageIcon, PencilIcon as EditIcon, ArrowPathIcon } from './Icons.tsx'; // Changed EditIcon to PencilIcon as EditIcon, Added ArrowPathIcon
 import { TRANSLATION_TARGET_LANGUAGES, DEFAULT_FLUX_KONTEX_SETTINGS } from '../constants.ts';
 
 
-const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
+const SettingsPanel: React.FC<SettingsPanelProps> = ({
   selectedModel,
   onModelChange,
   modelSettings, 
   onModelSettingsChange,
-  uploadedImages,      // Changed from onImageUpload
-  imagePreviews,       // Changed from imagePreview
-  onSetUploadedImages, // Changed from onImageUpload
-  onFileUpload,
-  uploadedTextFileName,
   isWebSearchEnabled,
   onWebSearchToggle,
   disabled,
@@ -24,34 +19,25 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
   onPersonaChange,
   onPersonaSave,
   onPersonaDelete,
+  userSession, // Added userSession for admin check
 }) => {
   const [showPersonaForm, setShowPersonaForm] = useState(false);
   const [editingPersona, setEditingPersona] = useState<Persona | null>(null);
   const [personaName, setPersonaName] = useState('');
   const [personaInstruction, setPersonaInstruction] = useState('');
 
+  const currentApiKeyStatus = apiKeyStatuses[selectedModel];
+  const isImagenModel = selectedModel === Model.IMAGEN3 || currentApiKeyStatus?.isImageGeneration;
+  const isTextToSpeechModel = selectedModel === Model.OPENAI_TTS || currentApiKeyStatus?.isTextToSpeech;
+  const isRealTimeTranslationModel = selectedModel === Model.REAL_TIME_TRANSLATION || currentApiKeyStatus?.isRealTimeTranslation;
+  const isAiAgentModel = selectedModel === Model.AI_AGENT || currentApiKeyStatus?.isAiAgent;
+  const isPrivateModel = selectedModel === Model.PRIVATE || currentApiKeyStatus?.isPrivateMode;
+  const isFluxKontexModel = selectedModel === Model.FLUX_KONTEX || currentApiKeyStatus?.isImageEditing;
 
-  const handleImageFilesChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files) {
-      const newFilesArray = Array.from(files);
-      const combinedFiles = [...uploadedImages, ...newFilesArray].slice(0, 4); // Limit to 4
-      onSetUploadedImages(combinedFiles);
-    }
-    event.target.value = ''; // Reset file input
-  };
-
-  const handleRemoveImage = (indexToRemove: number) => {
-    const newFiles = uploadedImages.filter((_, index) => index !== indexToRemove);
-    onSetUploadedImages(newFiles);
-  };
+  const showPersonaSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isPrivateModel && !isFluxKontexModel && selectedModel !== Model.CLAUDE;
+  const showChatModelSettingsSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isFluxKontexModel && !isPrivateModel && selectedModel !== Model.CLAUDE;
   
-  const handleTextFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    onFileUpload(file || null);
-    event.target.value = ''; 
-  };
-
+  // The entire attachments section is removed from here.
 
   const handlePersonaEdit = (persona: Persona) => {
     setEditingPersona(persona);
@@ -94,7 +80,6 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
 
 
   const models: Model[] = Object.values(Model) as Model[];
-  const currentApiKeyStatus = apiKeyStatuses[selectedModel];
   
   const isCurrentModelGeminiPlatformChat = currentApiKeyStatus?.isGeminiPlatform && 
                                          !currentApiKeyStatus?.isMock && 
@@ -104,20 +89,8 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
                                          !currentApiKeyStatus?.isAiAgent &&
                                          !currentApiKeyStatus?.isImageEditing;
 
-  const isImagenModel = selectedModel === Model.IMAGEN3 || currentApiKeyStatus?.isImageGeneration;
-  const isTextToSpeechModel = selectedModel === Model.OPENAI_TTS || currentApiKeyStatus?.isTextToSpeech;
-  const isRealTimeTranslationModel = selectedModel === Model.REAL_TIME_TRANSLATION || currentApiKeyStatus?.isRealTimeTranslation;
-  const isAiAgentModel = selectedModel === Model.AI_AGENT || currentApiKeyStatus?.isAiAgent; 
-  const isFluxKontexModel = selectedModel === Model.FLUX_KONTEX || currentApiKeyStatus?.isImageEditing;
-  const isPrivateModel = selectedModel === Model.PRIVATE || currentApiKeyStatus?.isPrivateMode;
-
-
   const actualModelId = getActualModelIdentifier(selectedModel);
   
-  const generalFileAcceptTypes = ".txt,.md,.json,.js,.ts,.jsx,.tsx,.py,.java,.c,.cpp,.h,.hpp,.cs,.go,.rs,.rb,.php,.html,.htm,.css,.scss,.less,.xml,.yaml,.yml,.ini,.sh,.bat,.ps1,.sql,.csv,.log,.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation";
-  const imageFileAcceptTypes = "image/jpeg, image/png, image/webp, image/gif, image/avif";
-
-
   const typedModelSettings = modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & FluxKontexSettings; 
 
   const imagenAspectRatios: { value: string; label: string }[] = [
@@ -152,7 +125,8 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
     const randomSeed = Math.floor(Math.random() * 1000000000); // Generate a large random integer
     onModelSettingsChange({ seed: randomSeed });
   };
-
+  
+  const isAdminUser = !userSession.isDemoUser && !userSession.isPaidUser;
 
   return (
     <div className="space-y-6 p-1">
@@ -175,46 +149,47 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
         </select>
       </div>
 
-      <div className="border-t border-secondary dark:border-neutral-darkest pt-4">
-        <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light mb-2 flex items-center">
-            <KeyIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" /> 
-            API Key Status
-        </h3>
-        {currentApiKeyStatus && (
-            <div className={`p-3 rounded-md text-sm ${
-                currentApiKeyStatus.isSet || currentApiKeyStatus.isMock 
-                    ? 'bg-green-100 dark:bg-green-900 border-green-500 dark:border-green-400 text-green-700 dark:text-green-300' 
-                    : 'bg-red-100 dark:bg-red-900 border-red-500 dark:border-red-400 text-red-700 dark:text-red-300'
-            } border`}>
-                <p className="font-medium">
-                    {currentApiKeyStatus.modelName} ({currentApiKeyStatus.isMock ? "Mock" : (currentApiKeyStatus.isTextToSpeech ? "TTS API" : (currentApiKeyStatus.isRealTimeTranslation ? "Translation API" : (currentApiKeyStatus.isAiAgent ? "AI Agent API" : (currentApiKeyStatus.isImageEditing ? "Image Editing API" : (currentApiKeyStatus.isPrivateMode ? "Local Mode" : "Live API Key")))))})
-                </p>
-                <p>Env Variable: <code>process.env.{currentApiKeyStatus.envVarName}</code></p>
-                {currentApiKeyStatus.isSet ? (
-                    <p>Key detected in environment.</p>
-                ) : (
-                    currentApiKeyStatus.isMock || currentApiKeyStatus.isPrivateMode ? 
-                    <p>Key NOT detected, but this is a mock/local model and will function.</p> :
-                    <p>Key NOT detected in environment.</p>
-                )}
-                {!currentApiKeyStatus.isSet && !currentApiKeyStatus.isMock && !currentApiKeyStatus.isPrivateMode && (
-                    <p className="mt-1 font-semibold">This model will not function without the API key (<code>process.env.{currentApiKeyStatus.envVarName}</code>).</p>
-                )}
-                 {currentApiKeyStatus.isGeminiPlatform && (
-                    <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
-                        This model uses the Google AI Studio API Key (<code>GEMINI_API_KEY</code> on proxy).
-                    </p>
-                 )}
-                 <p className="mt-2 text-xs text-neutral-600 dark:text-neutral-400">
-                    <InformationCircleIcon className="w-4 h-4 inline mr-1" />
-                    API keys are configured on the backend proxy server (<code>proxy-server/.env</code>).
-                </p>
-            </div>
-        )}
-      </div>
+      {isAdminUser && (
+        <div className="border-t border-secondary dark:border-neutral-darkest pt-4">
+          <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light mb-2 flex items-center">
+              <KeyIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" /> 
+              API Key Status
+          </h3>
+          {currentApiKeyStatus && (
+              <div className={`p-3 rounded-md text-sm ${
+                  currentApiKeyStatus.isSet || currentApiKeyStatus.isMock 
+                      ? 'bg-green-100 dark:bg-green-900 border-green-500 dark:border-green-400 text-green-700 dark:text-green-300' 
+                      : 'bg-red-100 dark:bg-red-900 border-red-500 dark:border-red-400 text-red-700 dark:text-red-300'
+              } border`}>
+                  <p className="font-medium">
+                      {currentApiKeyStatus.modelName} ({currentApiKeyStatus.isMock ? "Mock" : (currentApiKeyStatus.isTextToSpeech ? "TTS API" : (currentApiKeyStatus.isRealTimeTranslation ? "Translation API" : (currentApiKeyStatus.isAiAgent ? "AI Agent API" : (currentApiKeyStatus.isImageEditing ? "Image Editing API" : (currentApiKeyStatus.isPrivateMode ? "Local Mode" : "Live API Key")))))})
+                  </p>
+                  <p>Env Variable: <code>process.env.{currentApiKeyStatus.envVarName}</code></p>
+                  {currentApiKeyStatus.isSet ? (
+                      <p>Key detected in environment.</p>
+                  ) : (
+                      currentApiKeyStatus.isMock || currentApiKeyStatus.isPrivateMode ? 
+                      <p>Key NOT detected, but this is a mock/local model and will function.</p> :
+                      <p>Key NOT detected in environment.</p>
+                  )}
+                  {!currentApiKeyStatus.isSet && !currentApiKeyStatus.isMock && !currentApiKeyStatus.isPrivateMode && (
+                      <p className="mt-1 font-semibold">This model will not function without the API key (<code>process.env.{currentApiKeyStatus.envVarName}</code>).</p>
+                  )}
+                  {currentApiKeyStatus.isGeminiPlatform && (
+                      <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
+                          This model uses the Google AI Studio API Key (<code>GEMINI_API_KEY</code> on proxy).
+                      </p>
+                  )}
+                  <p className="mt-2 text-xs text-neutral-600 dark:text-neutral-400">
+                      <InformationCircleIcon className="w-4 h-4 inline mr-1" />
+                      API keys are configured on the backend proxy server (<code>proxy-server/.env</code>).
+                  </p>
+              </div>
+          )}
+        </div>
+      )}
 
-      {/* Persona Management Section - Hidden for Imagen, TTS, Real-Time Translation, AI Agent, Private Mode, Flux Kontex */}
-      {!isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isPrivateModel && !isFluxKontexModel && (
+      {showPersonaSection && (
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
           <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light mb-2 flex items-center">
             <UserCircleIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" />
@@ -298,9 +273,7 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
         </div>
       )}
 
-
-      {/* Chat Model Settings - Hidden for Imagen, TTS, Real-Time Translation, Flux Kontext, Private Mode. AI Agent has its own section. */}
-      {!isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isFluxKontexModel && !isPrivateModel && ( 
+      {showChatModelSettingsSection && ( 
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
           <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light">Model Settings (Chat)</h3>
           <div>
@@ -370,11 +343,10 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
         </div>
       )}
 
-      {/* AI Agent Settings - Uses standard model settings but gets its own section for clarity */}
       {isAiAgentModel && (
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
           <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
-              <UserCircleIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" /> {/* Reusing Persona icon as a generic AI/Agent icon */}
+              <UserCircleIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" />
               AI Agent Settings
           </h3>
           <p className="text-xs text-neutral-500 dark:text-neutral-400">
@@ -444,11 +416,10 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
         </div>
       )}
       
-      {/* Private Mode Settings */}
       {isPrivateModel && (
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
             <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
-              <UserCircleIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" /> {/* Reusing Persona icon */}
+              <UserCircleIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" />
               Private Mode Information
             </h3>
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
@@ -470,8 +441,6 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
         </div>
       )}
 
-
-      {/* Imagen Settings */}
       {isImagenModel && (
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
             <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
@@ -528,7 +497,6 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
         </div>
       )}
 
-      {/* OpenAI TTS Settings */}
       {isTextToSpeechModel && (
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
             <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
@@ -585,7 +553,6 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
         </div>
       )}
 
-      {/* Real-Time Translation Settings */}
       {isRealTimeTranslationModel && (
          <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
             <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
@@ -613,7 +580,6 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
         </div>
       )}
 
-      {/* Flux Kontext Settings */}
       {isFluxKontexModel && (
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
           <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
@@ -721,8 +687,6 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
         </div>
       )}
 
-
-      {/* Web Search Toggle - Only for compatible models */}
       {isCurrentModelGeminiPlatformChat && (
         <div className="border-t border-secondary dark:border-neutral-darkest pt-4">
           <div className="flex items-center justify-between">
@@ -748,101 +712,6 @@ const SettingsPanel: React.FC<LocalSettingsPanelProps> = ({
            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
                 Enable to allow the AI to search the web for up-to-date information. (Only for Gemini models)
             </p>
-        </div>
-      )}
-
-      {/* File Upload Section - Hidden for TTS, RTTM, and Imagen. Specific behavior for AI Agent, Private Mode, Flux Kontex */}
-      { !isTextToSpeechModel && !isRealTimeTranslationModel && !isImagenModel && (
-        <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
-          <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light">Attachments</h3>
-          
-          {/* Image Upload - Conditional based on model type */}
-           <div>
-            <label htmlFor="image-upload" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              {isFluxKontexModel ? "Upload Image(s) to Edit*" : "Upload Image(s)"}
-            </label>
-            <div className="mt-1">
-              <input
-                type="file"
-                id="image-upload"
-                accept={imageFileAcceptTypes}
-                multiple // Allow multiple files
-                onChange={handleImageFilesChange}
-                className="hidden"
-                disabled={disabled}
-              />
-              <button
-                onClick={() => document.getElementById('image-upload')?.click()}
-                disabled={disabled || uploadedImages.length >= 4}
-                className="px-4 py-2 border border-secondary dark:border-neutral-darkest rounded-md text-sm font-medium text-neutral-darker dark:text-secondary-light hover:bg-secondary/50 dark:hover:bg-neutral-dark/50 flex items-center disabled:opacity-50"
-              >
-                <PhotoIcon className="w-5 h-5 mr-2" /> Choose Image(s) (Max 4)
-              </button>
-              {uploadedImages.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {imagePreviews.map((previewUrl, index) => (
-                    <div key={index} className="relative group w-16 h-16 sm:w-20 sm:h-20">
-                      <img src={previewUrl} alt={`Preview ${index + 1}`} className="w-full h-full object-cover rounded-md border border-secondary dark:border-neutral-darkest" />
-                      <button
-                        onClick={() => handleRemoveImage(index)}
-                        className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-xs"
-                        aria-label={`Remove image ${index + 1}`}
-                      >
-                        <XMarkIcon className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-             {isFluxKontexModel ? (
-                 <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                    Hint: you can drag and drop file(s) here, or provide a base64 encoded data URL Accepted file types: jpg, jpeg, png, webp, gif, avif
-                    <br/>* Image upload is required for Flux Kontext model. The first uploaded image will be used for editing.
-                </p>
-             ) : (
-                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                   Accepted file types: {imageFileAcceptTypes.split(', ').join(', ')}
-                </p>
-             )}
-          </div>
-
-          {/* General File Upload (for standard chat, AI Agent, Private Mode) - Hidden for Imagen, Flux Kontex */}
-          {!isFluxKontexModel && (
-            <div>
-              <label htmlFor="file-upload" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-                Upload File (Text, PDF, etc.)
-              </label>
-              <div className="mt-1 flex items-center space-x-2">
-                <input
-                  type="file"
-                  id="file-upload"
-                  accept={generalFileAcceptTypes}
-                  onChange={handleTextFileChange}
-                  className="hidden"
-                  disabled={disabled}
-                />
-                <button
-                  onClick={() => document.getElementById('file-upload')?.click()}
-                  disabled={disabled}
-                  className="px-4 py-2 border border-secondary dark:border-neutral-darkest rounded-md text-sm font-medium text-neutral-darker dark:text-secondary-light hover:bg-secondary/50 dark:hover:bg-neutral-dark/50 flex items-center"
-                >
-                  <ArrowUpTrayIcon className="w-5 h-5 mr-2" /> Choose File
-                </button>
-                {uploadedTextFileName && (
-                  <div className="text-sm text-neutral-500 dark:text-neutral-400 flex items-center">
-                    <span className="truncate max-w-[100px] sm:max-w-[150px]" title={uploadedTextFileName}>{uploadedTextFileName}</span>
-                    <button onClick={() => onFileUpload(null)} className="ml-1 text-red-500 hover:text-red-700" aria-label="Remove file">
-                      <XMarkIcon className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-              </div>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                AI Agent will receive text content directly. Other models may only get filename.
-              </p>
-            </div>
-          )}
         </div>
       )}
     </div>
