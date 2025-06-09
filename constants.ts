@@ -1,7 +1,7 @@
 
 
 
-import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank, AiAgentSettings, CreditPackage, PrivateModeSettings, FluxKontexSettings, FluxKontexAspectRatio } from './types.ts'; // Update to .ts
+import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank, AiAgentSettings, CreditPackage, PrivateModeSettings, FluxKontexSettings, FluxKontexAspectRatio, DemoUserLimits, PaidUserLimits } from './types.ts'; // Update to .ts, Add DemoUserLimits, PaidUserLimits
 
 export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
   temperature: 0.7,
@@ -117,7 +117,37 @@ export const LOCAL_STORAGE_DEVICE_LOGS_KEY = 'femiAiDeviceLogs';
 export const MAX_DEVICE_LOGS = 5;
 export const LOCAL_STORAGE_CHAT_BACKGROUND_KEY = 'femiAiChatBackgroundUrl';
 export const MAX_SAVED_CHAT_SESSIONS = 10; // Max number of chat sessions to store
-export const OPENAI_TTS_MAX_INPUT_LENGTH = 20000; // Max character limit for OpenAI TTS service
+
+
+// DEMO MODE CONSTANTS
+export const DEMO_USER_KEY = "DEMO"; // This is used as the actual login code for demo
+
+export const DEMO_LIMITS_CONFIG = {
+  FLUX_KONTEX_MAX_USES_PER_DAY: 2,
+  IMAGEN3_MAX_IMAGES_PER_DAY: 10,
+  OPENAI_TTS_MAX_CHARS_TOTAL: 5000,
+};
+
+export const INITIAL_DEMO_USER_LIMITS: DemoUserLimits = {
+  fluxKontextUsesLeft: DEMO_LIMITS_CONFIG.FLUX_KONTEX_MAX_USES_PER_DAY,
+  fluxKontextMaxUses: DEMO_LIMITS_CONFIG.FLUX_KONTEX_MAX_USES_PER_DAY,
+  imagen3ImagesLeft: DEMO_LIMITS_CONFIG.IMAGEN3_MAX_IMAGES_PER_DAY,
+  imagen3MaxImages: DEMO_LIMITS_CONFIG.IMAGEN3_MAX_IMAGES_PER_DAY,
+  openaiTtsCharsLeft: DEMO_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL,
+  openaiTtsMaxChars: DEMO_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL,
+};
+
+// PAID USER CONSTANTS
+export const PAID_USER_LIMITS_CONFIG: PaidUserLimits = {
+  fluxKontextUsesLeft: 0, // This will be set by server or defaults to max
+  fluxKontextMaxUses: 15,
+  imagen3ImagesLeft: 0, // This will be set by server or defaults to max
+  imagen3MaxImages: 50,
+  openaiTtsCharsLeft: 0, // This will be set by server or defaults to max
+  openaiTtsMaxChars: 20000,
+};
+// Used by frontend to check input length before sending
+export const OPENAI_TTS_MAX_INPUT_LENGTH = PAID_USER_LIMITS_CONFIG.openaiTtsMaxChars;
 
 
 // Language Learning Constants

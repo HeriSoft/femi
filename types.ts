@@ -151,14 +151,6 @@ export interface SettingsPanelProps {
   onModelChange: (model: Model) => void;
   modelSettings: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings> & Partial<FluxKontexSettings>; 
   onModelSettingsChange: (settings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings & FluxKontexSettings>) => void;
-  
-  uploadedImages: File[]; // Changed from onImageUpload / imagePreview to handle multiple
-  imagePreviews: string[];  // Previews for the uploaded images
-  onSetUploadedImages: (files: File[]) => void; // Callback to update the list of uploaded images
-
-  onFileUpload: (file: File | null) => void; // Handles general files including text and video
-  uploadedTextFileName: string | null; // For text files or generic files
-  uploadedVideoFileName?: string | null; // Specific for video files (optional chaining for safety)
   isWebSearchEnabled: boolean;
   onWebSearchToggle: (enabled: boolean) => void;
   disabled?: boolean;
@@ -168,6 +160,7 @@ export interface SettingsPanelProps {
   onPersonaChange: (personaId: string | null) => void;
   onPersonaSave: (persona: Persona) => void;
   onPersonaDelete: (personaId: string) => void;
+  userSession: UserSessionState; // Added for demo mode
 }
 
 export const getActualModelIdentifier = (modelEnumString: string): string => {
@@ -488,11 +481,55 @@ export interface HandwritingCanvasProps {
   disabled?: boolean;
 }
 
-// VideoModalProps removed as VideoModal.tsx was deleted
-// export interface VideoModalProps {
-//   isOpen: boolean;
-//   onClose: () => void;
-//   videoSrc: string | null;
-//   title?: string;
-//   mimeType?: string;
-// }
+// DEMO & PAID USER TYPES
+export interface FeatureLimits {
+  fluxKontextUsesLeft: number;
+  fluxKontextMaxUses: number;
+  imagen3ImagesLeft: number;
+  imagen3MaxImages: number;
+  openaiTtsCharsLeft: number;
+  openaiTtsMaxChars: number;
+}
+export type DemoUserLimits = FeatureLimits; // DemoUserLimits is a specific instance of FeatureLimits
+export type PaidUserLimits = FeatureLimits; // PaidUserLimits is also a specific instance
+
+export interface BaseLoginResponse {
+  success: boolean;
+  message?: string;
+  isBlocked?: boolean; // For VPN blocking, can apply to any login type
+}
+
+export interface DemoLoginResponse extends BaseLoginResponse {
+  demoUserToken?: string;
+  limits?: DemoUserLimits;
+  cooldownActive?: boolean;
+  tryAgainAfter?: string; // ISO date string
+}
+
+export interface PaidLoginResponse extends BaseLoginResponse {
+  isPaidUser: true;
+  username: string;
+  paidUserToken?: string; // Might be used in future for session management
+  subscriptionEndDate?: string; // ISO date string
+  limits: PaidUserLimits; 
+}
+
+export interface AdminLoginResponse extends BaseLoginResponse {
+  isAdmin: true;
+}
+
+export type LoginResponseType = DemoLoginResponse | PaidLoginResponse | AdminLoginResponse;
+
+
+export interface UserSessionState {
+  isDemoUser: boolean;
+  demoUserToken: string | null;
+  demoLimits: DemoUserLimits | null;
+  isDemoBlockedByVpn: boolean; // From initial demo login check
+
+  isPaidUser?: boolean; // New: true if logged in as a paid user
+  paidUsername?: string; // New: username of the paid user
+  paidUserToken?: string | null; // New: token for paid user session
+  paidSubscriptionEndDate?: string | null; // New: ISO date string
+  paidLimits?: PaidUserLimits | null; // New: limits for paid user
+}
