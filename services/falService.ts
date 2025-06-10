@@ -1,13 +1,16 @@
 
-import { FluxKontexSettings } from '../types.ts';
+import { FluxKontexSettings, EditImageWithFluxKontexParams as ClientEditImageWithFluxKontexParams, SingleImageData, MultiImageData } from '../types.ts';
 
 // Matches the parameters expected by the updated proxy endpoint
-export interface EditImageWithFluxKontexParams {
-  image_base_64: string; // Changed from imageBase64 to image_base_64
-  imageMimeType: 'image/jpeg' | 'image/png'; 
-  prompt: string;
-  settings: FluxKontexSettings; 
-}
+// This interface is now defined in types.ts as EditImageWithFluxKontexParams
+// For clarity, let's ensure client-side usage matches what's in types.ts.
+// export interface EditImageWithFluxKontexParams { // This definition is now in types.ts
+//   modelIdentifier: string;
+//   prompt: string;
+//   settings: FluxKontexSettings;
+//   imageData: SingleImageData | MultiImageData; // Use the union type
+// }
+
 
 // Updated response type for the initial submission from the proxy
 export interface FluxKontexSubmitProxyResponse {
@@ -27,9 +30,32 @@ export interface FluxKontexStatusProxyResponse {
 
 
 export async function editImageWithFluxKontexProxy(
-  params: EditImageWithFluxKontexParams
+  params: ClientEditImageWithFluxKontexParams // Use the type from types.ts
 ): Promise<FluxKontexSubmitProxyResponse> {
-  const { image_base_64, imageMimeType, prompt, settings } = params; 
+  const { modelIdentifier, prompt, settings, imageData } = params; 
+
+  let bodyPayload: any = {
+    modelIdentifier,
+    prompt,
+    guidance_scale: settings.guidance_scale,
+    safety_tolerance: settings.safety_tolerance,
+    num_inference_steps: settings.num_inference_steps,
+    seed: settings.seed,
+    num_images: settings.num_images,
+    output_format: settings.output_format,
+  };
+
+  if (settings.aspect_ratio && settings.aspect_ratio !== 'default') {
+    bodyPayload.aspect_ratio = settings.aspect_ratio;
+  }
+  // If settings.aspect_ratio is 'default' or undefined, it's omitted from the payload.
+
+  if ('images_data' in imageData) { // Check if it's MultiImageData
+    bodyPayload.images_data = imageData.images_data;
+  } else { // It's SingleImageData
+    bodyPayload.image_base_64 = imageData.image_base_64;
+    bodyPayload.image_mime_type = imageData.image_mime_type;
+  }
 
   try {
     const response = await fetch('/api/fal/image/edit/flux-kontext', {
@@ -37,17 +63,7 @@ export async function editImageWithFluxKontexProxy(
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        image_base_64: image_base_64,
-        image_mime_type: imageMimeType,
-        prompt: prompt,
-        guidance_scale: settings.guidance_scale,
-        safety_tolerance: settings.safety_tolerance,
-        num_inference_steps: settings.num_inference_steps,
-        seed: settings.seed,
-        num_images: settings.num_images,
-        aspect_ratio: settings.aspect_ratio,
-      }),
+      body: JSON.stringify(bodyPayload),
     });
 
     const data: FluxKontexSubmitProxyResponse = await response.json();
@@ -59,7 +75,6 @@ export async function editImageWithFluxKontexProxy(
     if (data.requestId) {
       return { requestId: data.requestId, message: data.message };
     } else {
-      // This case should ideally be handled by the proxy returning an error if requestId is missing
       return { error: data.error || "Fal.ai Flux Kontext proxy did not return a requestId." };
     }
 
@@ -70,13 +85,14 @@ export async function editImageWithFluxKontexProxy(
 }
 
 export async function checkFluxKontexStatusProxy(
-  requestId: string
+  requestId: string,
+  modelIdentifier: string // Added modelIdentifier
 ): Promise<FluxKontexStatusProxyResponse> {
   try {
     const response = await fetch('/api/fal/image/edit/status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requestId }),
+      body: JSON.stringify({ requestId, modelIdentifier }), // Send modelIdentifier
     });
     
     const data: FluxKontexStatusProxyResponse = await response.json();
