@@ -1,6 +1,5 @@
 
 
-
 import { Chat } from '@google/genai'; // Updated import
 import React from 'react'; // Added for React.DetailedHTMLProps
 
@@ -16,7 +15,8 @@ export enum Model {
   REAL_TIME_TRANSLATION = 'Real-Time Translation (Gemini)', // New Real-Time Translation Model
   AI_AGENT = 'AI Agent (gemini-2.5-flash-preview-04-17)', // Renamed from AI_TASK_ORCHESTRATOR and updated model ID
   PRIVATE = 'Private (Local Data Storage)', // New Private Mode
-  FLUX_KONTEX = 'Flux Kontext (fal-ai/flux-pro/kontext)', // New Image Editing Model, updated "Kontex" to "Kontext"
+  FLUX_KONTEX = 'Flux Kontext (fal-ai/flux-pro/kontext)', 
+  FLUX_KONTEX_MAX_MULTI = 'Flux Kontext Max (fal-ai/flux-pro/kontext/max/multi)', // New: Advanced multi-image editing
 }
 
 export interface ChatMessage {
@@ -25,9 +25,10 @@ export interface ChatMessage {
   sender: 'user' | 'ai';
   timestamp: number; // Added to store the time of message creation
   model?: Model;
-  imagePreview?: string; // For user messages with a single image (upload)
-  imagePreviews?: string[]; // For AI generated/edited images (can be multiple for Imagen, single for Flux)
-  imageMimeType?: 'image/jpeg' | 'image/png'; // For AI generated images
+  imagePreview?: string; // For user messages with a single image (upload) - (e.g. Gemini, GPT-4)
+  imagePreviews?: string[]; // For AI generated/edited images OR for multi-image user uploads (Flux Max)
+  imageMimeType?: 'image/jpeg' | 'image/png'; // For AI generated images (single)
+  imageMimeTypes?: string[]; // For multi-image user uploads (Flux Max), corresponds to imagePreviews
   originalPrompt?: string; // For AI generated/edited images, to store the original user prompt
   fileName?: string; // For user messages with files
   fileContent?: string; // For storing text file content
@@ -47,6 +48,7 @@ export interface ChatMessage {
   isNote?: boolean; // For private mode text-only entries
   // Field for Flux Kontex polling
   fluxRequestId?: string; // Stores the request ID for polling Flux Kontex results
+  fluxModelId?: string; // Stores the Fal model ID used for this request (e.g. standard or max/multi)
 }
 
 export interface GroundingSource {
@@ -87,7 +89,9 @@ export interface PrivateModeSettings extends Pick<ModelSettings, 'systemInstruct
     // Private mode doesn't use temperature, topK, topP for generation
 }
 
-export type FluxKontexAspectRatio = 'Original' | '1:1' | '16:9' | '9:16' | '3:4' | '2:3' | '9:21' | '21:9';
+// Updated FluxKontexAspectRatio to match Fal.ai permitted values and include 'default'
+export type FluxKontexAspectRatio = 'default' | '1:1' | '16:9' | '9:16' | '4:3' | '3:2' | '2:3' | '3:4' | '9:21' | '21:9';
+
 
 export interface FluxKontexSettings {
   guidance_scale: number; 
@@ -95,7 +99,9 @@ export interface FluxKontexSettings {
   num_inference_steps?: number; 
   seed?: number | null; 
   num_images?: number; 
-  aspect_ratio?: FluxKontexAspectRatio;
+  aspect_ratio?: FluxKontexAspectRatio; // Type updated
+  output_format?: 'jpeg' | 'png'; 
+  // image_urls field is handled by the proxy when using Fal.ai JS client; client sends base64
 }
 
 
@@ -137,7 +143,8 @@ export interface ApiKeyStatus {
   isRealTimeTranslation?: boolean; // Flag for real-time translation model
   isAiAgent?: boolean; // Flag for AI Agent model (renamed from isTaskOrchestrator)
   isPrivateMode?: boolean; // Flag for Private (Local Data Storage) mode
-  isImageEditing?: boolean; // Flag for image editing models like Flux Kontex
+  isImageEditing?: boolean; // Flag for image editing models like Flux Kontex (single image)
+  isMultiImageEditing?: boolean; // Flag for multi-image editing models like Flux Kontext Max
 }
 
 export interface Persona {
@@ -532,4 +539,22 @@ export interface UserSessionState {
   paidUserToken?: string | null; // New: token for paid user session
   paidSubscriptionEndDate?: string | null; // New: ISO date string
   paidLimits?: PaidUserLimits | null; // New: limits for paid user
+}
+// --- Fal.ai Service Parameter Types ---
+export interface SingleImageData {
+  image_base_64: string;
+  image_mime_type: 'image/jpeg' | 'image/png';
+}
+
+export interface MultiImageData {
+  images_data: Array<{ base64: string; mimeType: string }>;
+}
+
+export type FluxKontexImageData = SingleImageData | MultiImageData;
+
+export interface EditImageWithFluxKontexParams {
+  modelIdentifier: string; // e.g., 'fal-ai/flux-pro/kontext' or 'fal-ai/flux-pro/kontext/max/multi'
+  prompt: string;
+  settings: FluxKontexSettings;
+  imageData: FluxKontexImageData;
 }

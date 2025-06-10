@@ -63,7 +63,8 @@ export const DEFAULT_FLUX_KONTEX_SETTINGS: FluxKontexSettings = {
   num_inference_steps: 30,
   seed: null, // Represents random
   num_images: 1,
-  aspect_ratio: 'Original',
+  aspect_ratio: 'default', // Changed to 'default'
+  output_format: 'jpeg', 
 };
 
 
@@ -102,9 +103,15 @@ export const ALL_MODEL_DEFAULT_SETTINGS: AllModelSettings = {
   [Model.AI_AGENT]: { ...DEFAULT_AI_AGENT_SETTINGS },
   [Model.PRIVATE]: { ...DEFAULT_PRIVATE_MODE_SETTINGS },
   [Model.FLUX_KONTEX]: {
-    ...DEFAULT_MODEL_SETTINGS, // Basic settings, mostly unused for image editing models like this
-    ...DEFAULT_FLUX_KONTEX_SETTINGS,
-    systemInstruction: 'Image editing context.', // Placeholder
+    ...DEFAULT_MODEL_SETTINGS, 
+    ...DEFAULT_FLUX_KONTEX_SETTINGS, 
+    systemInstruction: 'Image editing context.', 
+  },
+  [Model.FLUX_KONTEX_MAX_MULTI]: {
+    ...DEFAULT_MODEL_SETTINGS,
+    ...DEFAULT_FLUX_KONTEX_SETTINGS, 
+    num_images: 2, // Default to 2 for multi-image editing, user can adjust in UI
+    systemInstruction: 'Advanced multi-image editing context using Fal.ai Flux Pro Kontext Max Multi.',
   },
 };
  
