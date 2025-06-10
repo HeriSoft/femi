@@ -32,7 +32,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const isRealTimeTranslationModel = selectedModel === Model.REAL_TIME_TRANSLATION || currentApiKeyStatus?.isRealTimeTranslation;
   const isAiAgentModel = selectedModel === Model.AI_AGENT || currentApiKeyStatus?.isAiAgent;
   const isPrivateModel = selectedModel === Model.PRIVATE || currentApiKeyStatus?.isPrivateMode;
-  const isFluxKontexModel = selectedModel === Model.FLUX_KONTEX || currentApiKeyStatus?.isImageEditing;
+  const isFluxKontexModel = selectedModel === Model.FLUX_KONTEX || selectedModel === Model.FLUX_KONTEX_MAX_MULTI;
 
   const showPersonaSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isPrivateModel && !isFluxKontexModel && selectedModel !== Model.CLAUDE;
   const showChatModelSettingsSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isFluxKontexModel && !isPrivateModel && selectedModel !== Model.CLAUDE;
@@ -87,7 +87,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                          !currentApiKeyStatus?.isTextToSpeech &&
                                          !currentApiKeyStatus?.isRealTimeTranslation &&
                                          !currentApiKeyStatus?.isAiAgent &&
-                                         !currentApiKeyStatus?.isImageEditing;
+                                         !currentApiKeyStatus?.isImageEditing &&
+                                         !currentApiKeyStatus?.isMultiImageEditing;
+
 
   const actualModelId = getActualModelIdentifier(selectedModel);
   
@@ -102,12 +104,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   ];
 
   const fluxKontexAspectRatios: { value: FluxKontexAspectRatio; label: string }[] = [
-    { value: 'Original', label: 'Original (Match Input)'},
+    { value: 'default', label: 'Default (Model Specified)' },
     { value: '1:1', label: '1:1 (Square)' },
     { value: '16:9', label: '16:9 (Landscape)' },
     { value: '9:16', label: '9:16 (Portrait)' },
+    { value: '4:3', label: '4:3 (Standard)' },
+    { value: '3:2', label: '3:2 (Classic Photo)' },
+    { value: '2:3', label: '2:3 (Portrait Photo)' },
     { value: '3:4', label: '3:4 (Tall)' },
-    { value: '2:3', label: '2:3 (Portrait)' },
     { value: '9:21', label: '9:21 (Extra Tall)' },
     { value: '21:9', label: '21:9 (Extra Wide)' },
   ];
@@ -162,7 +166,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                       : 'bg-red-100 dark:bg-red-900 border-red-500 dark:border-red-400 text-red-700 dark:text-red-300'
               } border`}>
                   <p className="font-medium">
-                      {currentApiKeyStatus.modelName} ({currentApiKeyStatus.isMock ? "Mock" : (currentApiKeyStatus.isTextToSpeech ? "TTS API" : (currentApiKeyStatus.isRealTimeTranslation ? "Translation API" : (currentApiKeyStatus.isAiAgent ? "AI Agent API" : (currentApiKeyStatus.isImageEditing ? "Image Editing API" : (currentApiKeyStatus.isPrivateMode ? "Local Mode" : "Live API Key")))))})
+                      {currentApiKeyStatus.modelName} ({currentApiKeyStatus.isMock ? "Mock" : (currentApiKeyStatus.isTextToSpeech ? "TTS API" : (currentApiKeyStatus.isRealTimeTranslation ? "Translation API" : (currentApiKeyStatus.isAiAgent ? "AI Agent API" : (currentApiKeyStatus.isImageEditing || currentApiKeyStatus.isMultiImageEditing ? "Image Editing API" : (currentApiKeyStatus.isPrivateMode ? "Local Mode" : "Live API Key")))))})
                   </p>
                   <p>Env Variable: <code>process.env.{currentApiKeyStatus.envVarName}</code></p>
                   {currentApiKeyStatus.isSet ? (
@@ -306,7 +310,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
             />
           </div>
-          { (currentApiKeyStatus?.isGeminiPlatform && !currentApiKeyStatus.isImageGeneration && !currentApiKeyStatus.isImageEditing && !currentApiKeyStatus.isPrivateMode) && ( 
+          { (currentApiKeyStatus?.isGeminiPlatform && !currentApiKeyStatus.isImageGeneration && !currentApiKeyStatus.isImageEditing && !currentApiKeyStatus.isPrivateMode && !currentApiKeyStatus.isMultiImageEditing) && ( 
           <div>
             <label htmlFor="top-k" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
               Top K: {typedModelSettings.topK}
@@ -587,6 +591,19 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             Flux Kontext Settings
           </h3>
           <div>
+            <label htmlFor="flux-output-format" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Output Format</label>
+            <select 
+                id="flux-output-format"
+                value={typedModelSettings.output_format || DEFAULT_FLUX_KONTEX_SETTINGS.output_format}
+                onChange={(e) => onModelSettingsChange({ output_format: e.target.value as 'jpeg' | 'png' })}
+                disabled={disabled}
+                className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
+            >
+                <option value="jpeg">JPEG</option>
+                <option value="png">PNG</option>
+            </select>
+          </div>
+          <div>
             <label htmlFor="flux-safety-tolerance" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
               Safety Tolerance: {typedModelSettings.safety_tolerance ?? DEFAULT_FLUX_KONTEX_SETTINGS.safety_tolerance}
             </label>
@@ -682,7 +699,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           </div>
           <div className="mt-2 p-3 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-sm text-blue-700 dark:text-blue-300">
             <InformationCircleIcon className="w-5 h-5 inline mr-1.5 align-text-bottom" />
-            Upload an image and provide a prompt to describe the desired edits.
+            Upload an image (or multiple for Flux Max) and provide a prompt to describe the desired edits.
           </div>
         </div>
       )}
