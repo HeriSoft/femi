@@ -81,11 +81,16 @@ const DEMO_LIMITS_CONFIG_PROXY = {
   IMAGEN3_MAX_IMAGES_SESSION: 10, 
   OPENAI_TTS_MAX_CHARS_TOTAL: 5000,
 };
-const PAID_USER_LIMITS = {
-  FLUX_KONTEX_MAX_USES_PER_DAY: 15,
-  IMAGEN3_MAX_IMAGES_PER_DAY: 50,
-  OPENAI_TTS_MAX_CHARS_TOTAL: 20000,
+
+// --- PAID USER LIMITS ---
+const PAID_USER_MAX_LIMITS_CONFIG = { // Renamed for clarity
+  IMAGEN3_MAX_IMAGES_PER_DAY: 50, // Daily limit for Imagen
+  OPENAI_TTS_MAX_CHARS_TOTAL: 20000, // Per use/session limit for TTS
+  FLUX_KONTEX_MAX_MONTHLY_MAX_USES: 40, // Monthly limit for Flux Max
+  FLUX_KONTEX_PRO_MONTHLY_MAX_USES: 50,  // Monthly limit for Flux Pro
 };
+
+const paidUserFluxMonthlyUsageStore = {}; // { [username]: { [yearMonth]: { fluxMaxUsed: number, fluxProUsed: number } } }
 
 const demoUserUsageStore = {};
 const DEMO_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000;
@@ -99,6 +104,13 @@ function getClientIp(req) {
   return req.connection?.remoteAddress || req.socket?.remoteAddress || req.ip;
 }
 function getTodaysDateString() { return new Date().toISOString().split('T')[0]; }
+function getCurrentYearMonth() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = (now.getMonth() + 1).toString().padStart(2, '0'); // getMonth() is 0-indexed
+    return `${year}-${month}`;
+}
+
 
 function manageDemoUserData(ip) {
   const today = getTodaysDateString();
@@ -140,7 +152,7 @@ function manageDemoUserData(ip) {
 }
 
 async function paidUserAuthMiddleware(req, res, next) {
-    const paidUserToken = req.headers['x-paid-user-token'];
+    const paidUserToken = req.headers['x-paid-user-token']; // Username is used as token here
     if (paidUserToken) {
         try {
             if (!pool) throw new Error("Database not available for paid user auth.");
@@ -158,6 +170,18 @@ async function paidUserAuthMiddleware(req, res, next) {
                         isPaidUser: true,
                         subscriptionEndDate: subscriptions[0].end_date
                     };
+
+                    // Initialize/Load monthly Flux usage for this paid user
+                    const yearMonth = getCurrentYearMonth();
+                    if (!paidUserFluxMonthlyUsageStore[user.username]) {
+                        paidUserFluxMonthlyUsageStore[user.username] = {};
+                    }
+                    if (!paidUserFluxMonthlyUsageStore[user.username][yearMonth]) {
+                        paidUserFluxMonthlyUsageStore[user.username][yearMonth] = { fluxMaxUsed: 0, fluxProUsed: 0 };
+                        console.log(`[PaidUserAuth] Initialized monthly Flux usage for ${user.username} for ${yearMonth}.`);
+                    }
+                    req.paidUser.fluxMaxMonthlyUsed = paidUserFluxMonthlyUsageStore[user.username][yearMonth].fluxMaxUsed;
+                    req.paidUser.fluxProMonthlyUsed = paidUserFluxMonthlyUsageStore[user.username][yearMonth].fluxProUsed;
                 }
             }
         } catch (dbError) {
@@ -191,12 +215,31 @@ app.post('/api/auth/verify-code', async (req, res) => {
             if (subscriptions.length > 0) {
                 const subEndDate = new Date(subscriptions[0].end_date);
                 console.log(`[Paid Login] User ${user.username} has active subscription until ${subEndDate.toISOString()}.`);
+                
+                const yearMonth = getCurrentYearMonth();
+                if (!paidUserFluxMonthlyUsageStore[user.username]) {
+                    paidUserFluxMonthlyUsageStore[user.username] = {};
+                }
+                if (!paidUserFluxMonthlyUsageStore[user.username][yearMonth]) {
+                    paidUserFluxMonthlyUsageStore[user.username][yearMonth] = { fluxMaxUsed: 0, fluxProUsed: 0 };
+                }
+                const userMonthlyUsage = paidUserFluxMonthlyUsageStore[user.username][yearMonth];
+
                 return res.json({
                     success: true,
                     isPaidUser: true,
                     username: user.username,
                     subscriptionEndDate: subEndDate.toISOString(),
-                    limits: PAID_USER_LIMITS
+                    limits: {
+                        imagen3ImagesLeft: PAID_USER_MAX_LIMITS_CONFIG.IMAGEN3_MAX_IMAGES_PER_DAY, // Assuming daily limits for Imagen are generous or managed differently
+                        imagen3MaxImages: PAID_USER_MAX_LIMITS_CONFIG.IMAGEN3_MAX_IMAGES_PER_DAY,
+                        openaiTtsCharsLeft: PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL,
+                        openaiTtsMaxChars: PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL,
+                        fluxKontextMaxMonthlyUsesLeft: PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_MAX_MONTHLY_MAX_USES - userMonthlyUsage.fluxMaxUsed,
+                        fluxKontextMaxMonthlyMaxUses: PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_MAX_MONTHLY_MAX_USES,
+                        fluxKontextProMonthlyUsesLeft: PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_PRO_MONTHLY_MAX_USES - userMonthlyUsage.fluxProUsed,
+                        fluxKontextProMonthlyMaxUses: PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_PRO_MONTHLY_MAX_USES,
+                    }
                 });
             } else {
                 console.log(`[Paid Login] User ${user.username} found, but no active/valid subscription.`);
@@ -256,7 +299,7 @@ app.post('/api/auth/demo-login', (req, res) => {
 
 
 function demoOrPaidUserAuth(req, res, next) {
-  if (req.paidUser) {
+  if (req.paidUser) { // req.paidUser is set by paidUserAuthMiddleware if valid
     req.isPaidUser = true;
     return next();
   }
@@ -275,7 +318,7 @@ function demoOrPaidUserAuth(req, res, next) {
   }
   req.isDemoUser = true;
   req.clientIp = clientIp;
-  req.demoUserData = storedUserData;
+  req.demoUserData = storedUserData; // Attach full demo user data for use in endpoints
   next();
 }
 
@@ -328,6 +371,8 @@ app.post('/api/gemini/image/generate', demoOrPaidUserAuth, async (req, res) => {
 
     if (req.isPaidUser) {
       console.log(`[Imagen Proxy] Paid user ${req.paidUser.username} generating ${numImagesToGenerate} image(s).`);
+      // TODO: Paid user Imagen limit check if necessary (e.g., daily/monthly based on subscription)
+      // For now, assuming paid users have a high or subscription-based limit for Imagen
     } else if (req.isDemoUser) {
       if (!req.demoUserData) {
           console.error("[Imagen Proxy Error] demoUserData is missing for a demo user request. IP:", req.clientIp);
@@ -437,8 +482,8 @@ app.post('/api/openai/tts/generate', demoOrPaidUserAuth, async (req, res) => {
     const currentChars = textInput ? textInput.length : 0;
 
     if (req.isPaidUser) {
-      if (currentChars > PAID_USER_LIMITS.OPENAI_TTS_MAX_CHARS_TOTAL) {
-          return res.status(413).json({ error: `Input quá dài cho người dùng trả phí TTS. Tối đa: ${PAID_USER_LIMITS.OPENAI_TTS_MAX_CHARS_TOTAL}`, limitReached: true });
+      if (currentChars > PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL) {
+          return res.status(413).json({ error: `Input quá dài cho người dùng trả phí TTS. Tối đa: ${PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL}`, limitReached: true });
       }
       console.log(`[OpenAI TTS Proxy] Paid user ${req.paidUser.username} generating audio for ${currentChars} chars.`);
     } else if (req.isDemoUser) {
@@ -547,13 +592,14 @@ app.post('/api/fal/image/edit/flux-kontext', demoOrPaidUserAuth, async (req, res
   const currentClientIp = getClientIp(req); 
   console.log(`[Flux Endpoint DEBUG] Request received. IP: ${currentClientIp}, PaidUser: ${req.isPaidUser}, DemoUser: ${req.isDemoUser}`);
 
-  if (req.isDemoUser && req.demoUserData) {
+  if (req.isPaidUser && req.paidUser) {
+    console.log(`[Flux Endpoint DEBUG] Paid User: ${req.paidUser.username}. Monthly Flux Max Used: ${req.paidUser.fluxMaxMonthlyUsed}, Pro Used: ${req.paidUser.fluxProMonthlyUsed}`);
+  } else if (req.isDemoUser && req.demoUserData) {
     console.log(`[Flux Endpoint DEBUG] Demo User. Initial req.demoUserData.fluxUses: ${req.demoUserData.fluxUses}`);
     if (demoUserUsageStore[currentClientIp]) {
       console.log(`[Flux Endpoint DEBUG] Demo User. Initial demoUserUsageStore[${currentClientIp}].fluxUses: ${demoUserUsageStore[currentClientIp].fluxUses}`);
     } else {
-      // This case should ideally not happen if demoOrPaidUserAuth populates req.demoUserData correctly
-      console.warn(`[Flux Endpoint DEBUG] Demo User. demoUserUsageStore[${currentClientIp}] is UNDEFINED, but req.demoUserData exists. This indicates a potential state inconsistency or timing issue.`);
+      console.warn(`[Flux Endpoint DEBUG] Demo User. demoUserUsageStore[${currentClientIp}] is UNDEFINED, but req.demoUserData exists.`);
     }
   }
 
@@ -579,17 +625,33 @@ app.post('/api/fal/image/edit/flux-kontext', demoOrPaidUserAuth, async (req, res
     if (!modelIdentifier || !prompt) {
          return res.status(400).json({ error: "Missing required fields: modelIdentifier, prompt for Flux Kontext." });
     }
-    // Further specific validation for single vs multi image might be needed here before decrementing
-    if (modelIdentifier === 'fal-ai/flux-pro/kontext/max/multi' && (!images_data || !Array.isArray(images_data) || images_data.length === 0)) {
+    
+    const isFluxMax = modelIdentifier === 'fal-ai/flux-pro/kontext/max/multi';
+    const isFluxPro = modelIdentifier === 'fal-ai/flux-pro/kontext';
+
+    if (isFluxMax && (!images_data || !Array.isArray(images_data) || images_data.length === 0)) {
         return res.status(400).json({ error: "Flux Kontext Max/Multi requires 'images_data' array." });
-    } else if (modelIdentifier !== 'fal-ai/flux-pro/kontext/max/multi' && (!image_base_64 || !image_mime_type)) {
+    } else if (isFluxPro && (!image_base_64 || !image_mime_type)) {
         return res.status(400).json({ error: "Standard Flux Kontext requires 'image_base_64' and 'image_mime_type'." });
     }
 
-    // Check and decrement demo user limits *before* calling Fal.ai
-    if (req.isDemoUser) {
+
+    // Check limits
+    if (req.isPaidUser && req.paidUser) {
+        const yearMonth = getCurrentYearMonth();
+        const monthlyUsage = paidUserFluxMonthlyUsageStore[req.paidUser.username]?.[yearMonth];
+        if (!monthlyUsage) {
+             console.error(`[Flux Endpoint CRITICAL] Paid user ${req.paidUser.username} monthly usage for ${yearMonth} not found/initialized!`);
+             return res.status(500).json({ error: "Internal server error: Paid user usage data not found." });
+        }
+        if (isFluxMax && monthlyUsage.fluxMaxUsed >= PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_MAX_MONTHLY_MAX_USES) {
+            return res.status(429).json({ error: `Monthly limit for Flux Kontext Max reached (${PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_MAX_MONTHLY_MAX_USES} images/month).`, limitReached: true });
+        }
+        if (isFluxPro && monthlyUsage.fluxProUsed >= PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_PRO_MONTHLY_MAX_USES) {
+            return res.status(429).json({ error: `Monthly limit for Flux Kontext Pro reached (${PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_PRO_MONTHLY_MAX_USES} images/month).`, limitReached: true });
+        }
+    } else if (req.isDemoUser) {
       if (!req.demoUserData || !currentClientIp || !demoUserUsageStore[currentClientIp]) {
-        // This check is redundant if demoOrPaidUserAuth is working correctly and currentClientIp is always valid
         console.error("[Flux Endpoint CRITICAL] Demo user data integrity issue before limit check. IP:", currentClientIp, "req.demoUserData exists:", !!req.demoUserData, "store entry exists:", !!demoUserUsageStore[currentClientIp]);
         return res.status(500).json({ error: "Demo user data integrity issue. Cannot process request."});
       }
@@ -599,10 +661,6 @@ app.post('/api/fal/image/edit/flux-kontext', demoOrPaidUserAuth, async (req, res
         console.log(`[Flux Endpoint DEBUG] Demo User ${currentClientIp} has no Flux uses left. Blocking.`);
         return res.status(429).json({ error: `Đã hết ${DEMO_LIMITS_CONFIG_PROXY.FLUX_KONTEX_MAX_USES_SESSION} lượt sử dụng Flux Kontext cho phiên DEMO này.`, limitReached: true, usesLeft: 0 });
       }
-      // Decrement now - This was the proposed change to make it count the attempt
-      // However, the original bug implies this part was not being reached or not persisting.
-      // For now, sticking to original logic of incrementing *after* successful Fal.ai queue submission,
-      // to match the logs. The detailed logging will show if the increment happens.
     }
 
     let falInput = {
@@ -625,7 +683,7 @@ app.post('/api/fal/image/edit/flux-kontext', demoOrPaidUserAuth, async (req, res
         console.log(`[Flux Kontext Max/Multi Proxy] Not including 'num_inference_steps' as it's not in the model's schema.`);
     }
 
-    if (modelIdentifier === 'fal-ai/flux-pro/kontext/max/multi') {
+    if (isFluxMax) {
         falInput.image_urls = images_data.map(img => `data:${img.mimeType};base64,${img.base64}`);
     } else { 
         falInput.image_url = `data:${image_mime_type};base64,${image_base_64}`;
@@ -637,7 +695,16 @@ app.post('/api/fal/image/edit/flux-kontext', demoOrPaidUserAuth, async (req, res
 
     if (queueResult && queueResult.request_id) {
         console.log(`[Flux Kontext Proxy] Request ID from fal.queue.submit for model ${modelIdentifier}: ${queueResult.request_id}`);
-        if (req.isDemoUser && req.demoUserData && currentClientIp && demoUserUsageStore[currentClientIp]) { 
+        
+        if (req.isPaidUser && req.paidUser) {
+            const yearMonth = getCurrentYearMonth();
+            const userMonthlyStore = paidUserFluxMonthlyUsageStore[req.paidUser.username]?.[yearMonth];
+            if (userMonthlyStore) {
+                if (isFluxMax) userMonthlyStore.fluxMaxUsed += 1;
+                if (isFluxPro) userMonthlyStore.fluxProUsed += 1;
+                console.log(`[Paid Usage] Flux (${isFluxMax ? 'Max' : 'Pro'}): User ${req.paidUser.username} used 1 attempt. Total for month ${yearMonth}: Max=${userMonthlyStore.fluxMaxUsed}, Pro=${userMonthlyStore.fluxProUsed}`);
+            }
+        } else if (req.isDemoUser && req.demoUserData && currentClientIp && demoUserUsageStore[currentClientIp]) { 
           console.log(`[Flux Endpoint DEBUG] Before increment: demoUserUsageStore[${currentClientIp}].fluxUses = ${demoUserUsageStore[currentClientIp].fluxUses}`);
           demoUserUsageStore[currentClientIp].fluxUses += 1;
           console.log(`[Flux Endpoint DEBUG] After increment: demoUserUsageStore[${currentClientIp}].fluxUses = ${demoUserUsageStore[currentClientIp].fluxUses}`);
