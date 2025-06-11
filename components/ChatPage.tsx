@@ -1600,21 +1600,23 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         let notificationMessage = "";
 
         if (isFluxKontexModelSelected) {
-            if (!limits || limits.fluxKontextUsesLeft <= 0) {
+            const isMax = selectedModel === Model.FLUX_KONTEX_MAX_MULTI;
+            const usesLeft = isMax ? limits?.fluxKontextMaxMonthlyUsesLeft : limits?.fluxKontextProMonthlyUsesLeft;
+            if (!limits || usesLeft === undefined || usesLeft <= 0) {
                 limitExceeded = true;
-                notificationMessage = "Đã hết lượt 2 lần dùng thử Flux Kontext. Vui lòng liên hệ facebook admin Lee Thinh để mua gói hằng tháng giá rẻ.";
+                notificationMessage = `Đã hết lượt dùng thử ${isMax ? 'Flux Kontext Max' : 'Flux Kontext Pro'}. Vui lòng liên hệ admin.`;
             }
         } else if (isImagenModelSelected) {
             const imagenSettings = modelSettings as ImagenSettings;
             const numImagesToGen = imagenSettings.numberOfImages || 1;
-            if (!limits || limits.imagen3ImagesLeft < numImagesToGen) {
+            if (!limits || limits.imagen3MonthlyImagesLeft < numImagesToGen) {
                 limitExceeded = true;
-                notificationMessage = `Not enough Imagen3 demo uses left. Need ${numImagesToGen}, have ${limits?.imagen3ImagesLeft || 0}.`;
+                notificationMessage = `Not enough Imagen3 demo uses left. Need ${numImagesToGen}, have ${limits?.imagen3MonthlyImagesLeft || 0}.`;
             }
         } else if (isTextToSpeechModelSelected) {
-            if (!limits || currentInputText.length > limits.openaiTtsCharsLeft) {
+            if (!limits || currentInputText.length > limits.openaiTtsMonthlyCharsLeft) {
                  limitExceeded = true;
-                 notificationMessage = `OpenAI TTS character limit exceeded for DEMO. Need ${currentInputText.length}, have ${limits?.openaiTtsCharsLeft || 0} left.`;
+                 notificationMessage = `OpenAI TTS character limit exceeded for DEMO. Need ${currentInputText.length}, have ${limits?.openaiTtsMonthlyCharsLeft || 0} left.`;
             }
         }
         if (limitExceeded) {
@@ -1659,8 +1661,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           } : msg));
           if (audioPlayerRef.current) handlePlayAudio(URL.createObjectURL(audioBlob), aiMessageId);
 
-          if (userSession.isDemoUser && !userSession.isPaidUser) {
-              onUpdateDemoLimits({ openaiTtsCharsLeft: (userSession.demoLimits?.openaiTtsCharsLeft || 0) - userDisplayedText.length });
+          if (userSession.isDemoUser && !userSession.isPaidUser && userSession.demoLimits) {
+              onUpdateDemoLimits({ openaiTtsMonthlyCharsLeft: (userSession.demoLimits?.openaiTtsMonthlyCharsLeft || 0) - userDisplayedText.length });
           }
 
       } else if ((currentModelStatus?.isImageEditing || currentModelStatus?.isMultiImageEditing) && !currentModelStatus.isMock) {
@@ -1710,8 +1712,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                 ...msg, text: fluxResult.message || `Image editing submitted (ID: ${fluxResult.requestId}). Waiting for results...`, fluxRequestId: fluxResult.requestId, isRegenerating: false, timestamp: msg.timestamp || Date.now(), fluxModelId: actualModelIdentifier
             } : msg));
             pollFluxKontexStatus(fluxResult.requestId, aiMessageId, userDisplayedText, actualModelIdentifier); // Pass model ID for polling
-            if (userSession.isDemoUser && !userSession.isPaidUser) {
-                onUpdateDemoLimits({ fluxKontextUsesLeft: (userSession.demoLimits?.fluxKontextUsesLeft || 0) - 1 });
+            if (userSession.isDemoUser && !userSession.isPaidUser && userSession.demoLimits) {
+                if (selectedModel === Model.FLUX_KONTEX) {
+                    onUpdateDemoLimits({ fluxKontextProMonthlyUsesLeft: (userSession.demoLimits?.fluxKontextProMonthlyUsesLeft || 0) - 1 });
+                } else if (selectedModel === Model.FLUX_KONTEX_MAX_MULTI) {
+                    onUpdateDemoLimits({ fluxKontextMaxMonthlyUsesLeft: (userSession.demoLimits?.fluxKontextMaxMonthlyUsesLeft || 0) - 1 });
+                }
             }
           } else { throw new Error(fluxResult.error || "Flux Kontext submission failed (no request ID)."); }
 
@@ -1733,9 +1739,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                     imagePreviews: imageUrls, imageMimeType: mimeType, originalPrompt: userDisplayedText, isRegenerating: false,
                     timestamp: msg.timestamp || Date.now()
                   } : msg ));
-            if (userSession.isDemoUser && !userSession.isPaidUser) {
+            if (userSession.isDemoUser && !userSession.isPaidUser && userSession.demoLimits) {
                 const numGenerated = apiResponseData.generatedImages.length;
-                onUpdateDemoLimits({ imagen3ImagesLeft: (userSession.demoLimits?.imagen3ImagesLeft || 0) - numGenerated });
+                onUpdateDemoLimits({ imagen3MonthlyImagesLeft: (userSession.demoLimits?.imagen3MonthlyImagesLeft || 0) - numGenerated });
             }
           } else { throw new Error(apiResponseData.error || "Image generation failed (no images returned)."); }
 
@@ -1863,7 +1869,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
     let determinedTtsMaxLength = OPENAI_TTS_MAX_INPUT_LENGTH; // Default (usually paid user limit from constants)
     if (userSession.isDemoUser && !userSession.isPaidUser && userSession.demoLimits) {
-        determinedTtsMaxLength = userSession.demoLimits.openaiTtsMaxChars;
+        determinedTtsMaxLength = userSession.demoLimits.openaiTtsMonthlyMaxChars;
     } else if (userSession.isPaidUser && userSession.paidLimits) {
         determinedTtsMaxLength = userSession.paidLimits.openaiTtsMaxChars;
     }
@@ -2468,14 +2474,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
 
   return (
-    <div className={`h-full flex flex-col relative ${userSession.isDemoUser && userSession.isDemoBlockedByVpn ? 'filter blur-sm pointer-events-none' : ''}`}>
-      {userSession.isDemoUser && userSession.isDemoBlockedByVpn && (
-        <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50">
-            <p className="text-white text-2xl font-bold p-8 bg-red-700 rounded-lg shadow-xl">
-                DEMO Access Restricted (VPN/Proxy Detected)
-            </p>
-        </div>
-      )}
+    <div className="h-full flex flex-col relative">
       {userSession.isPaidUser && userSession.paidSubscriptionEndDate && (
         <div className="bg-green-600 text-white text-xs text-center py-0.5 px-2 sticky top-0 z-40">
           Paid User: {userSession.paidUsername} | Subscription ends: {new Date(userSession.paidSubscriptionEndDate).toLocaleDateString()}

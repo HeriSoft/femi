@@ -6,7 +6,7 @@ import { SunIcon, MoonIcon, BellIcon, UserCircleIcon as AvatarIcon, KeyIcon, XMa
 import { useNotification } from '../contexts/NotificationContext.tsx';
 import NotificationPanel from './NotificationPanel.tsx';
 import AccountSettingsModal from './AccountSettingsModal.tsx';
-import { LOCAL_STORAGE_DEVICE_LOGS_KEY, MAX_DEVICE_LOGS, DEMO_USER_KEY } from '../constants.ts';
+import { LOCAL_STORAGE_DEVICE_LOGS_KEY, MAX_DEVICE_LOGS } from '../constants.ts'; // Removed DEMO_USER_KEY
 
 
 export interface MockUser {
@@ -136,42 +136,18 @@ const Header: React.FC<HeaderProps> = ({
 
   const handleLoginSubmit = async () => {
     if (!loginCodeInput.trim()) {
-      addNotification("Please enter a login code.", "error");
+      addNotification("Please enter a login code/username.", "error");
       return;
     }
     setIsLoginLoading(true);
-    // App.tsx will handle the actual API call and user state update
     onLogin(loginCodeInput.trim()); 
-
-    // App.tsx is now responsible for setting currentUser and notifications.
-    // This modal will close, and App.tsx will re-render Header with new currentUser if login is successful.
     setIsLoginModalOpen(false);
     setIsLoginLoading(false);
-    
-    // Record device only if it's not a DEMO login, or if DEMO login is also considered a "login event" for device tracking.
-    // For now, assume admin login records device. Demo login device tracking can be decided.
-    if (loginCodeInput.trim().toUpperCase() !== DEMO_USER_KEY) {
-        // This part might be redundant if App.tsx handles successful login state update and device recording
-        // For admin login success, App.tsx should ideally trigger this.
-        // For simplicity, if the input code isn't DEMO, we *assume* it might be an admin code
-        // and the success will be handled by onLogin -> App.tsx -> currentUser update.
-        // Let's rely on App.tsx to call recordLoginDevice upon successful *admin* login.
-    }
-     if (loginCodeInput.trim().toUpperCase() !== DEMO_USER_KEY) {
-        // Assuming App.tsx handles the actual success and calls recordLoginDevice
-        // This is a bit tricky here since Header doesn't know if admin login was successful.
-        // Best practice: App.tsx calls recordLoginDevice after successful admin login.
-        // For now, to keep it simple, we won't call recordLoginDevice directly here for admin.
-    } else {
-        // For DEMO login, App.tsx will also handle its specific logic.
-        // Device recording for DEMO can be added in App.tsx's DEMO login path if needed.
-    }
   };
 
   const handleSignOut = () => { 
     onLogout(); 
     setIsLoginDropdownOpen(false);
-    // addNotification("You have been logged out.", "info"); // Moved to App.tsx for consistency
   };
   
   const handleOpenAccountSettings = () => {
@@ -349,7 +325,7 @@ const Header: React.FC<HeaderProps> = ({
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light">Enter Login Code</h3>
+                <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light">Enter Login Code/Username</h3>
                 <button
                   onClick={() => setIsLoginModalOpen(false)}
                   className="p-1 rounded-full hover:bg-secondary dark:hover:bg-neutral-dark"
@@ -363,7 +339,7 @@ const Header: React.FC<HeaderProps> = ({
                 value={loginCodeInput}
                 onChange={(e) => setLoginCodeInput(e.target.value)}
                 onKeyPress={(e) => { if (e.key === 'Enter' && !isLoginLoading) handleLoginSubmit(); }}
-                placeholder="Login Code (try 'DEMO')"
+                placeholder="e.g., 'guest_demo' or your code"
                 className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none mb-4"
                 autoFocus
                 disabled={isLoginLoading}

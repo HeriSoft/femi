@@ -12,10 +12,18 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
 
   const updates = [
     {
+      title: "DEMO User Access Update:",
+      points: [
+        "To try DEMO features, log in with a specific DEMO username (e.g., 'guest_demo').",
+        "Anonymous IP-based DEMO access is no longer available.",
+        "DEMO users have monthly limits for features."
+      ]
+    },
+    {
       title: "Flux Kontext Max (Advanced image editing) features:",
       points: [
         "Upload up to 4 images for editing requests.",
-        "40 images/month for paid users.", // Updated
+        "40 images/month for paid users.", 
         "Not available for DEMO users."
       ]
     },
@@ -23,15 +31,22 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
       title: "Flux Kontext Pro (image editing) features:",
       points: [
         "Upload up to 1 image for editing requests.",
-        "50 images/month for paid users.", // Updated
-        "DEMO users: 2 images trial."
+        "50 images/month for paid users.", 
+        "DEMO users: Limited monthly uses (e.g., 10 images/month via 'guest_demo')."
       ]
     },
     {
       title: "Text to Speech:",
       points: [
-        "DEMO users: Max 5,000 characters.",
-        "Paid users: 20,000 characters."
+        "DEMO users: Limited monthly characters (e.g., 10,000 chars/month via 'guest_demo').",
+        "Paid users: 20,000 characters (per use/session, subject to overall fair use)."
+      ]
+    },
+     {
+      title: "Imagen3 Image Generation:",
+      points: [
+        "DEMO users: Limited monthly images (e.g., 20 images/month via 'guest_demo').",
+        "Paid users: 50 images/day."
       ]
     },
     {
@@ -58,7 +73,7 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
       >
         <div className="flex justify-between items-center mb-4 pb-3 border-b border-secondary dark:border-neutral-darkest">
           <h2 id="news-modal-title" className="text-xl sm:text-2xl font-semibold text-primary dark:text-primary-light flex items-center">
-            <MegaphoneIcon className="w-7 h-7 mr-2" /> New Updates (Version 1.2)
+            <MegaphoneIcon className="w-7 h-7 mr-2" /> New Updates (Version 1.3 - DEMO System Change)
           </h2>
           <button
             onClick={onClose}
