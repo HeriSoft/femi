@@ -32,7 +32,7 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
       points: [
         "Upload up to 1 image for editing requests.",
         "50 images/month for paid users.", 
-        "DEMO users: Limited monthly uses (e.g., 10 images/month via 'guest_demo')."
+        "DEMO users: Limited monthly uses (e.g., 1 image/month via 'guest_demo')."
       ]
     },
     {
