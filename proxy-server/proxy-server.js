@@ -68,33 +68,30 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // --- Authentication ---
 const LOGIN_CODE_AUTH_ADMIN = process.env.LOGIN_CODE_AUTH_ADMIN;
-const DEMO_USER_LOGIN_CODE = process.env.DEMO_USER_LOGIN_CODE || "DEMO";
+// const DEMO_USER_LOGIN_CODE = process.env.DEMO_USER_LOGIN_CODE || "DEMO"; // No longer a generic code
 
 if (!LOGIN_CODE_AUTH_ADMIN) console.warn("PROXY WARNING: LOGIN_CODE_AUTH_ADMIN not found. Admin login will not function.");
 else console.log("LOGIN_CODE_AUTH_ADMIN is SET for admin.");
-console.log(`DEMO_USER_LOGIN_CODE is: ${DEMO_USER_LOGIN_CODE}`);
+// console.log(`DEMO_USER_LOGIN_CODE is: ${DEMO_USER_LOGIN_CODE}`); // Removed
 
 
-// --- DEMO MODE CONSTANTS & STORAGE ---
-const DEMO_LIMITS_CONFIG_PROXY = {
-  FLUX_KONTEX_MAX_USES_SESSION: 2, 
-  IMAGEN3_MAX_IMAGES_SESSION: 10, 
-  OPENAI_TTS_MAX_CHARS_TOTAL: 5000,
+// --- NAMED DEMO USER CONSTANTS (from DB) ---
+const DEMO_USER_MONTHLY_LIMITS = {
+  FLUX_KONTEX_MAX_MONTHLY: 5,
+  FLUX_KONTEX_PRO_MONTHLY: 10,
+  IMAGEN3_MONTHLY_IMAGES: 20,
+  OPENAI_TTS_MONTHLY_CHARS: 10000,
 };
 
 // --- PAID USER LIMITS ---
-const PAID_USER_MAX_LIMITS_CONFIG = { // Renamed for clarity
-  IMAGEN3_MAX_IMAGES_PER_DAY: 50, // Daily limit for Imagen
-  OPENAI_TTS_MAX_CHARS_TOTAL: 20000, // Per use/session limit for TTS
-  FLUX_KONTEX_MAX_MONTHLY_MAX_USES: 40, // Monthly limit for Flux Max
-  FLUX_KONTEX_PRO_MONTHLY_MAX_USES: 50,  // Monthly limit for Flux Pro
+const PAID_USER_MAX_LIMITS_CONFIG = {
+  IMAGEN3_MAX_IMAGES_PER_DAY: 50, 
+  OPENAI_TTS_MAX_CHARS_TOTAL: 20000, 
+  FLUX_KONTEX_MAX_MONTHLY_MAX_USES: 40,
+  FLUX_KONTEX_PRO_MONTHLY_MAX_USES: 50,
 };
 
-const paidUserFluxMonthlyUsageStore = {}; // { [username]: { [yearMonth]: { fluxMaxUsed: number, fluxProUsed: number } } }
-
-const demoUserUsageStore = {};
-const DEMO_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000;
-const MIN_INTERVAL_BETWEEN_FULL_DEMO_RESETS_MS = 30 * 24 * 60 * 60 * 1000; 
+const paidUserFluxMonthlyUsageStore = {}; 
 
 function getClientIp(req) {
   const forwarded = req.headers['x-forwarded-for'];
@@ -103,111 +100,98 @@ function getClientIp(req) {
   }
   return req.connection?.remoteAddress || req.socket?.remoteAddress || req.ip;
 }
-function getTodaysDateString() { return new Date().toISOString().split('T')[0]; }
+
 function getCurrentYearMonth() {
     const now = new Date();
     const year = now.getFullYear();
-    const month = (now.getMonth() + 1).toString().padStart(2, '0'); // getMonth() is 0-indexed
+    const month = (now.getMonth() + 1).toString().padStart(2, '0'); 
     return `${year}-${month}`;
 }
 
 
-function manageDemoUserData(ip) {
-  const today = getTodaysDateString();
-  let userData = demoUserUsageStore[ip];
-  const now = Date.now();
-  
-  console.log(`[ManageDemoUserData DEBUG] IP: ${ip}, Current Time: ${new Date(now).toISOString()}`);
-  if (userData) {
-      console.log(`[ManageDemoUserData DEBUG] Existing userData found for IP ${ip}. Token: ${userData.token}, TokenExpiry: ${new Date(userData.tokenExpiry).toISOString()}, CooldownUntil: ${new Date(userData.canStartNewFullDemoAfter).toISOString()}, FluxUses: ${userData.fluxUses}, ImagenUses: ${userData.imagenUses}, TTSChars: ${userData.ttsChars}, LastAccess: ${userData.lastAccessDate}, Blocked: ${userData.isBlocked}`);
-  } else {
-      console.log(`[ManageDemoUserData DEBUG] No existing userData found for IP ${ip}.`);
-  }
+async function paidOrDemoUserAuthMiddleware(req, res, next) {
+    const paidUserToken = req.headers['x-paid-user-token']; // Paid username as token
+    const demoUserToken = req.headers['x-demo-user-token']; // Demo username as token
 
-  if (!userData || now >= userData.canStartNewFullDemoAfter) {
-    userData = {
-      token: randomBytes(16).toString('hex'),
-      tokenExpiry: now + DEMO_TOKEN_EXPIRY_MS,
-      fluxUses: 0, 
-      imagenUses: 0, 
-      ttsChars: 0,
-      lastAccessDate: today,
-      isBlocked: false,
-      canStartNewFullDemoAfter: now + MIN_INTERVAL_BETWEEN_FULL_DEMO_RESETS_MS,
-      limitsLastExhaustedTimestamp: undefined,
-    };
-    demoUserUsageStore[ip] = userData;
-    console.log(`[ManageDemoUserData] IP ${ip}. Full demo period (re)started. Uses reset. New Token: ${userData.token}, Cooldown until ${new Date(userData.canStartNewFullDemoAfter).toISOString()}`);
-  } else {
-    console.log(`[ManageDemoUserData DEBUG] IP ${ip} is an existing user within main cooldown. Preserving usage stats. Current Token: ${userData.token}, LastAccess: ${userData.lastAccessDate}`);
-    if (userData.lastAccessDate !== today) {
-      userData.lastAccessDate = today;
-      console.log(`[ManageDemoUserData] IP ${ip}. New day of activity (${today}). Session limits (Flux, Imagen) persist until full demo reset.`);
-    }
-    if (now > userData.tokenExpiry && now < userData.canStartNewFullDemoAfter) {
-      console.log(`[ManageDemoUserData DEBUG] Token expired for IP ${ip} (Expiry: ${new Date(userData.tokenExpiry).toISOString()}), but still in cooldown for new full demo (Until: ${new Date(userData.canStartNewFullDemoAfter).toISOString()}).`);
-    }
-  }
-  return userData;
-}
-
-async function paidUserAuthMiddleware(req, res, next) {
-    const paidUserToken = req.headers['x-paid-user-token']; // Username is used as token here
     if (paidUserToken) {
         try {
             if (!pool) throw new Error("Database not available for paid user auth.");
-            const [users] = await pool.execute('SELECT id, username FROM users WHERE username = ?', [paidUserToken]);
+            const [users] = await pool.execute('SELECT id, username, user_type FROM users WHERE username = ?', [paidUserToken]);
             if (users.length > 0) {
                 const user = users[0];
-                const [subscriptions] = await pool.execute(
-                    'SELECT end_date FROM subscriptions WHERE user_id = ? AND status = "active" AND end_date > NOW()',
-                    [user.id]
-                );
-                if (subscriptions.length > 0) {
-                    req.paidUser = {
-                        id: user.id,
-                        username: user.username,
-                        isPaidUser: true,
-                        subscriptionEndDate: subscriptions[0].end_date
-                    };
+                if (user.user_type === 'PAID') {
+                    const [subscriptions] = await pool.execute(
+                        'SELECT end_date FROM subscriptions WHERE user_id = ? AND status = "active" AND end_date > NOW()',
+                        [user.id]
+                    );
+                    if (subscriptions.length > 0) {
+                        req.paidUser = {
+                            id: user.id, username: user.username, isPaidUser: true,
+                            subscriptionEndDate: subscriptions[0].end_date
+                        };
 
-                    // Initialize/Load monthly Flux usage for this paid user
-                    const yearMonth = getCurrentYearMonth();
-                    if (!paidUserFluxMonthlyUsageStore[user.username]) {
-                        paidUserFluxMonthlyUsageStore[user.username] = {};
+                        const yearMonth = getCurrentYearMonth();
+                        if (!paidUserFluxMonthlyUsageStore[user.username]) paidUserFluxMonthlyUsageStore[user.username] = {};
+                        if (!paidUserFluxMonthlyUsageStore[user.username][yearMonth]) {
+                            paidUserFluxMonthlyUsageStore[user.username][yearMonth] = { fluxMaxUsed: 0, fluxProUsed: 0 };
+                        }
+                        req.paidUser.fluxMaxMonthlyUsed = paidUserFluxMonthlyUsageStore[user.username][yearMonth].fluxMaxUsed;
+                        req.paidUser.fluxProMonthlyUsed = paidUserFluxMonthlyUsageStore[user.username][yearMonth].fluxProUsed;
+                        req.isPaidUser = true;
                     }
-                    if (!paidUserFluxMonthlyUsageStore[user.username][yearMonth]) {
-                        paidUserFluxMonthlyUsageStore[user.username][yearMonth] = { fluxMaxUsed: 0, fluxProUsed: 0 };
-                        console.log(`[PaidUserAuth] Initialized monthly Flux usage for ${user.username} for ${yearMonth}.`);
-                    }
-                    req.paidUser.fluxMaxMonthlyUsed = paidUserFluxMonthlyUsageStore[user.username][yearMonth].fluxMaxUsed;
-                    req.paidUser.fluxProMonthlyUsed = paidUserFluxMonthlyUsageStore[user.username][yearMonth].fluxProUsed;
                 }
             }
-        } catch (dbError) {
-            console.error("[Paid Auth DB Error]", dbError);
-        }
+        } catch (dbError) { console.error("[Paid Auth DB Error]", dbError); }
+    } else if (demoUserToken) {
+        try {
+            if (!pool) throw new Error("Database not available for demo user auth.");
+            const [users] = await pool.execute(
+                'SELECT id, username, user_type, demo_flux_max_monthly_used, demo_flux_pro_monthly_used, demo_imagen_monthly_used, demo_tts_monthly_chars_used, demo_usage_last_reset_month FROM users WHERE username = ? AND user_type = "DEMO"', 
+                [demoUserToken] // Assuming demoUserToken is the demo username
+            );
+            if (users.length > 0) {
+                const user = users[0];
+                req.demoUser = { // Attach DB fetched demo user data
+                    id: user.id, username: user.username, isDemoUser: true,
+                    fluxMaxMonthlyUsed: user.demo_flux_max_monthly_used || 0,
+                    fluxProMonthlyUsed: user.demo_flux_pro_monthly_used || 0,
+                    imagenMonthlyUsed: user.demo_imagen_monthly_used || 0,
+                    ttsMonthlyCharsUsed: user.demo_tts_monthly_chars_used || 0,
+                    usageLastResetMonth: user.demo_usage_last_reset_month
+                };
+                req.isDemoUser = true;
+            }
+        } catch (dbError) { console.error("[Demo Auth DB Error]", dbError); }
     }
     next();
 }
-app.use(paidUserAuthMiddleware);
+app.use(paidOrDemoUserAuthMiddleware); // Applies to all routes after this
 
 app.post('/api/auth/verify-code', async (req, res) => {
-    const { code } = req.body;
-    if (code === DEMO_USER_LOGIN_CODE) {
-        return res.status(400).json({ success: false, message: "Please use /api/auth/demo-login for DEMO access." });
-    }
+    const { code } = req.body; // 'code' is now the username (admin, paid, or demo)
+    
     if (code === LOGIN_CODE_AUTH_ADMIN) {
         if (!LOGIN_CODE_AUTH_ADMIN) return res.status(500).json({ success: false, message: "Admin login not configured." });
         console.log("[Admin Login] Successful via LOGIN_CODE_AUTH_ADMIN.");
         return res.json({ success: true, isAdmin: true, message: "Admin login successful." });
     }
+
     if (!pool) return res.status(503).json({ success: false, message: "Database service unavailable." });
+
     try {
-        const [users] = await pool.execute('SELECT id, username, password_hash FROM users WHERE username = ?', [code]);
-        if (users.length > 0) {
-            const user = users[0];
-            console.log(`[Paid Login Attempt] User "${user.username}" found. Password check SKIPPED for this simplified flow.`);
+        const [users] = await pool.execute(
+            'SELECT id, username, user_type, password_hash, demo_flux_max_monthly_used, demo_flux_pro_monthly_used, demo_imagen_monthly_used, demo_tts_monthly_chars_used, demo_usage_last_reset_month FROM users WHERE username = ?', 
+            [code]
+        );
+
+        if (users.length === 0) {
+            console.log(`[Login] Username "${code}" not found in DB.`);
+            return res.status(401).json({ success: false, message: "Invalid username or code." });
+        }
+        const user = users[0];
+
+        if (user.user_type === 'PAID') {
+            console.log(`[Paid Login Attempt] User "${user.username}" (PAID type) found.`);
             const [subscriptions] = await pool.execute(
                 'SELECT end_date FROM subscriptions WHERE user_id = ? AND status = "active" AND end_date > NOW()',
                 [user.id]
@@ -217,21 +201,18 @@ app.post('/api/auth/verify-code', async (req, res) => {
                 console.log(`[Paid Login] User ${user.username} has active subscription until ${subEndDate.toISOString()}.`);
                 
                 const yearMonth = getCurrentYearMonth();
-                if (!paidUserFluxMonthlyUsageStore[user.username]) {
-                    paidUserFluxMonthlyUsageStore[user.username] = {};
-                }
+                if (!paidUserFluxMonthlyUsageStore[user.username]) paidUserFluxMonthlyUsageStore[user.username] = {};
                 if (!paidUserFluxMonthlyUsageStore[user.username][yearMonth]) {
                     paidUserFluxMonthlyUsageStore[user.username][yearMonth] = { fluxMaxUsed: 0, fluxProUsed: 0 };
                 }
                 const userMonthlyUsage = paidUserFluxMonthlyUsageStore[user.username][yearMonth];
 
                 return res.json({
-                    success: true,
-                    isPaidUser: true,
-                    username: user.username,
+                    success: true, isPaidUser: true, username: user.username,
+                    paidUserToken: user.username, // Using username as token for simplicity
                     subscriptionEndDate: subEndDate.toISOString(),
                     limits: {
-                        imagen3ImagesLeft: PAID_USER_MAX_LIMITS_CONFIG.IMAGEN3_MAX_IMAGES_PER_DAY, // Assuming daily limits for Imagen are generous or managed differently
+                        imagen3ImagesLeft: PAID_USER_MAX_LIMITS_CONFIG.IMAGEN3_MAX_IMAGES_PER_DAY,
                         imagen3MaxImages: PAID_USER_MAX_LIMITS_CONFIG.IMAGEN3_MAX_IMAGES_PER_DAY,
                         openaiTtsCharsLeft: PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL,
                         openaiTtsMaxChars: PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL,
@@ -243,84 +224,52 @@ app.post('/api/auth/verify-code', async (req, res) => {
                 });
             } else {
                 console.log(`[Paid Login] User ${user.username} found, but no active/valid subscription.`);
-                return res.status(403).json({ success: false, message: "Subscription inactive, expired, or not found." });
+                return res.status(403).json({ success: false, message: "Subscription inactive or expired." });
             }
+        } else if (user.user_type === 'DEMO') {
+            console.log(`[DEMO Login] User "${user.username}" (DEMO type) found.`);
+            const currentYearMonth = getCurrentYearMonth();
+            let { 
+                demo_flux_max_monthly_used: fluxMaxUsed = 0, 
+                demo_flux_pro_monthly_used: fluxProUsed = 0,
+                demo_imagen_monthly_used: imagenUsed = 0,
+                demo_tts_monthly_chars_used: ttsCharsUsed = 0,
+                demo_usage_last_reset_month: lastResetMonth
+            } = user;
+
+            if (lastResetMonth !== currentYearMonth) {
+                console.log(`[DEMO Login] Resetting monthly limits for DEMO user ${user.username} for new month ${currentYearMonth}. Old month: ${lastResetMonth}`);
+                fluxMaxUsed = 0; fluxProUsed = 0; imagenUsed = 0; ttsCharsUsed = 0;
+                await pool.execute(
+                    'UPDATE users SET demo_flux_max_monthly_used=0, demo_flux_pro_monthly_used=0, demo_imagen_monthly_used=0, demo_tts_monthly_chars_used=0, demo_usage_last_reset_month=? WHERE id=?',
+                    [currentYearMonth, user.id]
+                );
+            }
+            
+            const limits = {
+                fluxKontextMaxMonthlyUsesLeft: Math.max(0, DEMO_USER_MONTHLY_LIMITS.FLUX_KONTEX_MAX_MONTHLY - fluxMaxUsed),
+                fluxKontextMaxMonthlyMaxUses: DEMO_USER_MONTHLY_LIMITS.FLUX_KONTEX_MAX_MONTHLY,
+                fluxKontextProMonthlyUsesLeft: Math.max(0, DEMO_USER_MONTHLY_LIMITS.FLUX_KONTEX_PRO_MONTHLY - fluxProUsed),
+                fluxKontextProMonthlyMaxUses: DEMO_USER_MONTHLY_LIMITS.FLUX_KONTEX_PRO_MONTHLY,
+                imagen3MonthlyImagesLeft: Math.max(0, DEMO_USER_MONTHLY_LIMITS.IMAGEN3_MONTHLY_IMAGES - imagenUsed),
+                imagen3MonthlyMaxImages: DEMO_USER_MONTHLY_LIMITS.IMAGEN3_MONTHLY_IMAGES,
+                openaiTtsMonthlyCharsLeft: Math.max(0, DEMO_USER_MONTHLY_LIMITS.OPENAI_TTS_MONTHLY_CHARS - ttsCharsUsed),
+                openaiTtsMonthlyMaxChars: DEMO_USER_MONTHLY_LIMITS.OPENAI_TTS_MONTHLY_CHARS,
+            };
+            return res.json({
+                success: true, isDemoUser: true, username: user.username,
+                demoUserToken: user.username, // Using username as token for demo user
+                limits
+            });
         } else {
-            console.log(`[Login] Code "${code}" does not match DEMO, ADMIN, or any paid username in DB.`);
-            return res.status(401).json({ success: false, message: "Invalid login code or username." });
+            console.log(`[Login] User "${user.username}" found, but has unhandled user_type: ${user.user_type}.`);
+            return res.status(403).json({ success: false, message: "Access denied for this user type." });
         }
     } catch (dbError) {
         console.error("[DB Auth Error]", dbError);
         return res.status(500).json({ success: false, message: "Database error during authentication." });
     }
 });
-
-app.post('/api/auth/demo-login', (req, res) => {
-  const clientIp = getClientIp(req);
-  console.log(`[DemoLoginRoute DEBUG] Received demo login request from IP: ${clientIp}`);
-  if (!clientIp) {
-    console.log(`[DemoLoginRoute DEBUG] Could not determine client IP.`);
-    return res.status(400).json({ success: false, message: "Could not determine client IP." });
-  }
-
-  let isBlockedByVpn = false;
-  if (isBlockedByVpn) {
-    if (!demoUserUsageStore[clientIp]) demoUserUsageStore[clientIp] = { isBlocked: true }; else demoUserUsageStore[clientIp].isBlocked = true;
-    console.log(`[DemoLoginRoute DEBUG] IP ${clientIp} BLOCKED by VPN/Proxy rule.`);
-    return res.status(403).json({ success: false, message: "Access via VPN/Proxy is not permitted for DEMO.", isBlocked: true });
-  }
-
-  const userData = manageDemoUserData(clientIp);
-  console.log(`[DemoLoginRoute DEBUG] IP: ${clientIp}. UserData from manage: Token=${userData.token}, Expires=${new Date(userData.tokenExpiry).toISOString()}, CooldownUntil=${new Date(userData.canStartNewFullDemoAfter).toISOString()}, FluxUses=${userData.fluxUses}, ImagenUses=${userData.imagenUses}, TTSChars=${userData.ttsChars}, IsBlocked=${userData.isBlocked}`);
-
-  if (userData.isBlocked) {
-    console.log(`[DemoLoginRoute DEBUG] IP ${clientIp} is flagged as BLOCKED in userData.`);
-    return res.status(403).json({ success: false, message: "IP flagged.", isBlocked: true });
-  }
-
-  if (Date.now() > userData.tokenExpiry && Date.now() < userData.canStartNewFullDemoAfter) {
-    const timeLeftMs = userData.canStartNewFullDemoAfter - Date.now();
-    const hoursLeft = Math.ceil(timeLeftMs / (1000 * 60 * 60));
-    console.log(`[DemoLoginRoute DEBUG] IP: ${clientIp}. BLOCKING: Token expired (at ${new Date(userData.tokenExpiry).toISOString()}), but still in cooldown (until ${new Date(userData.canStartNewFullDemoAfter).toISOString()}). Responding 403.`);
-    return res.status(403).json({ success: false, message: `DEMO cool-down. Try in approx ${hoursLeft}h.`, isBlocked: false, cooldownActive: true, tryAgainAfter: new Date(userData.canStartNewFullDemoAfter).toISOString() });
-  }
-
-  const limits = {
-    fluxKontextUsesLeft: Math.max(0, DEMO_LIMITS_CONFIG_PROXY.FLUX_KONTEX_MAX_USES_SESSION - userData.fluxUses),
-    fluxKontextMaxUses: DEMO_LIMITS_CONFIG_PROXY.FLUX_KONTEX_MAX_USES_SESSION,
-    imagen3ImagesLeft: Math.max(0, DEMO_LIMITS_CONFIG_PROXY.IMAGEN3_MAX_IMAGES_SESSION - userData.imagenUses),
-    imagen3MaxImages: DEMO_LIMITS_CONFIG_PROXY.IMAGEN3_MAX_IMAGES_SESSION,
-    openaiTtsCharsLeft: Math.max(0, DEMO_LIMITS_CONFIG_PROXY.OPENAI_TTS_MAX_CHARS_TOTAL - userData.ttsChars),
-    openaiTtsMaxChars: DEMO_LIMITS_CONFIG_PROXY.OPENAI_TTS_MAX_CHARS_TOTAL,
-  };
-  console.log(`[DemoLoginRoute DEBUG] IP: ${clientIp}. SUCCESS: Sending token ${userData.token}, Limits: ${JSON.stringify(limits)}, IsBlockedByVPNHeader: ${isBlockedByVpn}, UserDataIsBlockedFlag: ${userData.isBlocked}`);
-  res.json({ success: true, demoUserToken: userData.token, limits, isBlocked: userData.isBlocked });
-});
-
-
-function demoOrPaidUserAuth(req, res, next) {
-  if (req.paidUser) { // req.paidUser is set by paidUserAuthMiddleware if valid
-    req.isPaidUser = true;
-    return next();
-  }
-  const demoToken = req.headers['x-demo-token'];
-  if (!demoToken) return next(); 
-
-  const clientIp = getClientIp(req);
-  if (!clientIp) return res.status(400).json({ error: "Could not determine client IP for demo auth." });
-
-  const storedUserData = demoUserUsageStore[clientIp];
-  if (!storedUserData || storedUserData.token !== demoToken || Date.now() > (storedUserData.tokenExpiry || 0)) {
-    return res.status(401).json({ error: "Invalid or expired demo session. Please login with DEMO key again.", demoSessionInvalid: true });
-  }
-  if (storedUserData.isBlocked) {
-    return res.status(403).json({ error: "Demo access for your IP has been blocked.", demoSessionInvalid: true });
-  }
-  req.isDemoUser = true;
-  req.clientIp = clientIp;
-  req.demoUserData = storedUserData; // Attach full demo user data for use in endpoints
-  next();
-}
 
 
 const GEMINI_API_KEY_PROXY = process.env.GEMINI_API_KEY;
@@ -330,10 +279,11 @@ if (GEMINI_API_KEY_PROXY) {
   console.log("Google GenAI SDK initialized.");
 } else console.warn("PROXY WARNING: GEMINI_API_KEY missing.");
 
-app.post('/api/gemini/chat/stream', demoOrPaidUserAuth, async (req, res) => {
+app.post('/api/gemini/chat/stream', paidOrDemoUserAuthMiddleware, async (req, res) => { // Ensure middleware runs
     if (!ai) return res.status(500).json({ error: "Google GenAI SDK not initialized." });
     const { modelName, historyContents, modelSettings, enableGoogleSearch } = req.body;
     if (!modelName || !historyContents || !modelSettings) return res.status(400).json({ error: "Missing fields." });
+    // DEMO user limits for Gemini chat are not implemented yet, allow for now if authenticated.
     try {
         const tools = enableGoogleSearch ? [{googleSearch: {}}] : [];
         const config = {
@@ -364,26 +314,23 @@ app.post('/api/gemini/chat/stream', demoOrPaidUserAuth, async (req, res) => {
     }
 });
 
-app.post('/api/gemini/image/generate', demoOrPaidUserAuth, async (req, res) => {
+app.post('/api/gemini/image/generate', paidOrDemoUserAuthMiddleware, async (req, res) => {
   try {
     const { modelName, prompt, modelSettings } = req.body;
     const numImagesToGenerate = Math.max(1, Math.min(4, modelSettings?.numberOfImages || 1));
 
     if (req.isPaidUser) {
       console.log(`[Imagen Proxy] Paid user ${req.paidUser.username} generating ${numImagesToGenerate} image(s).`);
-      // TODO: Paid user Imagen limit check if necessary (e.g., daily/monthly based on subscription)
-      // For now, assuming paid users have a high or subscription-based limit for Imagen
     } else if (req.isDemoUser) {
-      if (!req.demoUserData) {
-          console.error("[Imagen Proxy Error] demoUserData is missing for a demo user request. IP:", req.clientIp);
-          return res.status(500).json({ error: "Internal server error: Demo user data not found."});
+      if (!req.demoUser || !pool) {
+          return res.status(500).json({ error: "Internal server error: Demo user data or DB not found."});
       }
-      const remainingUses = DEMO_LIMITS_CONFIG_PROXY.IMAGEN3_MAX_IMAGES_SESSION - req.demoUserData.imagenUses;
+      const remainingUses = DEMO_USER_MONTHLY_LIMITS.IMAGEN3_MONTHLY_IMAGES - req.demoUser.imagenMonthlyUsed;
       if (numImagesToGenerate > remainingUses) {
-        return res.status(429).json({ error: `Đã hết lượt tạo ảnh Imagen3 cho phiên DEMO này. Bạn còn lại ${remainingUses} ảnh (yêu cầu ${numImagesToGenerate}).`, limitReached: true, usesLeft: remainingUses });
+        return res.status(429).json({ error: `Monthly Imagen3 limit for DEMO user reached. You have ${remainingUses} image(s) left (requested ${numImagesToGenerate}).`, limitReached: true, usesLeft: remainingUses });
       }
-    } else if (!GEMINI_API_KEY_PROXY) { 
-      return res.status(500).json({ error: "Google API Key missing for non-authenticated Imagen generation." });
+    } else { 
+      return res.status(401).json({ error: "User not authenticated for Imagen generation." });
     }
 
     if (!ai) return res.status(500).json({ error: "Google GenAI SDK not initialized." });
@@ -396,36 +343,23 @@ app.post('/api/gemini/image/generate', demoOrPaidUserAuth, async (req, res) => {
     };
     const response = await ai.models.generateImages({ model: modelName, prompt: prompt, config: config });
 
-    if (req.isDemoUser && req.demoUserData && req.clientIp && demoUserUsageStore[req.clientIp]) {
+    if (req.isDemoUser && req.demoUser) {
       const numGenerated = response.generatedImages?.length || 0;
-      demoUserUsageStore[req.clientIp].imagenUses += numGenerated;
-      console.log(`[Demo Usage] Imagen: IP ${req.clientIp} used ${numGenerated} images. Total for session: ${demoUserUsageStore[req.clientIp].imagenUses}/${DEMO_LIMITS_CONFIG_PROXY.IMAGEN3_MAX_IMAGES_SESSION}`);
-      if (demoUserUsageStore[req.clientIp].imagenUses >= DEMO_LIMITS_CONFIG_PROXY.IMAGEN3_MAX_IMAGES_SESSION) {
-          demoUserUsageStore[req.clientIp].limitsLastExhaustedTimestamp = Date.now();
-      }
+      await pool.execute(
+          'UPDATE users SET demo_imagen_monthly_used = demo_imagen_monthly_used + ? WHERE id = ?',
+          [numGenerated, req.demoUser.id]
+      );
+      console.log(`[Demo Usage] Imagen: User ${req.demoUser.username} used ${numGenerated} images. New monthly total: ${req.demoUser.imagenMonthlyUsed + numGenerated}/${DEMO_USER_MONTHLY_LIMITS.IMAGEN3_MONTHLY_IMAGES}`);
     }
     res.json(response);
   } catch (error) {
     console.error("[Imagen Proxy Error]", error);
     let msgString = "Imagen generation failed due to an internal server error.";
-    let errorDetails = {};
-    if (error instanceof Error) {
-        msgString = error.message;
-        errorDetails = { name: error.name, stack: error.stack?.substring(0, 200) };
-    } else if (error.statusInfo && error.statusInfo.message) { 
-        msgString = String(error.statusInfo.message);
-    } else if (typeof error === 'object' && error !== null) {
-        msgString = JSON.stringify(error);
-    } else {
-        msgString = String(error);
-    }
-
+    if (error instanceof Error) msgString = error.message;
+    else if (error.statusInfo?.message) msgString = String(error.statusInfo.message);
     const errorStatus = error.status || 500;
-    if (!res.headersSent) {
-        return res.status(errorStatus).json({ error: `Imagen generation failed: ${msgString}`, details: errorDetails });
-    } else {
-        console.error("[Imagen Proxy Error] Headers already sent for Imagen error.");
-    }
+    if (!res.headersSent) return res.status(errorStatus).json({ error: `Imagen generation failed: ${msgString}` });
+    else console.error("[Imagen Proxy Error] Headers already sent.");
   }
 });
 
@@ -434,12 +368,12 @@ const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions';
 const OPENAI_TTS_URL = 'https://api.openai.com/v1/audio/speech';
 if (OPENAI_API_KEY) console.log("OpenAI API Key found."); else console.warn("PROXY WARNING: OPENAI_API_KEY missing.");
 
-app.post('/api/openai/chat/stream', demoOrPaidUserAuth, async (req, res) => {
+app.post('/api/openai/chat/stream', paidOrDemoUserAuthMiddleware, async (req, res) => {
     try {
         if (!OPENAI_API_KEY) return res.status(500).json({ error: "OpenAI API Key not configured." });
         const { modelIdentifier, history, modelSettings } = req.body;
         if (!modelIdentifier || !history || !modelSettings) return res.status(400).json({ error: "Missing fields." });
-
+        // DEMO user limits for OpenAI chat are not implemented yet, allow for now if authenticated.
         const openaiResponse = await fetch(OPENAI_CHAT_URL, {
             method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
             body: JSON.stringify({ model: modelIdentifier, messages: history, temperature: modelSettings.temperature, top_p: modelSettings.topP, stream: true }),
@@ -457,46 +391,33 @@ app.post('/api/openai/chat/stream', demoOrPaidUserAuth, async (req, res) => {
     } catch (error) {
         console.error("[OpenAI Chat Proxy Error]", error);
         let errorMsg = "OpenAI chat stream failed on proxy.";
-        let errorDetails = {};
-        if (error instanceof Error) {
-            errorMsg = error.message;
-            errorDetails = { name: error.name, stack: error.stack?.substring(0, 200) };
-        } else if (typeof error === 'object' && error !== null) {
-            errorMsg = JSON.stringify(error);
-        } else {
-            errorMsg = String(error);
-        }
-
-        if (!res.headersSent) {
-            res.status(500);
-            res.setHeader('Content-Type', 'text/event-stream');
-        }
-        res.write(`data: ${JSON.stringify({error: errorMsg, details: errorDetails, isFinished: true})}\n\n`);
+        if (error instanceof Error) errorMsg = error.message;
+        if (!res.headersSent) res.status(500); res.setHeader('Content-Type', 'text/event-stream');
+        res.write(`data: ${JSON.stringify({error: errorMsg, isFinished: true})}\n\n`);
         if (!res.writableEnded) res.end();
     }
 });
 
-app.post('/api/openai/tts/generate', demoOrPaidUserAuth, async (req, res) => {
+app.post('/api/openai/tts/generate', paidOrDemoUserAuthMiddleware, async (req, res) => {
   try {
     const { modelIdentifier, textInput, voice, speed, responseFormat = 'mp3' } = req.body;
     const currentChars = textInput ? textInput.length : 0;
 
     if (req.isPaidUser) {
       if (currentChars > PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL) {
-          return res.status(413).json({ error: `Input quá dài cho người dùng trả phí TTS. Tối đa: ${PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL}`, limitReached: true });
+          return res.status(413).json({ error: `Input too long for Paid user TTS. Max: ${PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL}`, limitReached: true });
       }
       console.log(`[OpenAI TTS Proxy] Paid user ${req.paidUser.username} generating audio for ${currentChars} chars.`);
     } else if (req.isDemoUser) {
-      if (!req.demoUserData) {
-          console.error("[OpenAI TTS Proxy Error] demoUserData is missing for a demo user request. IP:", req.clientIp);
-          return res.status(500).json({ error: "Internal server error: Demo user data not found."});
+      if (!req.demoUser || !pool) {
+          return res.status(500).json({ error: "Internal server error: Demo user data or DB not found."});
       }
-      const remainingChars = DEMO_LIMITS_CONFIG_PROXY.OPENAI_TTS_MAX_CHARS_TOTAL - req.demoUserData.ttsChars;
+      const remainingChars = DEMO_USER_MONTHLY_LIMITS.OPENAI_TTS_MONTHLY_CHARS - req.demoUser.ttsMonthlyCharsUsed;
       if (currentChars > remainingChars) {
-        return res.status(429).json({ error: `Đã hết ký tự sử dụng OpenAI TTS cho phiên DEMO này. Còn lại: ${remainingChars}, cần: ${currentChars}`, limitReached: true });
+        return res.status(429).json({ error: `Monthly TTS character limit for DEMO user reached. Remaining: ${remainingChars}, requested: ${currentChars}`, limitReached: true });
       }
-    } else if (!OPENAI_API_KEY) { 
-      return res.status(500).json({ error: "OpenAI API Key not configured for non-authenticated TTS." });
+    } else {
+      return res.status(401).json({ error: "User not authenticated for TTS." });
     }
     if (!modelIdentifier || !textInput || !voice || speed === undefined) return res.status(400).json({ error: "Missing fields for OpenAI TTS." });
 
@@ -509,30 +430,20 @@ app.post('/api/openai/tts/generate', demoOrPaidUserAuth, async (req, res) => {
         const errorMsg = String(errData.error?.message || "OpenAI TTS API Error");
         return res.status(openaiResponse.status).json({ error: errorMsg });
     }
-    if (req.isDemoUser && req.demoUserData && req.clientIp && demoUserUsageStore[req.clientIp]) {
-      demoUserUsageStore[req.clientIp].ttsChars += currentChars;
-      console.log(`[Demo Usage] TTS: IP ${req.clientIp} used ${currentChars} chars. Total for session: ${demoUserUsageStore[req.clientIp].ttsChars}/${DEMO_LIMITS_CONFIG_PROXY.OPENAI_TTS_MAX_CHARS_TOTAL}`);
-      if (demoUserUsageStore[req.clientIp].ttsChars >= DEMO_LIMITS_CONFIG_PROXY.OPENAI_TTS_MAX_CHARS_TOTAL) {
-          demoUserUsageStore[req.clientIp].limitsLastExhaustedTimestamp = Date.now();
-      }
+    if (req.isDemoUser && req.demoUser) {
+      await pool.execute(
+          'UPDATE users SET demo_tts_monthly_chars_used = demo_tts_monthly_chars_used + ? WHERE id = ?',
+          [currentChars, req.demoUser.id]
+      );
+      console.log(`[Demo Usage] TTS: User ${req.demoUser.username} used ${currentChars} chars. New monthly total: ${req.demoUser.ttsMonthlyCharsUsed + currentChars}/${DEMO_USER_MONTHLY_LIMITS.OPENAI_TTS_MONTHLY_CHARS}`);
     }
     res.setHeader('Content-Type', `audio/${responseFormat}`);
     openaiResponse.body.pipe(res);
   } catch (error) {
     console.error("[OpenAI TTS Proxy Error]", error);
     let errorMsg = "Failed to generate audio via proxy.";
-    let errorDetails = {};
-    if (error instanceof Error) {
-        errorMsg = error.message;
-        errorDetails = { name: error.name, stack: error.stack?.substring(0, 200) };
-    } else if (typeof error === 'object' && error !== null) {
-        errorMsg = JSON.stringify(error);
-    } else {
-        errorMsg = String(error);
-    }
-    if (!res.headersSent) {
-        res.status(500).json({ error: errorMsg, details: errorDetails });
-    }
+    if (error instanceof Error) errorMsg = error.message;
+    if (!res.headersSent) res.status(500).json({ error: errorMsg });
   }
 });
 
@@ -540,12 +451,12 @@ const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_CHAT_URL = 'https://api.deepseek.com/chat/completions';
 if (DEEPSEEK_API_KEY) console.log("Deepseek API Key found."); else console.warn("PROXY WARNING: DEEPSEEK_API_KEY missing.");
 
-app.post('/api/deepseek/chat/stream', demoOrPaidUserAuth, async (req, res) => {
+app.post('/api/deepseek/chat/stream', paidOrDemoUserAuthMiddleware, async (req, res) => {
     try {
         if (!DEEPSEEK_API_KEY) return res.status(500).json({ error: "Deepseek API Key not configured." });
         const { modelIdentifier, history, modelSettings } = req.body;
         if (!modelIdentifier || !history || !modelSettings) return res.status(400).json({ error: "Missing fields." });
-
+        // DEMO user limits for Deepseek chat are not implemented yet, allow for now if authenticated.
         const dsResponse = await fetch(DEEPSEEK_CHAT_URL, {
             method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DEEPSEEK_API_KEY}` },
             body: JSON.stringify({ model: modelIdentifier, messages: history, temperature: modelSettings.temperature, top_p: modelSettings.topP, stream: true }),
@@ -563,279 +474,114 @@ app.post('/api/deepseek/chat/stream', demoOrPaidUserAuth, async (req, res) => {
     } catch (error) {
         console.error("[Deepseek Chat Proxy Error]", error);
         let errorMsg = "Deepseek chat stream failed on proxy.";
-        let errorDetails = {};
-        if (error instanceof Error) {
-            errorMsg = error.message;
-            errorDetails = { name: error.name, stack: error.stack?.substring(0, 200) };
-        } else if (typeof error === 'object' && error !== null) {
-            errorMsg = JSON.stringify(error);
-        } else {
-            errorMsg = String(error);
-        }
-         if (!res.headersSent) {
-            res.status(500);
-            res.setHeader('Content-Type', 'text/event-stream');
-        }
-        res.write(`data: ${JSON.stringify({error: errorMsg, details: errorDetails, isFinished: true})}\n\n`);
+        if (error instanceof Error) errorMsg = error.message;
+        if (!res.headersSent) res.status(500); res.setHeader('Content-Type', 'text/event-stream');
+        res.write(`data: ${JSON.stringify({error: errorMsg, isFinished: true})}\n\n`);
         if (!res.writableEnded) res.end();
     }
 });
 
 const FAL_KEY = process.env.FAL_KEY;
-if (FAL_KEY) {
-    console.log("Fal.ai Key (FAL_KEY) found in process.env.");
-} else {
-    console.warn("PROXY WARNING: FAL_KEY not found in process.env. Fal.ai endpoints will likely fail.");
-}
+if (FAL_KEY) console.log("Fal.ai Key (FAL_KEY) found."); else console.warn("PROXY WARNING: FAL_KEY not found. Fal.ai endpoints will likely fail.");
 
-app.post('/api/fal/image/edit/flux-kontext', demoOrPaidUserAuth, async (req, res) => {
-  const currentClientIp = getClientIp(req); 
-  console.log(`[Flux Endpoint DEBUG] Request received. IP: ${currentClientIp}, PaidUser: ${req.isPaidUser}, DemoUser: ${req.isDemoUser}`);
-
-  if (req.isPaidUser && req.paidUser) {
-    console.log(`[Flux Endpoint DEBUG] Paid User: ${req.paidUser.username}. Monthly Flux Max Used: ${req.paidUser.fluxMaxMonthlyUsed}, Pro Used: ${req.paidUser.fluxProMonthlyUsed}`);
-  } else if (req.isDemoUser && req.demoUserData) {
-    console.log(`[Flux Endpoint DEBUG] Demo User. Initial req.demoUserData.fluxUses: ${req.demoUserData.fluxUses}`);
-    if (demoUserUsageStore[currentClientIp]) {
-      console.log(`[Flux Endpoint DEBUG] Demo User. Initial demoUserUsageStore[${currentClientIp}].fluxUses: ${demoUserUsageStore[currentClientIp].fluxUses}`);
-    } else {
-      console.warn(`[Flux Endpoint DEBUG] Demo User. demoUserUsageStore[${currentClientIp}] is UNDEFINED, but req.demoUserData exists.`);
-    }
-  }
-
+app.post('/api/fal/image/edit/flux-kontext', paidOrDemoUserAuthMiddleware, async (req, res) => {
   try {
-    if (!FAL_KEY) {
-        return res.status(500).json({ error: "Fal.ai API Key (FAL_KEY) not configured on proxy." });
-    }
-    const {
-        modelIdentifier, 
-        prompt,
-        image_base_64,
-        image_mime_type,
-        images_data, 
-        guidance_scale: guidance_scale_param,
-        safety_tolerance: safety_tolerance_param,
-        num_inference_steps: num_inference_steps_param,
-        seed: seed_param,
-        num_images: num_images_param, 
-        aspect_ratio: aspect_ratio_param, 
-        output_format: output_format_param,
-    } = req.body;
-
-    if (!modelIdentifier || !prompt) {
-         return res.status(400).json({ error: "Missing required fields: modelIdentifier, prompt for Flux Kontext." });
-    }
+    if (!FAL_KEY) return res.status(500).json({ error: "Fal.ai API Key not configured." });
+    const { modelIdentifier, prompt, image_base_64, image_mime_type, images_data, ...settings } = req.body;
+    if (!modelIdentifier || !prompt) return res.status(400).json({ error: "Missing modelIdentifier or prompt for Flux." });
     
     const isFluxMax = modelIdentifier === 'fal-ai/flux-pro/kontext/max/multi';
     const isFluxPro = modelIdentifier === 'fal-ai/flux-pro/kontext';
 
     if (isFluxMax && (!images_data || !Array.isArray(images_data) || images_data.length === 0)) {
-        return res.status(400).json({ error: "Flux Kontext Max/Multi requires 'images_data' array." });
+        return res.status(400).json({ error: "Flux Max requires 'images_data' array." });
     } else if (isFluxPro && (!image_base_64 || !image_mime_type)) {
-        return res.status(400).json({ error: "Standard Flux Kontext requires 'image_base_64' and 'image_mime_type'." });
+        return res.status(400).json({ error: "Flux Pro requires 'image_base_64' and 'image_mime_type'." });
     }
-
-
-    // Check limits
+    
+    // Limit checks
     if (req.isPaidUser && req.paidUser) {
         const yearMonth = getCurrentYearMonth();
         const monthlyUsage = paidUserFluxMonthlyUsageStore[req.paidUser.username]?.[yearMonth];
-        if (!monthlyUsage) {
-             console.error(`[Flux Endpoint CRITICAL] Paid user ${req.paidUser.username} monthly usage for ${yearMonth} not found/initialized!`);
-             return res.status(500).json({ error: "Internal server error: Paid user usage data not found." });
-        }
+        if (!monthlyUsage) return res.status(500).json({ error: "Paid user usage data not found." });
         if (isFluxMax && monthlyUsage.fluxMaxUsed >= PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_MAX_MONTHLY_MAX_USES) {
-            return res.status(429).json({ error: `Monthly limit for Flux Kontext Max reached (${PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_MAX_MONTHLY_MAX_USES} images/month).`, limitReached: true });
+            return res.status(429).json({ error: `Monthly Flux Max limit reached.`, limitReached: true });
         }
         if (isFluxPro && monthlyUsage.fluxProUsed >= PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_PRO_MONTHLY_MAX_USES) {
-            return res.status(429).json({ error: `Monthly limit for Flux Kontext Pro reached (${PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_PRO_MONTHLY_MAX_USES} images/month).`, limitReached: true });
+            return res.status(429).json({ error: `Monthly Flux Pro limit reached.`, limitReached: true });
         }
-    } else if (req.isDemoUser) {
-      if (!req.demoUserData || !currentClientIp || !demoUserUsageStore[currentClientIp]) {
-        console.error("[Flux Endpoint CRITICAL] Demo user data integrity issue before limit check. IP:", currentClientIp, "req.demoUserData exists:", !!req.demoUserData, "store entry exists:", !!demoUserUsageStore[currentClientIp]);
-        return res.status(500).json({ error: "Demo user data integrity issue. Cannot process request."});
-      }
-      const remainingUses = DEMO_LIMITS_CONFIG_PROXY.FLUX_KONTEX_MAX_USES_SESSION - demoUserUsageStore[currentClientIp].fluxUses;
-      console.log(`[Flux Endpoint DEBUG] Demo User ${currentClientIp}. Flux uses before this request: ${demoUserUsageStore[currentClientIp].fluxUses}. Remaining: ${remainingUses}`);
-      if (remainingUses <= 0) {
-        console.log(`[Flux Endpoint DEBUG] Demo User ${currentClientIp} has no Flux uses left. Blocking.`);
-        return res.status(429).json({ error: `Đã hết ${DEMO_LIMITS_CONFIG_PROXY.FLUX_KONTEX_MAX_USES_SESSION} lượt sử dụng Flux Kontext cho phiên DEMO này.`, limitReached: true, usesLeft: 0 });
-      }
-    }
-
-    let falInput = {
-        prompt: prompt,
-        guidance_scale: guidance_scale_param ?? PROXY_DEFAULT_FLUX_KONTEX_SETTINGS.guidance_scale,
-        safety_tolerance: safety_tolerance_param ?? PROXY_DEFAULT_FLUX_KONTEX_SETTINGS.safety_tolerance,
-        seed: (seed_param === null || seed_param === undefined) ? null : seed_param, 
-        num_images: num_images_param ?? PROXY_DEFAULT_FLUX_KONTEX_SETTINGS.num_images,
-        output_format: output_format_param ?? PROXY_DEFAULT_FLUX_KONTEX_SETTINGS.output_format,
-    };
-    const effectiveAspectRatio = aspect_ratio_param === undefined 
-      ? PROXY_DEFAULT_FLUX_KONTEX_SETTINGS.aspect_ratio 
-      : aspect_ratio_param; 
-    if (effectiveAspectRatio && effectiveAspectRatio !== 'default') {
-        falInput.aspect_ratio = effectiveAspectRatio;
-    }
-    if (modelIdentifier !== 'fal-ai/flux-pro/kontext/max/multi') {
-        falInput.num_inference_steps = num_inference_steps_param ?? PROXY_DEFAULT_FLUX_KONTEX_SETTINGS.num_inference_steps;
+    } else if (req.isDemoUser && req.demoUser) {
+        if (!pool) return res.status(500).json({ error: "DB not available for DEMO limit check." });
+        const limitToCheck = isFluxMax ? DEMO_USER_MONTHLY_LIMITS.FLUX_KONTEX_MAX_MONTHLY : DEMO_USER_MONTHLY_LIMITS.FLUX_KONTEX_PRO_MONTHLY;
+        const usedCount = isFluxMax ? req.demoUser.fluxMaxMonthlyUsed : req.demoUser.fluxProMonthlyUsed;
+        if (usedCount >= limitToCheck) {
+            return res.status(429).json({ error: `Monthly ${isFluxMax ? 'Flux Max' : 'Flux Pro'} limit for DEMO user reached.`, limitReached: true });
+        }
     } else {
-        console.log(`[Flux Kontext Max/Multi Proxy] Not including 'num_inference_steps' as it's not in the model's schema.`);
+      return res.status(401).json({ error: "User not authenticated for Flux." });
     }
 
-    if (isFluxMax) {
-        falInput.image_urls = images_data.map(img => `data:${img.mimeType};base64,${img.base64}`);
-    } else { 
-        falInput.image_url = `data:${image_mime_type};base64,${image_base_64}`;
-    }
-    console.log(`[Flux Endpoint DEBUG] Calling Fal.ai with model ${modelIdentifier}. Input (image data truncated):`, { ...falInput, image_url: falInput.image_url?.substring(0,50), image_urls: falInput.image_urls?.map(u => u.substring(0,50)) });
+    let falInput = { prompt, ...PROXY_DEFAULT_FLUX_KONTEX_SETTINGS, ...settings };
+    if (isFluxMax) falInput.image_urls = images_data.map(img => `data:${img.mimeType};base64,${img.base64}`);
+    else falInput.image_url = `data:${image_mime_type};base64,${image_base_64}`;
+    if (modelIdentifier === 'fal-ai/flux-pro/kontext/max/multi' && falInput.num_inference_steps) delete falInput.num_inference_steps;
+
 
     const queueResult = await fal.queue.submit(modelIdentifier, { input: falInput });
-    console.log(`[Flux Endpoint DEBUG] Fal.queue.submit result: request_id = ${queueResult?.request_id}`);
+    if (!queueResult?.request_id) return res.status(500).json({ error: "Fal.ai submission failed (no request ID)." });
 
-    if (queueResult && queueResult.request_id) {
-        console.log(`[Flux Kontext Proxy] Request ID from fal.queue.submit for model ${modelIdentifier}: ${queueResult.request_id}`);
-        
-        if (req.isPaidUser && req.paidUser) {
-            const yearMonth = getCurrentYearMonth();
-            const userMonthlyStore = paidUserFluxMonthlyUsageStore[req.paidUser.username]?.[yearMonth];
-            if (userMonthlyStore) {
-                if (isFluxMax) userMonthlyStore.fluxMaxUsed += 1;
-                if (isFluxPro) userMonthlyStore.fluxProUsed += 1;
-                console.log(`[Paid Usage] Flux (${isFluxMax ? 'Max' : 'Pro'}): User ${req.paidUser.username} used 1 attempt. Total for month ${yearMonth}: Max=${userMonthlyStore.fluxMaxUsed}, Pro=${userMonthlyStore.fluxProUsed}`);
-            }
-        } else if (req.isDemoUser && req.demoUserData && currentClientIp && demoUserUsageStore[currentClientIp]) { 
-          console.log(`[Flux Endpoint DEBUG] Before increment: demoUserUsageStore[${currentClientIp}].fluxUses = ${demoUserUsageStore[currentClientIp].fluxUses}`);
-          demoUserUsageStore[currentClientIp].fluxUses += 1;
-          console.log(`[Flux Endpoint DEBUG] After increment: demoUserUsageStore[${currentClientIp}].fluxUses = ${demoUserUsageStore[currentClientIp].fluxUses}`);
-          console.log(`[Demo Usage] Flux: IP ${currentClientIp} used 1 attempt. Total for session: ${demoUserUsageStore[currentClientIp].fluxUses}/${DEMO_LIMITS_CONFIG_PROXY.FLUX_KONTEX_MAX_USES_SESSION}`);
-          if (demoUserUsageStore[currentClientIp].fluxUses >= DEMO_LIMITS_CONFIG_PROXY.FLUX_KONTEX_MAX_USES_SESSION) {
-              demoUserUsageStore[currentClientIp].limitsLastExhaustedTimestamp = Date.now();
-          }
-        }
-        res.json({ requestId: queueResult.request_id, message: "Image editing request submitted via queue. Polling for status." });
-    } else {
-        console.error(`[Flux Kontext Proxy] Fal.queue.submit for model ${modelIdentifier} did not return a request_id. Result:`, queueResult);
-        res.status(500).json({ error: "Fal.ai Flux Kontext: Failed to get a request ID for polling.", rawResult: queueResult });
+    // Update usage counts
+    if (req.isPaidUser && req.paidUser) {
+        const yearMonth = getCurrentYearMonth();
+        if (isFluxMax) paidUserFluxMonthlyUsageStore[req.paidUser.username][yearMonth].fluxMaxUsed += 1;
+        if (isFluxPro) paidUserFluxMonthlyUsageStore[req.paidUser.username][yearMonth].fluxProUsed += 1;
+        console.log(`[Paid Usage] Flux (${isFluxMax ? 'Max' : 'Pro'}): User ${req.paidUser.username}. Total used this month - Max: ${paidUserFluxMonthlyUsageStore[req.paidUser.username][yearMonth].fluxMaxUsed}, Pro: ${paidUserFluxMonthlyUsageStore[req.paidUser.username][yearMonth].fluxProUsed}`);
+    } else if (req.isDemoUser && req.demoUser) {
+        const fieldToUpdate = isFluxMax ? 'demo_flux_max_monthly_used' : 'demo_flux_pro_monthly_used';
+        await pool.execute(`UPDATE users SET ${fieldToUpdate} = ${fieldToUpdate} + 1 WHERE id = ?`, [req.demoUser.id]);
+        console.log(`[Demo Usage] Flux (${isFluxMax ? 'Max' : 'Pro'}): User ${req.demoUser.username} used 1 attempt.`);
     }
+    res.json({ requestId: queueResult.request_id, message: "Image editing request submitted." });
   } catch (error) {
-    console.error("[Flux Kontext Proxy Error] /api/fal/image/edit/flux-kontext:", error);
-    let errorMsg = "Failed to submit image editing request to Fal.ai proxy due to an internal server error.";
-    let errorDetails = {};
-    if (error instanceof Error) {
-        errorMsg = error.message;
-        errorDetails = { name: error.name, stack: error.stack?.substring(0, 200) };
-    } else if (typeof error === 'object' && error !== null) {
-        errorMsg = JSON.stringify(error); 
-    } else {
-        errorMsg = String(error);
-    }
-    if (!res.headersSent) {
-        res.status(500).json({ error: `Flux Kontext Submission Error: ${errorMsg}`, details: errorDetails });
-    } else {
-        console.error("[Flux Proxy Error] Headers already sent for Flux Kontext submission error.");
-    }
+    console.error("[Flux Edit Proxy Error]", error);
+    res.status(500).json({ error: `Flux Edit Error: ${error.message || "Internal server error"}` });
   }
 });
 
 app.post('/api/fal/image/edit/status', async (req, res) => {
-  let requestIdFromRequest = req.body?.requestId;
-  let modelIdFromRequest = req.body?.modelIdentifier;
   try {
-    if (!FAL_KEY) {
-        return res.status(500).json({ error: "Fal.ai API Key (FAL_KEY) not configured on proxy." });
-    }
+    if (!FAL_KEY) return res.status(500).json({ error: "Fal.ai API Key not configured." });
     const { requestId, modelIdentifier } = req.body;
-    requestIdFromRequest = requestId; 
-    modelIdFromRequest = modelIdentifier; 
-
-    if (!requestId || !modelIdentifier) {
-        return res.status(400).json({ error: "Missing requestId or modelIdentifier for status check." });
-    }
-    console.log(`[Flux Kontext Status Proxy] Checking status for request ID: ${requestId} on model: ${modelIdentifier}`);
+    if (!requestId || !modelIdentifier) return res.status(400).json({ error: "Missing requestId or modelIdentifier." });
 
     const statusResult = await fal.queue.status(modelIdentifier, { requestId });
+    let responsePayload = { status: statusResult?.status, rawResult: statusResult };
 
-    let responsePayload = { rawResult: statusResult, status: undefined, editedImageUrl: undefined, message: undefined, error: undefined };
-    if (statusResult) {
-        if (statusResult.status === 'COMPLETED') {
-            try {
-                console.log(`[Flux Kontext Status Proxy] Status is COMPLETED for ${requestId} (${modelIdentifier}). Fetching result...`);
-                const jobResult = await fal.queue.result(modelIdentifier, { requestId });
-                console.log(`[Flux Kontext Status Proxy] Result fetched for ${requestId} (${modelIdentifier}).`);
-                 if (process.env.VERBOSE_LOGGING === 'true') console.log("[Flux Kontext Status Proxy] Full result object:", JSON.stringify(jobResult, null, 2));
-
-                let imageUrl;
-                if (jobResult && jobResult.images && Array.isArray(jobResult.images) && jobResult.images.length > 0 && jobResult.images[0].url) {
-                    imageUrl = jobResult.images[0].url;
-                } else if (jobResult && jobResult.data && jobResult.data.images && Array.isArray(jobResult.data.images) && jobResult.data.images.length > 0 && jobResult.data.images[0].url) {
-                    imageUrl = jobResult.data.images[0].url; 
-                }
-                if (imageUrl) {
-                    responsePayload.status = 'COMPLETED';
-                    responsePayload.editedImageUrl = imageUrl;
-                    responsePayload.message = "Image editing completed successfully.";
-                    responsePayload.rawResult = jobResult; 
-                } else {
-                    responsePayload.status = 'COMPLETED_NO_IMAGE';
-                    responsePayload.message = "Processing completed, but no image URL was found in Fal.ai result payload.";
-                    responsePayload.error = "Fal.ai result payload did not contain an image URL or was structured unexpectedly.";
-                    responsePayload.rawResult = jobResult;
-                    console.warn(`[Flux Kontext Status Proxy] 'COMPLETED' status for ${modelIdentifier}, result fetched, but no image URL at expected path. Fal.ai result:`, jobResult);
-                }
-            } catch (resultError) {
-                let detailedErrorMessage = String(resultError.message || "Failed to fetch result for completed job.");
-                if (resultError.status === 422 && resultError.body && resultError.body.detail) {
-                    try { detailedErrorMessage += ` Fal.ai Details: ${JSON.stringify(resultError.body.detail)}`; } 
-                    catch (stringifyError) { detailedErrorMessage += ` Fal.ai Details: (Could not stringify error body detail)`; }
-                }
-                console.error(`[Flux Kontext Status Proxy Error] Fetching result for COMPLETED ${requestId} (${modelIdentifier}):`, resultError, "Detailed Error Message:", detailedErrorMessage);
-                responsePayload.status = 'ERROR_FETCHING_RESULT';
-                responsePayload.error = detailedErrorMessage;
-                responsePayload.message = "Image editing completed, but failed to retrieve the final image due to an API error.";
-            }
-        } else if (statusResult.status === 'IN_PROGRESS' || statusResult.status === 'IN_QUEUE') {
-            responsePayload.status = statusResult.status;
-            responsePayload.message = `Image editing is ${statusResult.status.toLowerCase()}.`;
-        } else if (statusResult.status === 'ERROR') { 
-            responsePayload.status = 'ERROR';
-            const errorLog = statusResult.logs?.find(log => log.level === 'ERROR');
-            responsePayload.error = String(statusResult.error?.message || errorLog?.message || "Fal.ai reported an error.");
-            responsePayload.message = "Image editing failed.";
-        } else { 
-            responsePayload.status = statusResult.status || 'IN_PROGRESS'; 
-            responsePayload.message = `Image editing status: ${statusResult.status || 'Unknown'}.`;
+    if (statusResult?.status === 'COMPLETED') {
+        const jobResult = await fal.queue.result(modelIdentifier, { requestId });
+        responsePayload.rawResult = jobResult; // Ensure full result is in rawResult
+        let imageUrl = jobResult?.images?.[0]?.url || jobResult?.data?.images?.[0]?.url;
+        if (imageUrl) {
+            responsePayload.editedImageUrl = imageUrl;
+            responsePayload.message = "Image editing completed successfully.";
+        } else {
+            responsePayload.status = 'COMPLETED_NO_IMAGE';
+            responsePayload.message = "Processing completed, but no image URL found.";
+            responsePayload.error = "Fal.ai result did not contain an image URL.";
         }
-        console.log(`[Flux Kontext Status Proxy] Status for ${requestId} (${modelIdentifier}): ${responsePayload.status}. Message: ${responsePayload.message}`);
-        return res.json(responsePayload);
-    } else { 
-        console.warn(`[Flux Kontext Status Proxy] Request ID ${requestId} (${modelIdentifier}) not found by Fal.ai or statusResult was null/undefined.`);
-        return res.status(404).json({ status: 'NOT_FOUND', error: `Request ID ${requestId} for model ${modelIdentifier} not found or invalid status response.`, message: `Request ID ${requestId} not found or invalid status.` });
+    } else if (statusResult?.status === 'ERROR') {
+        responsePayload.error = statusResult.error?.message || "Fal.ai reported an error.";
+        responsePayload.message = "Image editing failed.";
+    } else if (!statusResult) {
+        return res.status(404).json({ status: 'NOT_FOUND', error: `Request ID ${requestId} not found.` });
     }
-  } catch (error) { 
-    console.error(`[Flux Kontext Status Proxy Error] Checking status for ${requestIdFromRequest} (Model: ${modelIdFromRequest}):`, error);
-    let errorMsg = "Failed to check Fal.ai request status via proxy.";
-    let errorDetails = {};
-    if (error instanceof Error) {
-        errorMsg = error.message;
-        errorDetails = { name: error.name, stack: error.stack?.substring(0, 200) };
-    } else if (typeof error === 'object' && error !== null) {
-        errorMsg = JSON.stringify(error);
-    } else {
-        errorMsg = String(error);
-    }
-    if (error.message && (error.message.includes("404") || error.message.toLowerCase().includes("not found") || error.message.toLowerCase().includes("request not found"))) {
-        if (!res.headersSent) {
-            return res.status(404).json({ status: 'NOT_FOUND', error: `Request ID ${requestIdFromRequest} not found (Fal error: ${errorMsg}).`, message: `Request ID ${requestIdFromRequest} not found.`, details: errorDetails });
-        }
-    }
-    if (!res.headersSent) {
-        res.status(500).json({ status: 'PROXY_REQUEST_ERROR', error: `Fal Status Check Error: ${errorMsg}`, message: "Error checking status with Fal.ai proxy.", details: errorDetails });
-    } else {
-        console.error("[Flux Status Proxy Error] Headers already sent for status check error.");
-    }
+    res.json(responsePayload);
+  } catch (error) {
+    console.error("[Flux Status Proxy Error]", error);
+    res.status(500).json({ status: 'PROXY_REQUEST_ERROR', error: `Fal Status Check Error: ${error.message || "Internal server error"}` });
   }
 });
+
 
 app.listen(port, () => {
   console.log(`AI Chat Proxy Server listening at http://localhost:${port}`);
