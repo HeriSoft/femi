@@ -132,7 +132,7 @@ export const MAX_SAVED_CHAT_SESSIONS = 10; // Max number of chat sessions to sto
 // export const DEMO_USER_KEY = "DEMO"; // REPLACED: DEMO login now uses specific usernames via verify-code
 
 export const DEMO_USER_DEFAULT_MONTHLY_LIMITS = { // Max values for a DEMO user per month
-  FLUX_KONTEX_MAX_MONTHLY: 5,
+  FLUX_KONTEX_MAX_MONTHLY: 0, // Changed from 5 to 0
   FLUX_KONTEX_PRO_MONTHLY: 10,
   IMAGEN3_MONTHLY_IMAGES: 20,
   OPENAI_TTS_MONTHLY_CHARS: 10000,
