@@ -389,8 +389,14 @@ export const BuildingStorefrontIcon: React.FC<React.SVGProps<SVGSVGElement>> = (
 
 export const DocumentTextIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
     <path strokeLinecap="round" strokeLinejoin="round" d="M9 10.5h.008v.008H9v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 2.25h.008v.008H9v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 2.25h.008v.008H9v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+  </svg>
+);
+
+export const MegaphoneIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M10.34 3.75h-1.5a.75.75 0 0 0-.75.75v4.5a.75.75 0 0 0 .75.75h1.5m0-6H12M10.34 3.75L12 3m0 0l1.66 2.49m-1.66-2.49L10.34 3.75m1.66 0L13.66 6M12 3v2.49m0 0L10.34 6M12 5.49L13.66 6m0 0v2.49m0 0l1.5 2.25M13.66 6l-3.32 4.98M13.66 6H12m1.66 0L12 5.49M16.5 9.75h1.5a.75.75 0 0 0 .75-.75V4.5a.75.75 0 0 0-.75-.75h-1.5m0 6H15m1.5 0v2.25m0 0l1.5 2.25M16.5 12l-3.32 4.98M16.5 12H15m1.5 0l-1.5-2.25M12 12.75V15m0 0l3.445 5.167a.75.75 0 0 0 1.22-.868L13.5 15M12 15l-3.445 5.167a.75.75 0 0 1-1.22-.868L10.5 15m1.5 0H12M12 15H6.75A2.25 2.25 0 0 1 4.5 12.75V9A2.25 2.25 0 0 1 6.75 6.75h7.5A2.25 2.25 0 0 1 16.5 9v3.75a2.25 2.25 0 0 1-2.25 2.25H12Z" />
   </svg>
 );
 // ... any other icons you might need
