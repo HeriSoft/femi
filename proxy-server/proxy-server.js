@@ -1,4 +1,6 @@
 
+
+
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -77,8 +79,8 @@ else console.log("LOGIN_CODE_AUTH_ADMIN is SET for admin.");
 
 // --- NAMED DEMO USER CONSTANTS (from DB) ---
 const DEMO_USER_MONTHLY_LIMITS = {
-  FLUX_KONTEX_MAX_MONTHLY: 0, // Changed from 5 to 0
-  FLUX_KONTEX_PRO_MONTHLY: 10,
+  FLUX_KONTEX_MAX_MONTHLY: 0, 
+  FLUX_KONTEX_PRO_MONTHLY: 1, // Updated to 1
   IMAGEN3_MONTHLY_IMAGES: 20,
   OPENAI_TTS_MONTHLY_CHARS: 10000,
 };
