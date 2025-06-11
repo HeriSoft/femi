@@ -136,7 +136,7 @@ const Header: React.FC<HeaderProps> = ({
 
   const handleLoginSubmit = async () => {
     if (!loginCodeInput.trim()) {
-      addNotification("Liên hệ admin qua zalo: 0901984741 để lấy key miễn phí.", "error");
+      addNotification("Please enter a login code/username.", "error");
       return;
     }
     setIsLoginLoading(true);
@@ -339,10 +339,13 @@ const Header: React.FC<HeaderProps> = ({
                 value={loginCodeInput}
                 onChange={(e) => setLoginCodeInput(e.target.value)}
                 placeholder="Enter code"
-                className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none mb-4"
+                className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none mb-2"
                 autoFocus
                 disabled={isLoginLoading}
               />
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-4 text-center">
+                Liên hệ admin qua zalo: 0901984741 để lấy key miễn phí
+              </p>
               <div className="flex justify-end space-x-2">
                 <button
                   onClick={() => setIsLoginModalOpen(false)}
