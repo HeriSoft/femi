@@ -136,7 +136,7 @@ const Header: React.FC<HeaderProps> = ({
 
   const handleLoginSubmit = async () => {
     if (!loginCodeInput.trim()) {
-      addNotification("Please enter a login code/username.", "error");
+      addNotification("Liên hệ admin qua zalo: 0901984741 để lấy key miễn phí.", "error");
       return;
     }
     setIsLoginLoading(true);
