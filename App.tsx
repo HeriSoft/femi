@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { ThemeContextType, Model, UserGlobalProfile, LanguageOption, UserLanguageProfile, WebGameType, NotificationType as AppNotificationType, TienLenGameModalProps, CreditPackage, UserSessionState, DemoLoginResponse, DemoUserLimits, LoginResponseType, PaidLoginResponse, AdminLoginResponse, PaidUserLimits } from './types.ts';
+import { ThemeContextType, Model, UserGlobalProfile, LanguageOption, UserLanguageProfile, WebGameType, NotificationType as AppNotificationType, TienLenGameModalProps, CreditPackage, UserSessionState, DemoUserLoginResponse, DemoUserLimits, LoginResponseType, PaidLoginResponse, AdminLoginResponse, PaidUserLimits } from './types.ts';
 import ChatPage from './components/ChatPage.tsx';
 import Header, { MockUser } from './components/Header.tsx';
 import LanguageLearningModal from './components/LanguageLearningModal.tsx';
@@ -10,7 +10,7 @@ import TienLenGameModal from './components/games/tienlen/TienLenGameModal.tsx';
 import NewsModal from './components/NewsModal.tsx'; // Import NewsModal
 import { NotificationProvider, useNotification } from './contexts/NotificationContext.tsx';
 import { KeyIcon } from './components/Icons.tsx';
-import { LOCAL_STORAGE_USER_PROFILE_KEY, DEFAULT_USER_LANGUAGE_PROFILE, EXP_MILESTONES_CONFIG, BADGES_CATALOG, LOCAL_STORAGE_CHAT_BACKGROUND_KEY, DEMO_CREDIT_PACKAGES, DEMO_USER_KEY, INITIAL_DEMO_USER_LIMITS, PAID_USER_LIMITS_CONFIG } from './constants.ts';
+import { LOCAL_STORAGE_USER_PROFILE_KEY, DEFAULT_USER_LANGUAGE_PROFILE, EXP_MILESTONES_CONFIG, BADGES_CATALOG, LOCAL_STORAGE_CHAT_BACKGROUND_KEY, DEMO_CREDIT_PACKAGES, INITIAL_DEMO_USER_LIMITS, PAID_USER_LIMITS_CONFIG } from './constants.ts'; // Removed DEMO_USER_KEY
 
 export const ThemeContext = React.createContext<ThemeContextType | undefined>(undefined);
 
@@ -126,7 +126,8 @@ const AppContent: React.FC<AppContentProps> = ({
               Authentication Required
             </h2>
             <p className="text-neutral-600 dark:text-neutral-400 max-w-md">
-              Please log in to access the AI chat application. You can do this by clicking the "Login" button in the header. Try "DEMO" or your paid user code.
+              Please log in to access the AI chat application. You can do this by clicking the "Login" button in the header.
+              Try a DEMO username like "guest_demo" (if available) or your Admin/Paid user code.
             </p>
           </div>
         )}
@@ -167,9 +168,10 @@ const App = (): JSX.Element => {
   
   const [userSession, setUserSession] = useState<UserSessionState>({
     isDemoUser: false,
+    demoUsername: undefined,
     demoUserToken: null,
     demoLimits: null,
-    isDemoBlockedByVpn: false,
+    // isDemoBlockedByVpn: false, // This is removed as VPN blocking is no longer a client-side concern with named demo users
     isPaidUser: false,
     paidUsername: undefined,
     paidUserToken: null,
@@ -195,14 +197,15 @@ const App = (): JSX.Element => {
 
   useEffect(() => {
     setIsAppReady(false);
+    let profileToSet: UserGlobalProfile = { languageProfiles: {}, aboutMe: '', credits: 0, paypalEmail: undefined };
+
     if (currentUser && !userSession.isDemoUser && !userSession.isPaidUser) { // Admin user
-      let loadedProfile: UserGlobalProfile = { languageProfiles: {}, aboutMe: 'Admin User', credits: 99999, paypalEmail: undefined }; 
-      // Admin might have a separate profile or default high credits
-      setUserProfile(loadedProfile);
-    } else if (userSession.isDemoUser) { 
-      setUserProfile({ languageProfiles: {}, aboutMe: 'DEMO User', credits: 0, paypalEmail: undefined }); 
-    } else if (userSession.isPaidUser) {
-        let loadedProfile: UserGlobalProfile = { languageProfiles: {}, aboutMe: `Paid User: ${userSession.paidUsername}`, credits: 1000, paypalEmail: undefined }; // Example credits
+      profileToSet = { languageProfiles: {}, aboutMe: 'Admin User', credits: 99999, paypalEmail: undefined };
+    } else if (userSession.isDemoUser && userSession.demoUsername) { 
+      profileToSet = { languageProfiles: {}, aboutMe: `DEMO User: ${userSession.demoUsername}`, credits: 0, paypalEmail: undefined }; 
+      // DEMO user profile is not persisted in localStorage for now. Limits are server-driven.
+    } else if (userSession.isPaidUser && userSession.paidUsername) {
+        let loadedProfile: UserGlobalProfile = { languageProfiles: {}, aboutMe: `Paid User: ${userSession.paidUsername}`, credits: 1000, paypalEmail: undefined }; 
          try {
             const storedProfileString = localStorage.getItem(`${LOCAL_STORAGE_USER_PROFILE_KEY}_${userSession.paidUsername}`);
             if (storedProfileString) {
@@ -212,25 +215,26 @@ const App = (): JSX.Element => {
                 }
             }
         } catch (error) { console.error(`[App.tsx] Error loading profile for ${userSession.paidUsername}:`, error); }
-        setUserProfile(loadedProfile);
+        profileToSet = loadedProfile;
     } else { 
-      setUserProfile({ languageProfiles: {}, aboutMe: '', credits: 0, paypalEmail: undefined }); 
       setIsLoginModalInitiallyOpen(true); 
       setIsLanguageLearningModalOpen(false); setIsGamesModalOpen(false); setIsVoiceAgentWidgetActive(false); setIsWebGamePlayerModalOpen(false); setActiveWebGameType(null);
     }
+    setUserProfile(profileToSet);
     setIsAppReady(true); 
-  }, [currentUser, userSession.isDemoUser, userSession.isPaidUser, userSession.paidUsername]);
+  }, [currentUser, userSession.isDemoUser, userSession.isPaidUser, userSession.paidUsername, userSession.demoUsername]);
 
   useEffect(() => {
-    if (currentUser && isAppReady) { 
+    // Only save profile for Admin or Paid users. DEMO user profiles are not saved to localStorage.
+    if (isAppReady && ((currentUser && !userSession.isDemoUser && !userSession.isPaidUser) || (userSession.isPaidUser && userSession.paidUsername))) { 
       try {
-        let profileKey = LOCAL_STORAGE_USER_PROFILE_KEY;
+        let profileKey = LOCAL_STORAGE_USER_PROFILE_KEY; // Default for admin or if paidUsername somehow not set
         if (userSession.isPaidUser && userSession.paidUsername) {
             profileKey = `${LOCAL_STORAGE_USER_PROFILE_KEY}_${userSession.paidUsername}`;
-        } else if (userSession.isDemoUser || (!userSession.isDemoUser && !userSession.isPaidUser && currentUser?.name === "Admin User")) {
-            // Admin profile might be stored under a generic key or not stored if it's static
-            // Demo user profile is not persisted this way
-            return; 
+        } else if (currentUser?.name === "Admin User") { // Explicitly for Admin
+             profileKey = `${LOCAL_STORAGE_USER_PROFILE_KEY}_admin`;
+        } else {
+            return; // Do not save if it's not admin or a specific paid user
         }
         localStorage.setItem(profileKey, JSON.stringify(userProfile));
       } catch (error) { console.error("Error saving user profile:", error); }
@@ -239,106 +243,83 @@ const App = (): JSX.Element => {
 
   const toggleTheme = useCallback(() => setTheme(prev => prev === 'light' ? 'dark' : 'light'), []);
 
-  const handleLogin = useCallback(async (loginCode: string) => {
+  const handleLogin = useCallback(async (loginCode: string) => { // loginCode is now username for all types
     setIsLoginModalInitiallyOpen(false);
-    setCurrentUser(null); // Reset previous user state
-    setUserSession({ // Reset session state
-        isDemoUser: false, demoUserToken: null, demoLimits: null, isDemoBlockedByVpn: false,
+    setCurrentUser(null); 
+    setUserSession({ 
+        isDemoUser: false, demoUsername: undefined, demoUserToken: null, demoLimits: null,
         isPaidUser: false, paidUsername: undefined, paidUserToken: null, paidSubscriptionEndDate: null, paidLimits: null,
     });
-    setIsNewsModalOpen(false); // Ensure news modal is closed before new login attempt
+    setIsNewsModalOpen(false);
 
-    if (loginCode.toUpperCase() === DEMO_USER_KEY) { 
-        try {
-            const response = await fetch('/api/auth/demo-login', { method: 'POST' });
-            if (!response.ok) {
-                const errorText = await response.text().catch(() => `Proxy request failed with status ${response.status}`);
-                addAppNotification(`DEMO login failed: ${errorText.substring(0,100)}`, "error", `Status: ${response.status}`);
-                let isBlockedByVpnLocal = false; 
-                try { const errJson = JSON.parse(errorText); if(errJson.isBlocked) isBlockedByVpnLocal = true;} catch(_) {}
-                setUserSession(prev => ({ ...prev, isDemoBlockedByVpn: isBlockedByVpnLocal })); 
-                return;
-            }
-            const data = await response.json() as DemoLoginResponse;
-            if (data.success && data.demoUserToken && data.limits) {
-                setCurrentUser({ name: "DEMO User" }); 
+    try {
+        const response = await fetch('/api/auth/verify-code', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: loginCode }),
+        });
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => `Proxy request failed with status ${response.status}`);
+            addAppNotification(`Login failed: ${errorText.substring(0,100)}`, "error", `Status: ${response.status}`);
+            return;
+        }
+        const data = await response.json() as LoginResponseType; 
+
+        if (data.success) {
+            if ((data as AdminLoginResponse).isAdmin) {
+                setCurrentUser({ name: "Admin User" });
+                setUserSession(prev => ({ ...prev, isPaidUser: false, isDemoUser: false })); 
+                addAppNotification("Admin login successful!", "success");
+                setIsNewsModalOpen(true);
+            } else if ((data as DemoUserLoginResponse).isDemoUser) {
+                const demoData = data as DemoUserLoginResponse;
+                setCurrentUser({ name: demoData.username }); // Set current user for DEMO as well
                 setUserSession({ 
-                    isDemoUser: true, demoUserToken: data.demoUserToken, demoLimits: data.limits, 
-                    isDemoBlockedByVpn: data.isBlocked || false,
+                    isDemoUser: true, demoUsername: demoData.username, demoUserToken: demoData.demoUserToken, demoLimits: demoData.limits,
                     isPaidUser: false, paidLimits: null 
                 });
-                addAppNotification("Logged in as DEMO user. Usage limits apply.", "info");
-                if (data.isBlocked) addAppNotification("DEMO access for your IP is restricted.", "error");
-                if (data.cooldownActive) addAppNotification(data.message || "DEMO user is in cool-down.", "warning");
-                setIsNewsModalOpen(true); // Show news modal on successful DEMO login
+                addAppNotification(`Logged in as DEMO user: ${demoData.username}. Monthly limits apply.`, "info");
+                setIsNewsModalOpen(true);
+            } else if ((data as PaidLoginResponse).isPaidUser) {
+                const paidData = data as PaidLoginResponse;
+                setCurrentUser({ name: paidData.username });
+                setUserSession({
+                    isPaidUser: true, paidUsername: paidData.username, paidUserToken: paidData.paidUserToken || null, 
+                    paidSubscriptionEndDate: paidData.subscriptionEndDate || null, paidLimits: paidData.limits,
+                    isDemoUser: false, demoUserToken: null, demoLimits: null, 
+                });
+                addAppNotification(`Welcome back, ${paidData.username}! Subscription active until ${new Date(paidData.subscriptionEndDate || 0).toLocaleDateString()}.`, "success");
+                setIsNewsModalOpen(true);
             } else {
-                addAppNotification(data.message || "DEMO login failed.", "error", data.isBlocked ? "VPN/Proxy likely detected." : (data.message?.includes("cool-down") ? data.message : undefined));
-                setUserSession(prev => ({ ...prev, isDemoBlockedByVpn: data.isBlocked || false }));
+                 addAppNotification(data.message || "Login successful, but user type undetermined.", "warning");
             }
-        } catch (error: any) {
-            addAppNotification(`Error during DEMO login: ${error.message || 'Network error or malformed response'}.`, "error", "Check if the proxy server is running.");
+        } else {
+             addAppNotification(data.message || "Invalid login code or username.", "error");
         }
-    } else { 
-        try {
-            const response = await fetch('/api/auth/verify-code', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: loginCode }),
-            });
-            if (!response.ok) {
-                const errorText = await response.text().catch(() => `Proxy request failed with status ${response.status}`);
-                addAppNotification(`Login failed: ${errorText.substring(0,100)}`, "error", `Status: ${response.status}`);
-                return;
-            }
-            const data = await response.json() as LoginResponseType; 
-
-            if (data.success) {
-                if ((data as AdminLoginResponse).isAdmin) {
-                    setCurrentUser({ name: "Admin User" });
-                    setUserSession(prev => ({ ...prev, isPaidUser: false, isDemoUser: false })); 
-                    addAppNotification("Admin login successful!", "success");
-                    setIsNewsModalOpen(true); // Show news modal on successful ADMIN login
-                } else if ((data as PaidLoginResponse).isPaidUser) {
-                    const paidData = data as PaidLoginResponse;
-                    setCurrentUser({ name: paidData.username });
-                    setUserSession({
-                        isPaidUser: true, 
-                        paidUsername: paidData.username, 
-                        paidUserToken: paidData.paidUserToken || null, 
-                        paidSubscriptionEndDate: paidData.subscriptionEndDate || null,
-                        paidLimits: paidData.limits,
-                        isDemoUser: false, demoUserToken: null, demoLimits: null, isDemoBlockedByVpn: false, 
-                    });
-                    addAppNotification(`Welcome back, ${paidData.username}! Subscription active until ${new Date(paidData.subscriptionEndDate || 0).toLocaleDateString()}.`, "success");
-                    setIsNewsModalOpen(true); // Show news modal on successful PAID login
-                } else {
-                     addAppNotification(data.message || "Login successful, but user type undetermined.", "warning");
-                }
-            } else {
-                 addAppNotification(data.message || "Invalid login code or username.", "error");
-            }
-        } catch (error: any) {
-             addAppNotification(`Login request failed: ${error.message || 'Network error or malformed response'}.`, "error", "Check if the proxy server is running.");
-        }
+    } catch (error: any) {
+         addAppNotification(`Login request failed: ${error.message || 'Network error or malformed response'}.`, "error", "Check if the proxy server is running.");
     }
   }, [addAppNotification]);
 
   const handleLogout = useCallback(() => {
     setCurrentUser(null); 
     setUserSession({ 
-        isDemoUser: false, demoUserToken: null, demoLimits: null, isDemoBlockedByVpn: false,
+        isDemoUser: false, demoUsername: undefined, demoUserToken: null, demoLimits: null,
         isPaidUser: false, paidUsername: undefined, paidUserToken: null, paidSubscriptionEndDate: null, paidLimits: null,
     }); 
     addAppNotification("You have been logged out.", "info");
-    setIsNewsModalOpen(false); // Ensure news modal is closed on logout
+    setIsNewsModalOpen(false);
   }, [addAppNotification]);
   
+  // This function might become a no-op if all limit updates are server-side and fetched on login/action
+  // For now, keeping it, but it won't be called as frequently.
   const updateDemoLimits = useCallback((updatedLimits: Partial<DemoUserLimits>) => {
     setUserSession(prev => {
         if (prev.isDemoUser && prev.demoLimits) {
-            const newLimits = { ...prev.demoLimits, ...updatedLimits };
-            if (newLimits.fluxKontextUsesLeft < 0) newLimits.fluxKontextUsesLeft = 0;
-            if (newLimits.imagen3ImagesLeft < 0) newLimits.imagen3ImagesLeft = 0;
-            if (newLimits.openaiTtsCharsLeft < 0) newLimits.openaiTtsCharsLeft = 0;
-            return { ...prev, demoLimits: newLimits };
+            // Client-side update of demoLimits is less critical if server is source of truth
+            // This could be used to reflect an immediate local change before next server sync
+            // but for now, let's assume server will always provide the latest.
+            // const newLimits = { ...prev.demoLimits, ...updatedLimits };
+            // return { ...prev, demoLimits: newLimits };
+            console.warn("[App.tsx] updateDemoLimits called, but DEMO limits are now primarily server-managed.");
         }
         return prev;
     });

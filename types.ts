@@ -447,18 +447,21 @@ export interface CreditPackage {
 
 // --- User Session State ---
 export interface DemoUserLimits {
-  fluxKontextUsesLeft: number;
-  fluxKontextMaxUses: number;
-  imagen3ImagesLeft: number;
-  imagen3MaxImages: number;
-  openaiTtsCharsLeft: number;
-  openaiTtsMaxChars: number;
+  // These will represent MONTHLY limits for named DEMO users
+  fluxKontextMaxMonthlyUsesLeft: number;
+  fluxKontextMaxMonthlyMaxUses: number;
+  fluxKontextProMonthlyUsesLeft: number;
+  fluxKontextProMonthlyMaxUses: number;
+  imagen3MonthlyImagesLeft: number;
+  imagen3MonthlyMaxImages: number;
+  openaiTtsMonthlyCharsLeft: number;
+  openaiTtsMonthlyMaxChars: number;
 }
 
 export interface PaidUserLimits {
-  imagen3ImagesLeft: number;
+  imagen3ImagesLeft: number; // This could be daily or monthly depending on how proxy sets it for paid
   imagen3MaxImages: number;
-  openaiTtsCharsLeft: number;
+  openaiTtsCharsLeft: number; // This could be daily or monthly
   openaiTtsMaxChars: number;
   fluxKontextMaxMonthlyUsesLeft: number;
   fluxKontextMaxMonthlyMaxUses: number;
@@ -468,25 +471,27 @@ export interface PaidUserLimits {
 
 export interface UserSessionState {
   isDemoUser: boolean;
-  demoUserToken: string | null;
-  demoLimits: DemoUserLimits | null;
-  isDemoBlockedByVpn: boolean;
-  
+  demoUsername?: string; // Username for the specific DEMO account
+  demoUserToken: string | null; // Token issued by the server for this DEMO user
+  demoLimits: DemoUserLimits | null; // Specific limits for this DEMO user
+  // isDemoBlockedByVpn: boolean; // This might become less relevant if DEMO requires specific accounts
+
   isPaidUser: boolean;
   paidUsername?: string;
-  paidUserToken?: string | null; // Could be the username itself if used as a simple token
-  paidSubscriptionEndDate?: string | null; // ISO string
+  paidUserToken?: string | null; 
+  paidSubscriptionEndDate?: string | null; 
   paidLimits: PaidUserLimits | null;
 }
 
-export interface DemoLoginResponse {
+// This response type will likely be from /api/auth/verify-code when a DEMO user logs in
+export interface DemoUserLoginResponse {
     success: boolean;
     message?: string;
-    demoUserToken?: string;
-    limits?: DemoUserLimits;
-    isBlocked?: boolean;
-    cooldownActive?: boolean;
-    tryAgainAfter?: string; // ISO date string for when cooldown ends
+    isDemoUser: true; // Key identifier
+    username: string; // The specific DEMO username
+    demoUserToken: string; // Token for this session
+    limits: DemoUserLimits; // Their specific, potentially monthly, limits
+    // cooldownActive and tryAgainAfter might be removed if demo users are persistent DB accounts
 }
 
 export interface AdminLoginResponse {
@@ -500,12 +505,14 @@ export interface PaidLoginResponse {
     message?: string;
     isPaidUser: true;
     username: string;
-    paidUserToken?: string; // Could be the same as username or a different token
-    subscriptionEndDate?: string; // ISO date string
+    paidUserToken?: string; 
+    subscriptionEndDate?: string; 
     limits: PaidUserLimits;
 }
 
-export type LoginResponseType = DemoLoginResponse | AdminLoginResponse | PaidLoginResponse;
+// UserType on the server will determine which of these responses (or similar) is sent from /api/auth/verify-code
+export type LoginResponseType = DemoUserLoginResponse | AdminLoginResponse | PaidLoginResponse;
+
 
 // For Flux Kontext Proxy Service
 export interface SingleImageData {

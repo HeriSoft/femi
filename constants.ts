@@ -126,38 +126,45 @@ export const LOCAL_STORAGE_CHAT_BACKGROUND_KEY = 'femiAiChatBackgroundUrl';
 export const MAX_SAVED_CHAT_SESSIONS = 10; // Max number of chat sessions to store
 
 
-// DEMO MODE CONSTANTS
-export const DEMO_USER_KEY = "DEMO"; // This is used as the actual login code for demo
+// DEMO USER CONSTANTS (Now for named DEMO accounts from DB)
+// The specific "DEMO" login code (e.g., "guest_demo") will be managed on the server or communicated to users.
+// This DEMO_USER_KEY is no longer the primary login mechanism.
+// export const DEMO_USER_KEY = "DEMO"; // REPLACED: DEMO login now uses specific usernames via verify-code
 
-export const DEMO_LIMITS_CONFIG = {
-  FLUX_KONTEX_MAX_USES_PER_DAY: 2, // Per session, not per day strictly enforced by proxy, but conceptual daily limit
-  IMAGEN3_MAX_IMAGES_PER_DAY: 10,  // Per session
-  OPENAI_TTS_MAX_CHARS_TOTAL: 5000, // Total per DEMO period (e.g., until full reset)
+export const DEMO_USER_DEFAULT_MONTHLY_LIMITS = { // Max values for a DEMO user per month
+  FLUX_KONTEX_MAX_MONTHLY: 5,
+  FLUX_KONTEX_PRO_MONTHLY: 10,
+  IMAGEN3_MONTHLY_IMAGES: 20,
+  OPENAI_TTS_MONTHLY_CHARS: 10000,
 };
 
-export const INITIAL_DEMO_USER_LIMITS: DemoUserLimits = {
-  fluxKontextUsesLeft: DEMO_LIMITS_CONFIG.FLUX_KONTEX_MAX_USES_PER_DAY,
-  fluxKontextMaxUses: DEMO_LIMITS_CONFIG.FLUX_KONTEX_MAX_USES_PER_DAY,
-  imagen3ImagesLeft: DEMO_LIMITS_CONFIG.IMAGEN3_MAX_IMAGES_PER_DAY,
-  imagen3MaxImages: DEMO_LIMITS_CONFIG.IMAGEN3_MAX_IMAGES_PER_DAY,
-  openaiTtsCharsLeft: DEMO_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL,
-  openaiTtsMaxChars: DEMO_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL,
+export const INITIAL_DEMO_USER_LIMITS: DemoUserLimits = { // For client-side display if needed, actuals from server
+  fluxKontextMaxMonthlyUsesLeft: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_KONTEX_MAX_MONTHLY,
+  fluxKontextMaxMonthlyMaxUses: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_KONTEX_MAX_MONTHLY,
+  fluxKontextProMonthlyUsesLeft: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_KONTEX_PRO_MONTHLY,
+  fluxKontextProMonthlyMaxUses: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_KONTEX_PRO_MONTHLY,
+  imagen3MonthlyImagesLeft: DEMO_USER_DEFAULT_MONTHLY_LIMITS.IMAGEN3_MONTHLY_IMAGES,
+  imagen3MonthlyMaxImages: DEMO_USER_DEFAULT_MONTHLY_LIMITS.IMAGEN3_MONTHLY_IMAGES,
+  openaiTtsMonthlyCharsLeft: DEMO_USER_DEFAULT_MONTHLY_LIMITS.OPENAI_TTS_MONTHLY_CHARS,
+  openaiTtsMonthlyMaxChars: DEMO_USER_DEFAULT_MONTHLY_LIMITS.OPENAI_TTS_MONTHLY_CHARS,
 };
+
 
 // PAID USER CONSTANTS - These are MAX values for the proxy to construct the "limits" object
-// The "left" values will be calculated by the proxy based on actual usage.
 export const PAID_USER_LIMITS_CONFIG: PaidUserLimits = {
-  imagen3ImagesLeft: 0, // Placeholder, actual value from proxy
+  imagen3ImagesLeft: 0, 
   imagen3MaxImages: 50, // Daily limit
-  openaiTtsCharsLeft: 0, // Placeholder, actual value from proxy
+  openaiTtsCharsLeft: 0, 
   openaiTtsMaxChars: 20000, // Per use or session limit
-  fluxKontextMaxMonthlyUsesLeft: 0, // Placeholder, actual value from proxy
+  fluxKontextMaxMonthlyUsesLeft: 0, 
   fluxKontextMaxMonthlyMaxUses: 40, // Monthly limit
-  fluxKontextProMonthlyUsesLeft: 0, // Placeholder, actual value from proxy
+  fluxKontextProMonthlyUsesLeft: 0, 
   fluxKontextProMonthlyMaxUses: 50,  // Monthly limit
 };
+
 // Used by frontend to check input length before sending for OpenAI TTS.
-// This should ideally be the same as what paid users get, or a reasonable default.
+// This should be based on the user's actual limits (paid or demo from server).
+// For simplicity, if a generic max is needed before knowing user type, using paid.
 export const OPENAI_TTS_MAX_INPUT_LENGTH = PAID_USER_LIMITS_CONFIG.openaiTtsMaxChars;
 
 
