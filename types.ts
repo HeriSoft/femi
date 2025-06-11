@@ -160,52 +160,14 @@ export interface SettingsPanelProps {
   onModelSettingsChange: (settings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings & FluxKontexSettings>) => void;
   isWebSearchEnabled: boolean;
   onWebSearchToggle: (enabled: boolean) => void;
-  disabled?: boolean;
+  disabled: boolean;
   apiKeyStatuses: Record<Model, ApiKeyStatus>;
   personas: Persona[];
   activePersonaId: string | null;
   onPersonaChange: (personaId: string | null) => void;
   onPersonaSave: (persona: Persona) => void;
   onPersonaDelete: (personaId: string) => void;
-  userSession: UserSessionState; // Added for demo mode
-}
-
-export const getActualModelIdentifier = (modelEnumString: string): string => {
-  const match = modelEnumString.match(/\(([^)]+)\)$/);
-  return match ? match[1] : modelEnumString; 
-};
-
-// For OpenAI / Deepseek message history
-export interface ApiChatMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; detail?: "auto" | "low" | "high" } }>;
-}
-
-// Stream chunk for OpenAI and Deepseek services
-export interface ApiStreamChunk {
-  textDelta?: string;
-  error?: string;
-  isFinished?: boolean;
-}
-
-// Common parameters for OpenAI and Deepseek stream functions
-export interface GeneralApiSendMessageParams {
-  apiKey: string;
-  modelIdentifier: string;
-  history: ApiChatMessage[]; 
-  modelSettings: ModelSettings;
-}
-
-// Chat History Types
-export interface ChatSession {
-  id: string;
-  name: string;
-  timestamp: number;
-  model: Model; // The primary model used for this session
-  messages: ChatMessage[];
-  modelSettingsSnapshot: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings> & Partial<FluxKontexSettings>; 
-  isPinned?: boolean; // For pinning important chats
-  activePersonaIdSnapshot?: string | null; // Snapshot of active persona
+  userSession: UserSessionState;
 }
 
 export interface HistoryPanelProps {
@@ -214,17 +176,47 @@ export interface HistoryPanelProps {
   onLoadSession: (sessionId: string) => void;
   onDeleteSession: (sessionId: string) => void;
   onRenameSession: (sessionId: string, newName: string) => void;
-  onSaveCurrentChat: () => void; // Saves to LocalStorage
+  onSaveCurrentChat: () => void;
   onStartNewChat: () => void;
-  isLoading: boolean; // To disable actions while chat is processing
+  isLoading: boolean;
   onTogglePinSession: (sessionId: string) => void;
-  onSaveChatToDevice: () => void; 
-  onLoadChatFromDevice: (file: File) => Promise<void>; 
-  onExportChatWithMediaData: () => void; // New: Exports chat with all media to JSON
+  onSaveChatToDevice: () => void;
+  onLoadChatFromDevice: (file: File) => void;
+  onExportChatWithMediaData: () => void;
 }
 
-// Notification System Types
-export type NotificationType = 'success' | 'error' | 'info' | 'warning';
+export interface ChatSession {
+  id: string;
+  name: string;
+  timestamp: number;
+  model: Model;
+  messages: ChatMessage[];
+  modelSettingsSnapshot: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings> & Partial<FluxKontexSettings>;
+  isPinned: boolean;
+  activePersonaIdSnapshot: string | null; // Save active persona with the session
+}
+
+export interface ApiChatMessage {
+  role: 'user' | 'assistant' | 'system' | 'function' | 'tool';
+  content: string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; detail?: "auto" | "low" | "high" } }>;
+  name?: string; // Optional: For function/tool calls
+  tool_calls?: any[]; // For tool usage
+  tool_call_id?: string; // For tool responses
+}
+
+export interface ApiStreamChunk {
+  textDelta?: string;
+  isFinished?: boolean;
+  error?: string;
+  // Potentially add other fields if the API stream sends more structured data
+}
+
+export interface GeneralApiSendMessageParams {
+  modelIdentifier: string; 
+  history: ApiChatMessage[];
+  modelSettings: ModelSettings;
+  // apiKey?: string; // API Key will be handled by the proxy
+}
 
 export interface NotificationMessage {
   id: string;
@@ -232,8 +224,10 @@ export interface NotificationMessage {
   type: NotificationType;
   timestamp: number;
   read: boolean;
-  details?: string; // For optional extended error details
+  details?: string; 
 }
+
+export type NotificationType = 'success' | 'error' | 'info' | 'warning';
 
 export interface NotificationContextType {
   notifications: NotificationMessage[];
@@ -243,123 +237,118 @@ export interface NotificationContextType {
   clearAllNotifications: () => void;
 }
 
-// Language Learning Feature Types
-export type LanguageOption = 'en' | 'ja' | 'ko' | 'zh' | 'vi'; // Kept for language learning feature itself
-export type TranslationLanguageCode = 'en' | 'vi' | 'ko' | 'ja' | 'zh' | 'th' | 'ru' | 'it'; // For Real-Time Translation
+export interface AccountSettingsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onChatBackgroundChange: (newUrl: string | null) => void;
+  currentChatBackground: string | null;
+  userProfile: UserGlobalProfile | null; 
+  onUpdateUserProfile: (updatedProfile: UserGlobalProfile) => void;
+  currentUserCredits: number;
+  onPurchaseCredits: (packageId: string, paymentMethod: 'paypal' | 'stripe' | 'vietqr') => void;
+  paypalEmail: string | undefined;
+  onSavePayPalEmail: (email: string) => void;
+}
 
-export interface LanguageOptionConfig { // Used by Language Learning feature
+export type AccountTabType = 'profile' | 'credits' | 'devices' | 'background' | 'avatar' | 'payment';
+
+
+// Language Learning Types
+export type LanguageOption = 'en' | 'ja' | 'ko' | 'zh' | 'vi'; // Add more as needed
+export type LanguageLearningActivityType = 'listening' | 'speaking' | 'vocabulary' | 'quiz' | 'sentence-scramble' | 'handwriting';
+
+
+export interface LanguageOptionConfig {
   code: LanguageOption;
   name: string;
-  flag?: string; // e.g., emoji flag or URL to small image
+  flag: string;
 }
 
-export interface TranslationLanguageOptionConfig { // For Real-Time Translation target languages
-  code: TranslationLanguageCode;
+export interface TranslationLanguageOptionConfig {
+  code: string; 
   name: string;
-  flag?: string;
+  flag: string;
 }
-
-
-export type LanguageLearningActivityType = 'listening' | 'speaking' | 'vocabulary' | 'quiz' | 'sentence-scramble' | 'handwriting';
 
 export interface Badge {
   id: string;
   name: string;
   description: string;
-  icon: string; // Emoji or a key for an Icon component
-  expThreshold: number; // EXP needed to earn this badge
+  icon: string; 
+  expThreshold: number;
 }
 
 export interface UserLanguageProfile {
   exp: number;
   earnedBadgeIds: string[];
-  // Could add lastActivityDate, streak, etc. later
 }
 
 export interface UserGlobalProfile {
-  languageProfiles: Partial<Record<LanguageOption, UserLanguageProfile>>; // Use Partial for initially unselected languages
-  favoriteLanguage?: LanguageOption; // User's preferred language for translations
-  aboutMe?: string; 
-  credits: number; // User's current credit balance
-  paypalEmail?: string; // User's saved PayPal email
+  languageProfiles: {
+    [key in LanguageOption]?: UserLanguageProfile;
+  };
+  aboutMe?: string;
+  credits: number; 
+  paypalEmail?: string; 
+  favoriteLanguage?: LanguageOption | "";
 }
-
-export interface VocabularyItem {
-  word: string;
-  meaning: string; // Meaning in English or user's native language
-  exampleSentence: string; // Example sentence in the target language
-}
-
-export interface LearningContent {
-  id: string;
-  activityType: LanguageLearningActivityType;
-  language: LanguageOption;
-  title?: string;
-  instruction?: string; 
-  
-  // For Listening
-  script?: string; // Text to be converted to audio
-  question?: string; // Question about the script or for Quiz
-  options?: string[]; // MCQ options (Listening or Quiz)
-  correctAnswerIndex?: number; // Index of the correct option (Listening or Quiz)
-
-  // For Speaking
-  phraseToSpeak?: string; // Phrase for user to speak
-
-  // For Vocabulary
-  vocabularySet?: VocabularyItem[]; // Array of vocabulary words
-  
-  // For Sentence Scramble
-  originalSentence?: string;
-  scrambledWords?: { word: string, id: number }[]; // id is the original index of the word
-
-  // For Handwriting
-  targetText?: string; // Character/word to write
-
-  aiPromptForGeneration?: string; 
-  aiPromptForEvaluation?: string; 
-}
-
-// State for an active learning session/exercise
-export interface LearningActivityState {
-    isLoadingContent: boolean;
-    content: LearningContent | null;
-    error: string | null;
-    userAnswer: string | number | null | string[]; // Can be string for sentence scramble sentence
-    userSelectedWordIds?: number[]; // For sentence scramble, to track which scrambled words were used
-    isAnswerSubmitted: boolean;
-    isAnswerCorrect: boolean | null;
-    audioUrl?: string; // For listening exercise audio
-    isAudioPlaying?: boolean; // For listening exercise audio playback status
-    translatedUserSpeech?: string; // For speaking practice translation
-    isLoadingTranslation?: boolean; // For speaking practice translation loading state
-
-    // For Handwriting
-    userHandwritingImage?: string; // base64 data URL of user's input (canvas or uploaded)
-    accuracyScore?: number;        // 0-100
-    aiFeedback?: string;           // Qualitative feedback from AI
-    handwritingInputMethod?: 'draw' | 'upload'; // Current input method
-}
-
 
 export interface LanguageLearningModalProps {
   isOpen: boolean;
   onClose: () => void;
   userProfile: UserGlobalProfile | null;
-  onUpdateProfile: (updatedProfile: UserGlobalProfile) => void;
+  onUpdateProfile: (profile: UserGlobalProfile) => void;
   onAddExp: (language: LanguageOption, expPoints: number) => void;
 }
 
-// Mini Games Arcade Types
-export type WebGameType = 'tic-tac-toe' | 'sliding-puzzle' | 'snake' | 'flappy-bird' | 'tien-len' | '8-ball-pool' | null;
+export interface LearningContent {
+    id: string;
+    activityType: LanguageLearningActivityType;
+    language: LanguageOption;
+    script?: string; // For listening
+    question?: string; // For listening, quiz
+    options?: string[]; // For listening, quiz
+    correctAnswerIndex?: number; // For listening, quiz
+    phraseToSpeak?: string; // For speaking
+    vocabularySet?: VocabularyItem[]; // For vocabulary
+    originalSentence?: string; // For sentence scramble
+    scrambledWords?: { word: string, id: number }[]; // For sentence scramble
+    targetText?: string; // For handwriting
+    instruction?: string; // General instruction if needed
+}
 
+export interface VocabularyItem {
+    word: string;
+    meaning: string;
+    exampleSentence: string;
+}
 
+export interface LearningActivityState {
+    isLoadingContent: boolean;
+    content: LearningContent | null;
+    error: string | null;
+    userAnswer: string | number | null; // string for speaking/scramble, number for quiz/listening index
+    userSelectedWordIds?: number[]; // For sentence scramble, stores IDs of selected words
+    isAnswerSubmitted: boolean;
+    isAnswerCorrect: boolean | null;
+    audioUrl?: string; // For listening/speaking feedback
+    isAudioPlaying?: boolean; // For listening/speaking feedback
+    translatedUserSpeech?: string; // For speaking practice with translation
+    isLoadingTranslation?: boolean; // For speaking practice with translation
+    userHandwritingImage?: string; // base64 data URL for handwriting
+    accuracyScore?: number; // For handwriting
+    aiFeedback?: string; // For handwriting or speaking
+    handwritingInputMethod?: 'draw' | 'upload'; // For handwriting
+}
+
+// Games Modal Types
 export interface GamesModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onPlayWebGame: (gameType: WebGameType, gameTitle: string) => void; 
+  onPlayWebGame: (gameType: WebGameType, gameTitle: string) => void;
 }
 
+export type WebGameType = 'tic-tac-toe' | 'sliding-puzzle' | 'flappy-bird' | 'tien-len' | '8-ball-pool' | null;
 
 export interface WebGamePlayerModalProps {
   isOpen: boolean;
@@ -368,99 +357,37 @@ export interface WebGamePlayerModalProps {
   gameTitle: string;
 }
 
-// Login Device Log
-export interface LoginDeviceLog {
-  id: string; 
-  device: string; 
-  timestamp: number; 
-}
-
-// Account Settings
-export type AccountTabType = 'profile' | 'credits' | 'devices' | 'background' | 'avatar' | 'payment';
-
-export interface BackgroundOption {
-  id: string;
-  name: string;
-  imageUrl: string;
-  thumbnailUrl: string;
-}
-
-export interface CreditPackage {
-  id: string;
-  name: string;
-  description?: string;
-  price: number;
-  currency: string; // e.g., "USD", "VND"
-  creditsAwarded: number;
-  icon?: React.ReactNode; // Optional: for a visual cue
-}
-
-export interface AccountSettingsModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onChatBackgroundChange: (newUrl: string | null) => void; 
-  currentChatBackground: string | null; 
-  userProfile: UserGlobalProfile | null; 
-  onUpdateUserProfile: (updatedProfile: UserGlobalProfile) => void;
-  
-  // Credit related props
-  currentUserCredits: number;
-  onPurchaseCredits: (packageId: string, paymentMethod: 'paypal' | 'stripe' | 'vietqr') => void; // Placeholder
-  paypalEmail: string | undefined;
-  onSavePayPalEmail: (email: string) => void; // Placeholder
-}
-
 // Tien Len Game Types
 export enum CardSuit {
   SPADES = '♠',   // Bích
   CLUBS = '♣',    // Chuồn (Tép)
   DIAMONDS = '♦', // Rô
-  HEARTS = '♥',   // Cơ
+  HEARTS = '♥'    // Cơ
 }
 
-export enum CardRank { // Values for sorting, 3 is lowest, 2 is highest
+export enum CardRank { // Using English for ranks internally
   THREE = '3', FOUR = '4', FIVE = '5', SIX = '6', SEVEN = '7',
   EIGHT = '8', NINE = '9', TEN = '10', JACK = 'J', QUEEN = 'Q',
-  KING = 'K', ACE = 'A', TWO = '2',
+  KING = 'K', ACE = 'A', TWO = '2'
 }
 
 export interface TienLenCard {
-  id: string; // e.g., "H3" for Heart 3, "S2" for Spade 2
+  id: string; // e.g., "HEARTSA" or "SPADES2"
   rank: CardRank;
   suit: CardSuit;
-  value: number; // Numerical value for comparison (3=0, ..., 2=12)
-  isSelected?: boolean;
+  value: number; // Numerical value for comparison (3=0, 2=12)
+  isSelected: boolean;
 }
 
 export type PlayerHand = TienLenCard[];
 
-export enum TienLenHandType {
-  INVALID = 'INVALID',
-  SINGLE = 'SINGLE',
-  PAIR = 'PAIR',
-  TRIPLE = 'TRIPLE',
-  STRAIGHT = 'STRAIGHT', // Sequence of 3+ cards
-  THREE_PAIR_STRAIGHT = 'THREE_PAIR_STRAIGHT', // Ba đôi thông
-  FOUR_OF_A_KIND = 'FOUR_OF_A_KIND', // Tứ quý
-  // Add more complex types like FOUR_PAIR_STRAIGHT (Bốn đôi thông), STRAIGHT_FLUSH (Sảnh rồng) later if needed
-}
-
-export interface ValidatedHand {
-  type: TienLenHandType;
-  cards: TienLenCard[];
-  rankValue: number; // For singles, pairs, triples, quads: the rank of the cards. For straights: the rank of the highest card.
-  suitValue?: number; // For singles, the suit value for tie-breaking.
-  length?: number; // For straights, the number of cards in the straight.
-}
-
-
 export interface TienLenGameState {
   playerHand: PlayerHand;
   aiHand: PlayerHand;
-  table: TienLenCard[]; // Cards currently displayed on the table (from the last played valid hand)
-  lastPlayedHand: ValidatedHand | null; // The last successfully played hand's structured info
+  table: TienLenCard[]; // Cards currently visible on the table from the last play
+  lastPlayedHand: ValidatedHand | null; // Structured info of the hand to beat
   currentPlayer: 'player' | 'ai';
-  turnHistory: Array<{ player: 'player' | 'ai'; playedCards: ValidatedHand | null; passed: boolean }>;
+  turnHistory: TurnHistoryEntry[];
   winner: 'player' | 'ai' | null;
   isDealing: boolean;
   statusMessage: string;
@@ -468,28 +395,58 @@ export interface TienLenGameState {
   aiScore: number;
   turnTimer: number;
   isPaused: boolean;
-  firstPlayerOfTheGame: 'player' | 'ai' | null; // Who holds 3 of Spades
-  isFirstTurnOfGame: boolean; // Is it the very first turn of the entire game?
+  firstPlayerOfTheGame: 'player' | 'ai' | null; // Who has the 3 of Spades
+  isFirstTurnOfGame: boolean;
 }
 
+export interface TurnHistoryEntry {
+  player: 'player' | 'ai';
+  playedCards: ValidatedHand | null; // The combination played
+  passed: boolean;
+}
+
+export enum TienLenHandType {
+  SINGLE = 'Single',
+  PAIR = 'Pair',
+  TRIPLE = 'Triple',
+  STRAIGHT = 'Straight', // Sảnh
+  FOUR_OF_A_KIND = 'Four of a Kind', // Tứ Quý
+  THREE_PAIR_STRAIGHT = 'Three Pair Straight', // Ba Đôi Thông
+  // FOUR_PAIR_STRAIGHT = 'Four Pair Straight', // Tứ Đôi Thông (optional, powerful)
+  INVALID = 'Invalid',
+}
+
+export interface ValidatedHand {
+  type: TienLenHandType;
+  cards: TienLenCard[];
+  rankValue: number; // Highest rank value (e.g., for pair of K, value of K) or lowest for Ba Đôi Thông
+  suitValue?: number; // For singles, to break ties
+  length?: number; // For straights
+}
 
 export interface TienLenGameModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-// Props for HandwritingCanvas component
-export interface HandwritingCanvasProps {
-  width: number;
-  height: number;
-  penColor?: string;
-  penThickness?: number;
-  canvasRef: React.RefObject<HTMLCanvasElement>; // Pass ref from parent to allow parent to access canvas data
-  disabled?: boolean;
+
+export interface LoginDeviceLog {
+  id: string;
+  device: string;
+  timestamp: number;
 }
 
-// DEMO & PAID USER TYPES
-export interface FeatureLimits {
+export interface CreditPackage {
+  id: string;
+  name: string;
+  description: string;
+  price: number; // e.g., 5.00
+  currency: 'USD' | 'VND'; // Example currencies
+  creditsAwarded: number;
+}
+
+// --- User Session State ---
+export interface DemoUserLimits {
   fluxKontextUsesLeft: number;
   fluxKontextMaxUses: number;
   imagen3ImagesLeft: number;
@@ -497,50 +454,60 @@ export interface FeatureLimits {
   openaiTtsCharsLeft: number;
   openaiTtsMaxChars: number;
 }
-export type DemoUserLimits = FeatureLimits; // DemoUserLimits is a specific instance of FeatureLimits
-export type PaidUserLimits = FeatureLimits; // PaidUserLimits is also a specific instance
 
-export interface BaseLoginResponse {
-  success: boolean;
-  message?: string;
-  isBlocked?: boolean; // For VPN blocking, can apply to any login type
+export interface PaidUserLimits {
+  imagen3ImagesLeft: number;
+  imagen3MaxImages: number;
+  openaiTtsCharsLeft: number;
+  openaiTtsMaxChars: number;
+  fluxKontextMaxMonthlyUsesLeft: number;
+  fluxKontextMaxMonthlyMaxUses: number;
+  fluxKontextProMonthlyUsesLeft: number;
+  fluxKontextProMonthlyMaxUses: number;
 }
-
-export interface DemoLoginResponse extends BaseLoginResponse {
-  demoUserToken?: string;
-  limits?: DemoUserLimits;
-  cooldownActive?: boolean;
-  tryAgainAfter?: string; // ISO date string
-}
-
-export interface PaidLoginResponse extends BaseLoginResponse {
-  isPaidUser: true;
-  username: string;
-  paidUserToken?: string; // Might be used in future for session management
-  subscriptionEndDate?: string; // ISO date string
-  limits: PaidUserLimits; 
-}
-
-export interface AdminLoginResponse extends BaseLoginResponse {
-  isAdmin: true;
-}
-
-export type LoginResponseType = DemoLoginResponse | PaidLoginResponse | AdminLoginResponse;
-
 
 export interface UserSessionState {
   isDemoUser: boolean;
   demoUserToken: string | null;
   demoLimits: DemoUserLimits | null;
-  isDemoBlockedByVpn: boolean; // From initial demo login check
-
-  isPaidUser?: boolean; // New: true if logged in as a paid user
-  paidUsername?: string; // New: username of the paid user
-  paidUserToken?: string | null; // New: token for paid user session
-  paidSubscriptionEndDate?: string | null; // New: ISO date string
-  paidLimits?: PaidUserLimits | null; // New: limits for paid user
+  isDemoBlockedByVpn: boolean;
+  
+  isPaidUser: boolean;
+  paidUsername?: string;
+  paidUserToken?: string | null; // Could be the username itself if used as a simple token
+  paidSubscriptionEndDate?: string | null; // ISO string
+  paidLimits: PaidUserLimits | null;
 }
-// --- Fal.ai Service Parameter Types ---
+
+export interface DemoLoginResponse {
+    success: boolean;
+    message?: string;
+    demoUserToken?: string;
+    limits?: DemoUserLimits;
+    isBlocked?: boolean;
+    cooldownActive?: boolean;
+    tryAgainAfter?: string; // ISO date string for when cooldown ends
+}
+
+export interface AdminLoginResponse {
+    success: boolean;
+    message?: string;
+    isAdmin: true;
+}
+
+export interface PaidLoginResponse {
+    success: boolean;
+    message?: string;
+    isPaidUser: true;
+    username: string;
+    paidUserToken?: string; // Could be the same as username or a different token
+    subscriptionEndDate?: string; // ISO date string
+    limits: PaidUserLimits;
+}
+
+export type LoginResponseType = DemoLoginResponse | AdminLoginResponse | PaidLoginResponse;
+
+// For Flux Kontext Proxy Service
 export interface SingleImageData {
   image_base_64: string;
   image_mime_type: 'image/jpeg' | 'image/png';
@@ -550,11 +517,31 @@ export interface MultiImageData {
   images_data: Array<{ base64: string; mimeType: string }>;
 }
 
-export type FluxKontexImageData = SingleImageData | MultiImageData;
-
 export interface EditImageWithFluxKontexParams {
   modelIdentifier: string; // e.g., 'fal-ai/flux-pro/kontext' or 'fal-ai/flux-pro/kontext/max/multi'
   prompt: string;
   settings: FluxKontexSettings;
-  imageData: FluxKontexImageData;
+  imageData: SingleImageData | MultiImageData; 
 }
+
+export interface HandwritingCanvasProps {
+  width: number;
+  height: number;
+  penColor?: string;
+  penThickness?: number;
+  canvasRef: React.RefObject<HTMLCanvasElement>;
+  disabled?: boolean;
+}
+
+export interface BackgroundOption {
+  id: string;
+  name: string;
+  imageUrl: string;
+  thumbnailUrl: string;
+}
+
+// Function to get actual model ID (especially for models with display names)
+export const getActualModelIdentifier = (model: Model): string => {
+  const match = model.match(/\(([^)]+)\)$/);
+  return match ? match[1] : model;
+};

@@ -130,9 +130,9 @@ export const MAX_SAVED_CHAT_SESSIONS = 10; // Max number of chat sessions to sto
 export const DEMO_USER_KEY = "DEMO"; // This is used as the actual login code for demo
 
 export const DEMO_LIMITS_CONFIG = {
-  FLUX_KONTEX_MAX_USES_PER_DAY: 2,
-  IMAGEN3_MAX_IMAGES_PER_DAY: 10,
-  OPENAI_TTS_MAX_CHARS_TOTAL: 5000,
+  FLUX_KONTEX_MAX_USES_PER_DAY: 2, // Per session, not per day strictly enforced by proxy, but conceptual daily limit
+  IMAGEN3_MAX_IMAGES_PER_DAY: 10,  // Per session
+  OPENAI_TTS_MAX_CHARS_TOTAL: 5000, // Total per DEMO period (e.g., until full reset)
 };
 
 export const INITIAL_DEMO_USER_LIMITS: DemoUserLimits = {
@@ -144,16 +144,20 @@ export const INITIAL_DEMO_USER_LIMITS: DemoUserLimits = {
   openaiTtsMaxChars: DEMO_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL,
 };
 
-// PAID USER CONSTANTS
+// PAID USER CONSTANTS - These are MAX values for the proxy to construct the "limits" object
+// The "left" values will be calculated by the proxy based on actual usage.
 export const PAID_USER_LIMITS_CONFIG: PaidUserLimits = {
-  fluxKontextUsesLeft: 0, // This will be set by server or defaults to max
-  fluxKontextMaxUses: 15,
-  imagen3ImagesLeft: 0, // This will be set by server or defaults to max
-  imagen3MaxImages: 50,
-  openaiTtsCharsLeft: 0, // This will be set by server or defaults to max
-  openaiTtsMaxChars: 20000,
+  imagen3ImagesLeft: 0, // Placeholder, actual value from proxy
+  imagen3MaxImages: 50, // Daily limit
+  openaiTtsCharsLeft: 0, // Placeholder, actual value from proxy
+  openaiTtsMaxChars: 20000, // Per use or session limit
+  fluxKontextMaxMonthlyUsesLeft: 0, // Placeholder, actual value from proxy
+  fluxKontextMaxMonthlyMaxUses: 40, // Monthly limit
+  fluxKontextProMonthlyUsesLeft: 0, // Placeholder, actual value from proxy
+  fluxKontextProMonthlyMaxUses: 50,  // Monthly limit
 };
-// Used by frontend to check input length before sending
+// Used by frontend to check input length before sending for OpenAI TTS.
+// This should ideally be the same as what paid users get, or a reasonable default.
 export const OPENAI_TTS_MAX_INPUT_LENGTH = PAID_USER_LIMITS_CONFIG.openaiTtsMaxChars;
 
 
