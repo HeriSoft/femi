@@ -4,7 +4,7 @@
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo, useContext } from 'react';
 // Update to .ts/.tsx extensions
-import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType, UserGlobalProfile, AiAgentSettings, PrivateModeSettings, FluxKontexSettings, NotificationType, UserSessionState, DemoUserLimits, PaidUserLimits, SingleImageData, MultiImageData, FluxKontexAspectRatio } from '../types.ts'; // Added UserSessionState, DemoUserLimits, PaidUserLimits, SingleImageData, MultiImageData, FluxKontexAspectRatio
+import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType, UserGlobalProfile, AiAgentSettings, PrivateModeSettings, FluxKontexSettings, NotificationType, UserSessionState, DemoUserLimits, PaidUserLimits, SingleImageData, MultiImageData, FluxKontexAspectRatio, EditImageWithFluxKontexParams } from '../types.ts'; // Added UserSessionState, DemoUserLimits, PaidUserLimits, SingleImageData, MultiImageData, FluxKontexAspectRatio, EditImageWithFluxKontexParams
 import type { Content } from '@google/genai'; // For constructing Gemini history
 import { ALL_MODEL_DEFAULT_SETTINGS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY, TRANSLATION_TARGET_LANGUAGES, MAX_SAVED_CHAT_SESSIONS, OPENAI_TTS_MAX_INPUT_LENGTH, PAID_USER_LIMITS_CONFIG, DEFAULT_FLUX_KONTEX_SETTINGS } from '../constants.ts';
 import { MessageBubble } from './MessageBubble.tsx'; // Changed to named import
@@ -17,7 +17,7 @@ import { sendOpenAIMessageStream } from '../services/openaiService.ts';
 import { sendDeepseekMessageStream } from '../services/deepseekService.ts';
 import { sendMockMessageStream } from '../services/mockApiService.ts';
 import { generateOpenAITTS } from "../services/openaiTTSService"; // Changed this line
-import { editImageWithFluxKontexProxy, checkFluxKontexStatusProxy } from '../services/falService.ts'; // Added Fal.ai service
+import { editImageWithFluxKontexProxy, checkFluxKontexStatusProxy, FalServiceEditParams } from '../services/falService.ts'; // Added Fal.ai service and FalServiceEditParams
 // Added MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon, ChevronDownIcon
 import { PaperAirplaneIcon, CogIcon, XMarkIcon, PromptIcon, Bars3Icon, ChatBubbleLeftRightIcon, ClockIcon as HistoryIcon, MicrophoneIcon, StopCircleIcon, SpeakerWaveIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon, ChevronDownIcon, ArrowDownTrayIcon, PencilIcon as EditIcon, PhotoIcon, ArrowUpTrayIcon, DocumentTextIcon } from './Icons.tsx'; // Added EditIcon, PhotoIcon, ArrowUpTrayIcon, DocumentTextIcon
 import { ThemeContext } from '../App.tsx'; // Import ThemeContext
@@ -1694,12 +1694,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             };
           }
 
-          const fluxResult = await editImageWithFluxKontexProxy({
-              modelIdentifier: actualModelIdentifier, // This is 'fal-ai/flux-pro/kontext' or 'fal-ai/flux-pro/kontext/max/multi'
+          const fluxParams: FalServiceEditParams = {
+              modelIdentifier: actualModelIdentifier, 
               prompt: textForApi,
               settings: currentModelSpecificSettings as FluxKontexSettings,
-              imageData: fluxImageData
-          });
+              imageData: fluxImageData,
+              requestHeaders: requestHeaders, 
+          };
+          const fluxResult = await editImageWithFluxKontexProxy(fluxParams);
           
           if (fluxResult.error) throw new Error(fluxResult.error);
 
