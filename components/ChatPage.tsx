@@ -4,9 +4,9 @@
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo, useContext } from 'react';
 // Update to .ts/.tsx extensions
-import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType, UserGlobalProfile, AiAgentSettings, PrivateModeSettings, FluxKontexSettings, NotificationType, UserSessionState, DemoUserLimits, PaidUserLimits, SingleImageData, MultiImageData, FluxKontexAspectRatio, EditImageWithFluxKontexParams } from '../types.ts'; // Added UserSessionState, DemoUserLimits, PaidUserLimits, SingleImageData, MultiImageData, FluxKontexAspectRatio, EditImageWithFluxKontexParams
+import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType, UserGlobalProfile, AiAgentSettings, PrivateModeSettings, FluxKontexSettings, NotificationType, UserSessionState, DemoUserLimits, PaidUserLimits, SingleImageData, MultiImageData, FluxKontexAspectRatio, EditImageWithFluxKontexParams, FluxDevSettings, GenerateImageWithFluxDevParams, FluxDevImageSize } from '../types.ts'; // Added UserSessionState, DemoUserLimits, PaidUserLimits, SingleImageData, MultiImageData, FluxKontexAspectRatio, EditImageWithFluxKontexParams
 import type { Content } from '@google/genai'; // For constructing Gemini history
-import { ALL_MODEL_DEFAULT_SETTINGS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY, TRANSLATION_TARGET_LANGUAGES, MAX_SAVED_CHAT_SESSIONS, OPENAI_TTS_MAX_INPUT_LENGTH, PAID_USER_LIMITS_CONFIG, DEFAULT_FLUX_KONTEX_SETTINGS } from '../constants.ts';
+import { ALL_MODEL_DEFAULT_SETTINGS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY, TRANSLATION_TARGET_LANGUAGES, MAX_SAVED_CHAT_SESSIONS, OPENAI_TTS_MAX_INPUT_LENGTH, PAID_USER_LIMITS_CONFIG, DEFAULT_FLUX_KONTEX_SETTINGS, DEFAULT_FLUX_DEV_SETTINGS } from '../constants.ts';
 import { MessageBubble } from './MessageBubble.tsx'; // Changed to named import
 import SettingsPanel from './SettingsPanel.tsx';
 import HistoryPanel from './HistoryPanel.tsx'; // Import HistoryPanel
@@ -17,7 +17,7 @@ import { sendOpenAIMessageStream } from '../services/openaiService.ts';
 import { sendDeepseekMessageStream } from '../services/deepseekService.ts';
 import { sendMockMessageStream } from '../services/mockApiService.ts';
 import { generateOpenAITTS } from "../services/openaiTTSService"; // Changed this line
-import { editImageWithFluxKontexProxy, checkFluxKontexStatusProxy, FalServiceEditParams } from '../services/falService.ts'; // Added Fal.ai service and FalServiceEditParams
+import { editImageWithFluxKontexProxy, generateImageWithFluxDevProxy, checkFalQueueStatusProxy, FalServiceEditParams, FalServiceGenerateParams } from '../services/falService.ts'; // Updated Fal.ai service imports
 // Added MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon, ChevronDownIcon
 import { PaperAirplaneIcon, CogIcon, XMarkIcon, PromptIcon, Bars3Icon, ChatBubbleLeftRightIcon, ClockIcon as HistoryIcon, MicrophoneIcon, StopCircleIcon, SpeakerWaveIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon, ChevronDownIcon, ArrowDownTrayIcon, PencilIcon as EditIcon, PhotoIcon, ArrowUpTrayIcon, DocumentTextIcon } from './Icons.tsx'; // Added EditIcon, PhotoIcon, ArrowUpTrayIcon, DocumentTextIcon
 import { ThemeContext } from '../App.tsx'; // Import ThemeContext
@@ -186,6 +186,10 @@ const getIsFluxKontexModel = (model: Model | null): boolean => {
   if (!model) return false;
   return model === Model.FLUX_KONTEX || model === Model.FLUX_KONTEX_MAX_MULTI;
 };
+const getIsFluxDevModel = (model: Model | null): boolean => {
+    if (!model) return false;
+    return model === Model.FLUX_DEV_IMAGE_GEN;
+};
 
 
 const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, userSession, onUpdateDemoLimits }) => {
@@ -223,6 +227,16 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             }
           }
         });
+         // Sanitize Flux Dev image_size settings
+        if (parsedSettings[Model.FLUX_DEV_IMAGE_GEN] && parsedSettings[Model.FLUX_DEV_IMAGE_GEN]!.image_size) {
+            const currentImageSize = parsedSettings[Model.FLUX_DEV_IMAGE_GEN]!.image_size as string;
+            const validFluxDevSizes = (DEFAULT_FLUX_DEV_SETTINGS.image_size ? [DEFAULT_FLUX_DEV_SETTINGS.image_size] : []).concat(['square_hd', 'square', 'portrait_4_3', 'portrait_16_9', 'landscape_4_3', 'landscape_16_9']);
+            if (!validFluxDevSizes.includes(currentImageSize as FluxDevImageSize)) {
+                console.warn(`[ChatPage Init] Invalid image_size "${currentImageSize}" found for Flux Dev. Resetting to default.`);
+                parsedSettings[Model.FLUX_DEV_IMAGE_GEN]!.image_size = DEFAULT_FLUX_DEV_SETTINGS.image_size;
+            }
+        }
+
 
         const completeDefaults: AllModelSettings = {};
         Object.values(Model).forEach(modelKey => {
@@ -245,7 +259,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     const aboutMeText = userProfile?.aboutMe?.trim();
     const activePersona = activePersonaId ? personas.find(p => p.id === activePersonaId) : null;
 
-    if (selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS && selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.AI_AGENT && selectedModel !== Model.PRIVATE && selectedModel !== Model.FLUX_KONTEX && selectedModel !== Model.FLUX_KONTEX_MAX_MULTI) {
+    if (selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS && selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.AI_AGENT && selectedModel !== Model.PRIVATE && selectedModel !== Model.FLUX_KONTEX && selectedModel !== Model.FLUX_KONTEX_MAX_MULTI && selectedModel !== Model.FLUX_DEV_IMAGE_GEN) {
         let finalSystemInstruction = baseSettings.systemInstruction;
 
         if (activePersona) {
@@ -285,6 +299,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   const isAiAgentMode = selectedModel === Model.AI_AGENT;
   const isPrivateModeSelected = selectedModel === Model.PRIVATE;
   const isFluxKontexModelSelected = selectedModel === Model.FLUX_KONTEX || selectedModel === Model.FLUX_KONTEX_MAX_MULTI;
+  const isFluxDevModelSelected = selectedModel === Model.FLUX_DEV_IMAGE_GEN;
   const isClaudeModelSelected = selectedModel === Model.CLAUDE;
 
 
@@ -457,6 +472,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         isImageEditing: false, 
         isMultiImageEditing: true,
       },
+      [Model.FLUX_DEV_IMAGE_GEN]: {
+        isSet: isProxyExpectedToHaveKey,
+        envVarName: 'FAL_KEY (on proxy)',
+        modelName: 'Flux Dev Image Gen',
+        isMock: false,
+        isGeminiPlatform: false,
+        isFluxDevImageGeneration: true,
+      },
     };
   }, []);
 
@@ -467,6 +490,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           return "Flux Kontext Editor";
         case Model.FLUX_KONTEX_MAX_MULTI:
           return "Flux Kontext Max Editor";
+        case Model.FLUX_DEV_IMAGE_GEN:
+          return "Flux Dev Image Generator";
         case Model.PRIVATE:
           return "Private Mode";
         case Model.AI_AGENT:
@@ -529,14 +554,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
   useEffect(() => {
     const currentModelStatus = apiKeyStatuses[selectedModel];
-    if ((!currentModelStatus?.isGeminiPlatform || currentModelStatus?.isImageGeneration || currentModelStatus?.isTextToSpeech || currentModelStatus?.isRealTimeTranslation || currentModelStatus?.isAiAgent || currentModelStatus?.isPrivateMode || currentModelStatus?.isImageEditing || currentModelStatus?.isMultiImageEditing) && isWebSearchEnabled) {
+    if ((!currentModelStatus?.isGeminiPlatform || currentModelStatus?.isImageGeneration || currentModelStatus?.isTextToSpeech || currentModelStatus?.isRealTimeTranslation || currentModelStatus?.isAiAgent || currentModelStatus?.isPrivateMode || currentModelStatus?.isImageEditing || currentModelStatus?.isMultiImageEditing || currentModelStatus?.isFluxDevImageGeneration) && isWebSearchEnabled) {
         setIsWebSearchEnabled(false);
     }
 
     // Clear image attachments
     const previousModel = prevSelectedModelRef.current;
-    const shouldClearImagesOnModelSwitch = 
-      (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || isClaudeModelSelected || isAiAgentMode) ||
+    const shouldClearImagesOnModelSwitch =
+      (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || isClaudeModelSelected || isAiAgentMode || isFluxDevModelSelected) ||
       (selectedModel !== previousModel && (
         // Clear if switching TO a Flux model from a non-Flux model
         (getIsFluxKontexModel(selectedModel) && !getIsFluxKontexModel(previousModel)) ||
@@ -556,7 +581,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
 
     // Clear text file attachments
-    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isFluxKontexModelSelected || isClaudeModelSelected || isPrivateModeSelected) {
+    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isFluxKontexModelSelected || isClaudeModelSelected || isPrivateModeSelected || isFluxDevModelSelected) {
       if (uploadedTextFileContent || uploadedTextFileName) {
         setUploadedTextFileContent(null);
         setUploadedTextFileName(null);
@@ -565,7 +590,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     // Note: AI Agent KEEPS text files.
 
     // Clear personas
-    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || isFluxKontexModelSelected || isClaudeModelSelected) {
+    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || isFluxKontexModelSelected || isClaudeModelSelected || isFluxDevModelSelected) {
       if (activePersonaId) {
         setActivePersonaId(null);
       }
@@ -577,6 +602,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       const stopMicForModel =
         (isImagenModelSelected && !isRealTimeTranslationMode) ||
         (isTextToSpeechModelSelected && !isRealTimeTranslationMode) ||
+        (isFluxDevModelSelected && !isRealTimeTranslationMode) ||
         (isClaudeModelSelected && !isRealTimeTranslationMode);
 
       if (stopMicForModel) {
@@ -865,7 +891,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   };
 
 
-  const handleModelSettingsChange = useCallback((newSettings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings & FluxKontexSettings>) => {
+  const handleModelSettingsChange = useCallback((newSettings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings & FluxKontexSettings & FluxDevSettings>) => {
     setAllSettings(prev => {
       const baseModelSettings = prev[selectedModel] || ALL_MODEL_DEFAULT_SETTINGS[selectedModel]!;
       let processedNewSettings = { ...newSettings };
@@ -876,12 +902,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
        if ('speed' in processedNewSettings && typeof processedNewSettings.speed === 'number') {
         processedNewSettings.speed = Math.max(0.25, Math.min(4.0, processedNewSettings.speed));
       }
-      if ('guidance_scale' in processedNewSettings && typeof processedNewSettings.guidance_scale === 'number') {
+      if ('guidance_scale' in processedNewSettings && typeof processedNewSettings.guidance_scale === 'number' && (getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel))) {
         processedNewSettings.guidance_scale = Math.max(0, Math.min(20, processedNewSettings.guidance_scale));
       }
 
       const activeP = activePersonaId ? personas.find(p => p.id === activePersonaId) : null;
-      if (activeP && 'systemInstruction' in processedNewSettings && selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS && selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.AI_AGENT && selectedModel !== Model.PRIVATE && selectedModel !== Model.FLUX_KONTEX && selectedModel !== Model.FLUX_KONTEX_MAX_MULTI) {
+      if (activeP && 'systemInstruction' in processedNewSettings && selectedModel !== Model.IMAGEN3 && selectedModel !== Model.OPENAI_TTS && selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.AI_AGENT && selectedModel !== Model.PRIVATE && selectedModel !== Model.FLUX_KONTEX && selectedModel !== Model.FLUX_KONTEX_MAX_MULTI && selectedModel !== Model.FLUX_DEV_IMAGE_GEN) {
           delete processedNewSettings.systemInstruction;
       }
 
@@ -933,8 +959,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   };
 
   const handleSaveCurrentChat = useCallback(() => {
-    if (isRealTimeTranslationMode || isAiAgentMode || isPrivateModeSelected || isFluxKontexModelSelected) {
-        addNotification(`Cannot save chat in ${isRealTimeTranslationMode ? 'Real-Time Translation' : (isAiAgentMode ? 'AI Agent' : (isPrivateModeSelected ? 'Private' : 'Image Editing'))} mode.`, "info");
+    if (isRealTimeTranslationMode || isAiAgentMode || isPrivateModeSelected || isFluxKontexModelSelected || isFluxDevModelSelected) {
+        addNotification(`Cannot save chat in ${isRealTimeTranslationMode ? 'Real-Time Translation' : (isAiAgentMode ? 'AI Agent' : (isPrivateModeSelected ? 'Private' : (isFluxKontexModelSelected ? 'Image Editing' : 'Flux Dev Image Gen')))} mode.`, "info");
         return;
     }
     if (messages.length === 0) {
@@ -1013,12 +1039,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         addNotification(`Chat "${sessionName}" saved to browser.`, "success");
     }
     clearSearch();
-  }, [messages, selectedModel, modelSettings, activeSessionId, savedSessions, activePersonaId, addNotification, currentChatName, isRealTimeTranslationMode, isAiAgentMode, isPrivateModeSelected, isFluxKontexModelSelected, pruneChatSessions, clearSearch]);
+  }, [messages, selectedModel, modelSettings, activeSessionId, savedSessions, activePersonaId, addNotification, currentChatName, isRealTimeTranslationMode, isAiAgentMode, isPrivateModeSelected, isFluxKontexModelSelected, isFluxDevModelSelected, pruneChatSessions, clearSearch]);
 
   const handleLoadSession = useCallback((sessionId: string) => {
     const sessionToLoad = savedSessions.find(s => s.id === sessionId);
     if (sessionToLoad) {
-      if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT || sessionToLoad.model === Model.PRIVATE || sessionToLoad.model === Model.FLUX_KONTEX || sessionToLoad.model === Model.FLUX_KONTEX_MAX_MULTI) {
+      if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT || sessionToLoad.model === Model.PRIVATE || sessionToLoad.model === Model.FLUX_KONTEX || sessionToLoad.model === Model.FLUX_KONTEX_MAX_MULTI || sessionToLoad.model === Model.FLUX_DEV_IMAGE_GEN) {
           addNotification(`Cannot load "${sessionToLoad.model}" sessions directly. Please start a new one if needed.`, "info");
           return;
       }
@@ -1062,7 +1088,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     setUploadedTextFileName(null);
     setIsWebSearchEnabled(false);
 
-    if (selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.PRIVATE && selectedModel !== Model.FLUX_KONTEX && selectedModel !== Model.FLUX_KONTEX_MAX_MULTI && !(selectedModel === Model.GPT4O && !isGpt41Unlocked)) {
+    if (selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.PRIVATE && selectedModel !== Model.FLUX_KONTEX && selectedModel !== Model.FLUX_KONTEX_MAX_MULTI && selectedModel !== Model.FLUX_DEV_IMAGE_GEN && !(selectedModel === Model.GPT4O && !isGpt41Unlocked)) {
         setAllSettings(prev => ({
             ...prev,
             [selectedModel]: { ...(ALL_MODEL_DEFAULT_SETTINGS[selectedModel] || ALL_MODEL_DEFAULT_SETTINGS[Model.GEMINI]!) }
@@ -1074,7 +1100,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         }));
     }
 
-    if (!isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected) setActivePersonaId(null);
+    if (!isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected && !isFluxDevModelSelected) setActivePersonaId(null);
     setError(null);
     setIsSidebarOpen(false);
     addNotification("Started new chat.", "info");
@@ -1092,7 +1118,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             setIsSpeakingLiveTranslation(false);
         }
     }
-  }, [selectedModel, addNotification, isRealTimeTranslationMode, isSpeakingLiveTranslation, isGpt41Unlocked, isAiAgentMode, isPrivateModeSelected, isFluxKontexModelSelected, clearSearch]);
+  }, [selectedModel, addNotification, isRealTimeTranslationMode, isSpeakingLiveTranslation, isGpt41Unlocked, isAiAgentMode, isPrivateModeSelected, isFluxKontexModelSelected, isFluxDevModelSelected, clearSearch]);
 
   const handleDeleteSession = useCallback((sessionId: string) => {
     const sessionToDelete = savedSessions.find(s => s.id === sessionId);
@@ -1148,8 +1174,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   }, [addNotification, pruneChatSessions]);
 
   const handleSaveChatToDevice = useCallback(() => {
-    if (isRealTimeTranslationMode || isAiAgentMode || isPrivateModeSelected || isFluxKontexModelSelected) {
-      addNotification(`Cannot save chat to device in ${isRealTimeTranslationMode ? 'Real-Time Translation' : (isAiAgentMode ? 'AI Agent' : (isPrivateModeSelected ? 'Private' : 'Image Editing'))} mode.`, "info");
+    if (isRealTimeTranslationMode || isAiAgentMode || isPrivateModeSelected || isFluxKontexModelSelected || isFluxDevModelSelected) {
+      addNotification(`Cannot save chat to device in ${isRealTimeTranslationMode ? 'Real-Time Translation' : (isAiAgentMode ? 'AI Agent' : (isPrivateModeSelected ? 'Private' : (isFluxKontexModelSelected ? 'Image Editing' : 'Flux Dev Image Gen')))} mode.`, "info");
       return;
     }
     if (messages.length === 0) {
@@ -1213,7 +1239,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       console.error("Error saving chat to device:", e);
       addNotification("Failed to save chat to device.", "error", e.message);
     }
-  }, [messages, selectedModel, modelSettings, activeSessionId, currentChatName, activePersonaId, addNotification, isRealTimeTranslationMode, isAiAgentMode, isPrivateModeSelected, isFluxKontexModelSelected, savedSessions]);
+  }, [messages, selectedModel, modelSettings, activeSessionId, currentChatName, activePersonaId, addNotification, isRealTimeTranslationMode, isAiAgentMode, isPrivateModeSelected, isFluxKontexModelSelected, isFluxDevModelSelected, savedSessions]);
 
 
   const handleLoadChatFromDevice = useCallback(async (file: File) => {
@@ -1235,7 +1261,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             if (!sessionToLoad.messages || !sessionToLoad.model || !sessionToLoad.modelSettingsSnapshot || !sessionToLoad.name || !sessionToLoad.timestamp) {
                 throw new Error("File is not a valid chat session format. Missing required fields.");
             }
-            if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT || sessionToLoad.model === Model.PRIVATE || sessionToLoad.model === Model.FLUX_KONTEX || sessionToLoad.model === Model.FLUX_KONTEX_MAX_MULTI) {
+            if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT || sessionToLoad.model === Model.PRIVATE || sessionToLoad.model === Model.FLUX_KONTEX || sessionToLoad.model === Model.FLUX_KONTEX_MAX_MULTI || sessionToLoad.model === Model.FLUX_DEV_IMAGE_GEN) {
                 addNotification(`Cannot load "${sessionToLoad.model}" sessions from file.`, "info");
                 return;
             }
@@ -1407,7 +1433,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     }
   }, [currentPlayingMessageId, isSpeakingLiveTranslation, liveTranslationAudioUrl]);
 
-  const pollFluxKontexStatus = useCallback(async (requestId: string, aiMessageId: string, userPrompt: string, fluxModelIdForPolling: string) => {
+  const pollFalStatus = useCallback(async (requestId: string, aiMessageId: string, userPrompt: string, falModelIdForPolling: string) => {
     const MAX_TOTAL_POLLS = 30;
     const POLL_INTERVAL = 3000;
     const MAX_NOT_FOUND_POLLS = 12;
@@ -1420,59 +1446,61 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       pollCount++;
       if (pollCount > MAX_TOTAL_POLLS) {
         if (intervalId) clearInterval(intervalId);
-        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Image editing timed out for: "${userPrompt}". Please try again.`, isRegenerating: false, fluxRequestId: undefined } : msg));
-        addNotification("Flux Kontext image editing timed out.", "error");
+        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Image processing timed out for: "${userPrompt}". Please try again.`, isRegenerating: false, fluxRequestId: undefined } : msg));
+        addNotification("Fal.ai image processing timed out.", "error");
         setIsLoading(false);
         return;
       }
 
       try {
-        const statusResult = await checkFluxKontexStatusProxy(requestId, fluxModelIdForPolling);
+        const statusResult = await checkFalQueueStatusProxy(requestId, falModelIdForPolling);
 
         if (statusResult.status === 'COMPLETED') {
           if (intervalId) clearInterval(intervalId);
-          if (statusResult.editedImageUrl) {
+          const imageOutput = statusResult.imageUrls && statusResult.imageUrls.length > 0 ? statusResult.imageUrls : (statusResult.imageUrl ? [statusResult.imageUrl] : []);
+          
+          if (imageOutput.length > 0) {
             setMessages(prev => prev.map(msg => msg.id === aiMessageId ? {
               ...msg,
-              text: `Image edited based on your prompt: "${userPrompt}"`,
-              imagePreviews: [statusResult.editedImageUrl!],
-              imageMimeType: 'image/png', // Fal usually returns PNG for these models
+              text: `Image(s) processed for prompt: "${userPrompt}"`,
+              imagePreviews: imageOutput,
+              imageMimeType: 'image/png', // Fal usually returns PNG
               originalPrompt: userPrompt,
               isRegenerating: false,
               fluxRequestId: undefined,
               timestamp: msg.timestamp || Date.now()
             } : msg));
-            addNotification("Image editing successful!", "success");
+            addNotification("Image processing successful!", "success");
           } else {
-            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Image editing completed, but no image was returned. Prompt: "${userPrompt}"`, isRegenerating: false, fluxRequestId: undefined } : msg));
-            addNotification("Flux Kontext: Processing completed, but no image was returned by the API.", "info", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0, 200) : undefined);
+            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Image processing completed, but no image was returned. Prompt: "${userPrompt}"`, isRegenerating: false, fluxRequestId: undefined } : msg));
+            addNotification("Fal.ai: Processing completed, but no image was returned by the API.", "info", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0, 200) : undefined);
           }
           setIsLoading(false);
           return;
         } else if (statusResult.status === 'IN_PROGRESS' || statusResult.status === 'IN_QUEUE') {
           notFoundCount = 0;
-          setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Image editing: ${statusResult.status?.toLowerCase()} (ID: ${requestId}). Attempt ${pollCount}/${MAX_TOTAL_POLLS}...` } : msg));
+          setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Image processing: ${statusResult.status?.toLowerCase()} (ID: ${requestId}). Attempt ${pollCount}/${MAX_TOTAL_POLLS}...` } : msg));
         } else if (statusResult.status === 'NOT_FOUND') {
           notFoundCount++;
           if (notFoundCount > MAX_NOT_FOUND_POLLS) {
             if (intervalId) clearInterval(intervalId);
             const errorMessage = statusResult.error || `Request ID ${requestId} not found after several attempts.`;
-            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error editing image: ${errorMessage}. Prompt: "${userPrompt}"`, isRegenerating: false, fluxRequestId: undefined } : msg));
-            addNotification(`Flux Kontext Error: ${errorMessage}`, "error", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0,200) : undefined);
+            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error processing image: ${errorMessage}. Prompt: "${userPrompt}"`, isRegenerating: false, fluxRequestId: undefined } : msg));
+            addNotification(`Fal.ai Error: ${errorMessage}`, "error", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0,200) : undefined);
             setIsLoading(false);
             return;
           }
-          setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Image editing: Verifying request (ID: ${requestId}). Attempt ${pollCount}/${MAX_TOTAL_POLLS}...` } : msg));
-        } else {
+          setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Image processing: Verifying request (ID: ${requestId}). Attempt ${pollCount}/${MAX_TOTAL_POLLS}...` } : msg));
+        } else { // Other error statuses or unexpected
           if (intervalId) clearInterval(intervalId);
-          const errorMessage = statusResult.error || "Unknown error during image editing.";
-          setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error editing image: ${errorMessage}. Prompt: "${userPrompt}"`, isRegenerating: false, fluxRequestId: undefined } : msg));
-          addNotification(`Flux Kontext Error: ${errorMessage}`, "error", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0,200) : undefined);
+          const errorMessage = statusResult.error || "Unknown error during image processing.";
+          setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error processing image: ${errorMessage}. Prompt: "${userPrompt}"`, isRegenerating: false, fluxRequestId: undefined } : msg));
+          addNotification(`Fal.ai Error: ${errorMessage}`, "error", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0,200) : undefined);
           setIsLoading(false);
         }
       } catch (pollingError: any) {
         if (intervalId) clearInterval(intervalId);
-        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error checking image edit status: ${pollingError.message}. Prompt: "${userPrompt}"`, isRegenerating: false, fluxRequestId: undefined } : msg));
+        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error checking image processing status: ${pollingError.message}. Prompt: "${userPrompt}"`, isRegenerating: false, fluxRequestId: undefined } : msg));
         addNotification(`Polling Error: ${pollingError.message}`, "error");
         setIsLoading(false);
       }
@@ -1514,11 +1542,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         text: userDisplayedText,
         sender: 'user',
         timestamp: messageTimestamp,
-        imagePreview: selectedModel !== Model.FLUX_KONTEX_MAX_MULTI && currentUploadedImagePreviews.length > 0 ? currentUploadedImagePreviews[0] : undefined,
-        imagePreviews: selectedModel === Model.FLUX_KONTEX_MAX_MULTI ? currentUploadedImagePreviews : undefined,
-        imageMimeTypes: selectedModel === Model.FLUX_KONTEX_MAX_MULTI ? currentUploadedImageFiles.map(f => f.type) : undefined,
+        imagePreview: (selectedModel !== Model.FLUX_KONTEX_MAX_MULTI && !isFluxDevModelSelected) && currentUploadedImagePreviews.length > 0 ? currentUploadedImagePreviews[0] : undefined,
+        imagePreviews: (selectedModel === Model.FLUX_KONTEX_MAX_MULTI || isFluxDevModelSelected) ? currentUploadedImagePreviews : undefined,
+        imageMimeTypes: (selectedModel === Model.FLUX_KONTEX_MAX_MULTI || isFluxDevModelSelected) ? currentUploadedImageFiles.map(f => f.type) : undefined,
         fileName: currentUploadedTextFileName || undefined,
-        isImageQuery: isImagenModelSelected || isFluxKontexModelSelected,
+        isImageQuery: isImagenModelSelected || isFluxKontexModelSelected || isFluxDevModelSelected,
         isTaskGoal: isAiAgentMode,
         isNote: isPrivateModeSelected && (currentUploadedImagePreviews.length === 0 && !currentUploadedTextFileName),
         model: isPrivateModeSelected ? Model.PRIVATE : undefined,
@@ -1530,7 +1558,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
     const aiMessageTimestamp = Date.now();
     const aiMessageId = isRegenerationOfAiMsgId || (aiMessageTimestamp + 1).toString();
-    const actualModelIdentifierForFlux = isFluxKontexModelSelected ? getActualModelIdentifier(selectedModel) : undefined;
+    const actualModelIdentifierForFal = (isFluxKontexModelSelected || isFluxDevModelSelected) ? getActualModelIdentifier(selectedModel) : undefined;
     const isAdminUser = !userSession.isDemoUser && !userSession.isPaidUser;
 
     // Flux Kontext Max Restriction
@@ -1545,6 +1573,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     if (!isRegenerationOfAiMsgId) {
         if (isImagenModelSelected) aiPlaceholderText = 'Generating image(s)...';
         else if (isFluxKontexModelSelected) aiPlaceholderText = 'Submitting image for editing...';
+        else if (isFluxDevModelSelected) aiPlaceholderText = 'Generating image (Flux Dev)...';
         else if (isTextToSpeechModelSelected) aiPlaceholderText = 'Synthesizing audio...';
         else if (isAiAgentMode) aiPlaceholderText = 'AI Agent is processing your goal...';
         else if (isPrivateModeSelected) aiPlaceholderText = 'Data logged locally. No AI response.';
@@ -1562,7 +1591,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         promptedByMessageId: userMessageId,
         isTaskPlan: isAiAgentMode,
         originalPrompt: userDisplayedText,
-        fluxModelId: isFluxKontexModelSelected ? actualModelIdentifierForFlux : undefined,
+        fluxModelId: (isFluxKontexModelSelected || isFluxDevModelSelected) ? actualModelIdentifierForFal : undefined,
     };
 
     if (isPrivateModeSelected) {
@@ -1588,7 +1617,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     if (userSession.isPaidUser && userSession.paidUsername) { 
         requestHeaders['X-Paid-User-Token'] = userSession.paidUsername;
     } else if (userSession.isDemoUser && userSession.demoUserToken) {
-        if (isFluxKontexModelSelected || isImagenModelSelected || isTextToSpeechModelSelected) {
+        if (isFluxKontexModelSelected || isImagenModelSelected || isTextToSpeechModelSelected || isFluxDevModelSelected) {
              requestHeaders['X-Demo-Token'] = userSession.demoUserToken;
         }
     }
@@ -1606,6 +1635,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                 limitExceeded = true;
                 notificationMessage = `Đã hết lượt dùng thử ${isMax ? 'Flux Kontext Max' : 'Flux Kontext Pro'}. Vui lòng liên hệ admin.`;
             }
+        } else if (isFluxDevModelSelected) {
+             const fluxDevSettings = modelSettings as FluxDevSettings;
+             const numImagesToGenFluxDev = fluxDevSettings.num_images || 1;
+             if (!limits || limits.fluxDevMonthlyImagesLeft < numImagesToGenFluxDev) {
+                limitExceeded = true;
+                notificationMessage = `Not enough Flux Dev demo uses left. Need ${numImagesToGenFluxDev}, have ${limits?.fluxDevMonthlyImagesLeft || 0}.`;
+             }
         } else if (isImagenModelSelected) {
             const imagenSettings = modelSettings as ImagenSettings;
             const numImagesToGen = imagenSettings.numberOfImages || 1;
@@ -1633,7 +1669,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
 
     try {
-      const currentModelSpecificSettings = modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings & FluxKontexSettings;
+      const currentModelSpecificSettings = modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings & FluxKontexSettings & FluxDevSettings;
       const currentModelStatus = apiKeyStatuses[selectedModel];
       const actualModelIdentifier = getActualModelIdentifier(selectedModel);
 
@@ -1665,7 +1701,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
               onUpdateDemoLimits({ openaiTtsMonthlyCharsLeft: (userSession.demoLimits?.openaiTtsMonthlyCharsLeft || 0) - userDisplayedText.length });
           }
 
-      } else if ((currentModelStatus?.isImageEditing || currentModelStatus?.isMultiImageEditing) && !currentModelStatus.isMock) {
+      } else if ((currentModelStatus?.isImageEditing || currentModelStatus?.isMultiImageEditing) && !currentModelStatus.isMock) { // Flux Kontext Standard & Max
           if (currentUploadedImageFiles.length === 0 || currentUploadedImagePreviews.length === 0) {
             throw new Error("Flux Kontext requires at least one image to be uploaded.");
           }
@@ -1711,7 +1747,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? {
                 ...msg, text: fluxResult.message || `Image editing submitted (ID: ${fluxResult.requestId}). Waiting for results...`, fluxRequestId: fluxResult.requestId, isRegenerating: false, timestamp: msg.timestamp || Date.now(), fluxModelId: actualModelIdentifier
             } : msg));
-            pollFluxKontexStatus(fluxResult.requestId, aiMessageId, userDisplayedText, actualModelIdentifier); // Pass model ID for polling
+            pollFalStatus(fluxResult.requestId, aiMessageId, userDisplayedText, actualModelIdentifier); // Pass model ID for polling
             if (userSession.isDemoUser && !userSession.isPaidUser && userSession.demoLimits) {
                 if (selectedModel === Model.FLUX_KONTEX) {
                     onUpdateDemoLimits({ fluxKontextProMonthlyUsesLeft: (userSession.demoLimits?.fluxKontextProMonthlyUsesLeft || 0) - 1 });
@@ -1720,6 +1756,27 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                 }
             }
           } else { throw new Error(fluxResult.error || "Flux Kontext submission failed (no request ID)."); }
+      } else if (currentModelStatus?.isFluxDevImageGeneration && !currentModelStatus.isMock) { // Flux Dev Image Gen
+            const fluxDevParams: FalServiceGenerateParams = {
+                modelIdentifier: actualModelIdentifier,
+                prompt: textForApi,
+                settings: currentModelSpecificSettings as FluxDevSettings,
+                requestHeaders: requestHeaders,
+            };
+            const fluxDevResult = await generateImageWithFluxDevProxy(fluxDevParams);
+            if (fluxDevResult.error) throw new Error(fluxDevResult.error);
+
+            if (fluxDevResult.requestId) {
+                setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? {
+                    ...msg, text: fluxDevResult.message || `Flux Dev image generation submitted (ID: ${fluxDevResult.requestId}). Waiting for results...`, fluxRequestId: fluxDevResult.requestId, isRegenerating: false, timestamp: msg.timestamp || Date.now(), fluxModelId: actualModelIdentifier
+                } : msg));
+                pollFalStatus(fluxDevResult.requestId, aiMessageId, userDisplayedText, actualModelIdentifier);
+                if (userSession.isDemoUser && !userSession.isPaidUser && userSession.demoLimits) {
+                    const numImages = (currentModelSpecificSettings as FluxDevSettings).num_images || 1;
+                    onUpdateDemoLimits({ fluxDevMonthlyImagesLeft: (userSession.demoLimits?.fluxDevMonthlyImagesLeft || 0) - numImages });
+                }
+            } else { throw new Error(fluxDevResult.error || "Flux Dev submission failed (no request ID)."); }
+
 
       } else if (isImagenModelSelected && !currentModelStatus.isMock) {
           const imagenBody = { prompt: userDisplayedText, modelSettings: currentModelSpecificSettings as ImagenSettings, modelName: actualModelIdentifier };
@@ -1818,7 +1875,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           if (chunk.isFinished) break;
         }
 
-      } else if (currentModelStatus?.isMock && !isRealTimeTranslationMode && !isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected) {
+      } else if (currentModelStatus?.isMock && !isRealTimeTranslationMode && !isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected && !isFluxDevModelSelected) {
         const mockParts: Part[] = [];
         if (textForApi.trim()) mockParts.push({ text: textForApi.trim() });
         if (currentUploadedTextFileName && !currentUploadedTextContent && currentUploadedImageFiles.length === 0) {
@@ -1833,7 +1890,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           currentText += chunk;
           setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? { ...msg, text: currentText, isRegenerating: false } : msg));
         }
-      } else if (!isRealTimeTranslationMode && !isPrivateModeSelected && !isFluxKontexModelSelected) {
+      } else if (!isRealTimeTranslationMode && !isPrivateModeSelected && !isFluxKontexModelSelected && !isFluxDevModelSelected) {
           throw new Error(`API integration for ${selectedModel} is not implemented or API key/Vertex config is missing and it's not a mock model.`);
       }
     } catch (e: any) {
@@ -1848,13 +1905,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       }]);
     }
 
-    if (!isFluxKontexModelSelected || (isFluxKontexModelSelected && !messages.find(m => m.id === aiMessageId)?.fluxRequestId)) {
+    if (!(isFluxKontexModelSelected || isFluxDevModelSelected) || ((isFluxKontexModelSelected || isFluxDevModelSelected) && !messages.find(m => m.id === aiMessageId)?.fluxRequestId)) {
       setIsLoading(false);
     }
 
     if (!isRegenerationOfAiMsgId && !isRealTimeTranslationMode && !isPrivateModeSelected) {
         setInput('');
-        if (!isFluxKontexModelSelected) { // Only clear for non-Flux models after send
+        if (!isFluxKontexModelSelected && !isFluxDevModelSelected) { // Only clear for non-Fal models after send
             setUploadedImages([]);
             setImagePreviews([]);
         }
@@ -1874,7 +1931,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         determinedTtsMaxLength = userSession.paidLimits.openaiTtsMaxChars;
     }
 
-    if (isImagenModelSelected && !input.trim()) {
+    if ((isImagenModelSelected || isFluxDevModelSelected) && !input.trim()) {
         setError("Please enter a prompt for image generation.");
         addNotification("Please enter a prompt for image generation.", "info");
         return;
@@ -1911,7 +1968,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         addNotification("Please enter text, or upload an image/file to log in Private Mode.", "info");
         return;
     }
-    if (!isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected && !input.trim() && uploadedImages.length === 0 && !uploadedTextFileName) {
+    if (!isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected && !isFluxDevModelSelected && !input.trim() && uploadedImages.length === 0 && !uploadedTextFileName) {
         return;
     }
 
@@ -1922,7 +1979,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   };
 
   const handleRegenerateResponse = async (aiMessageIdToRegenerate: string, promptedByMsgId: string) => {
-      if (isRealTimeTranslationMode || isAiAgentMode || isPrivateModeSelected || isFluxKontexModelSelected) return;
+      if (isRealTimeTranslationMode || isAiAgentMode || isPrivateModeSelected || isFluxKontexModelSelected || isFluxDevModelSelected) return;
       const userMessageForRegen = messages.find(m => m.id === promptedByMsgId && m.sender === 'user');
       const aiMessageToRegen = messages.find(m => m.id === aiMessageIdToRegenerate && m.sender === 'ai');
 
@@ -1954,7 +2011,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       setMessages(prev => prev.map(msg => {
           if (msg.id === aiMessageIdToRegenerate) {
               let regeneratingText = 'Regenerating...';
-              if (msg.model === Model.IMAGEN3) regeneratingText = 'Regenerating image(s)...';
+              if (msg.model === Model.IMAGEN3 || msg.model === Model.FLUX_DEV_IMAGE_GEN) regeneratingText = 'Regenerating image(s)...';
               if (msg.model === Model.OPENAI_TTS) regeneratingText = 'Resynthesizing audio...';
 
               return {
@@ -1969,7 +2026,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       );
   };
 
-  const imageUploadLimit = useMemo(() => selectedModel === Model.FLUX_KONTEX_MAX_MULTI ? 4 : 1, [selectedModel]);
+  const imageUploadLimit = useMemo(() => (selectedModel === Model.FLUX_KONTEX_MAX_MULTI || selectedModel === Model.FLUX_DEV_IMAGE_GEN) ? 4 : 1, [selectedModel]);
 
   const handleSetUploadedImages = (newFiles: File[]) => {
     if (isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected) return;
@@ -1977,13 +2034,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     let currentFiles: File[] = [];
     let currentPreviews: string[] = [];
   
-    if (selectedModel === Model.FLUX_KONTEX_MAX_MULTI) {
-      // For Flux Max, append new files to existing ones, respecting the limit.
+    if (selectedModel === Model.FLUX_KONTEX_MAX_MULTI || selectedModel === Model.FLUX_DEV_IMAGE_GEN) {
+      // For Flux Max or Flux Dev, append new files to existing ones, respecting the limit.
       const combinedFiles = [...uploadedImages, ...newFiles];
       currentFiles = combinedFiles.slice(0, imageUploadLimit);
   
       if (combinedFiles.length > imageUploadLimit) {
-        addNotification(`Cannot upload more than ${imageUploadLimit} images for Flux Kontext Max. Only the first ${imageUploadLimit} were kept.`, "warning");
+        addNotification(`Cannot upload more than ${imageUploadLimit} images for ${selectedModel === Model.FLUX_DEV_IMAGE_GEN ? 'Flux Dev' : 'Flux Kontext Max'}. Only the first ${imageUploadLimit} were kept.`, "warning");
       }
     } else {
       // For other models (including standard Flux Kontext), replace with the new file (limit 1).
@@ -2025,7 +2082,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
 
   const handleFileUpload = (file: File | null) => {
-    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isFluxKontexModelSelected || isClaudeModelSelected) return;
+    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isFluxKontexModelSelected || isClaudeModelSelected || isFluxDevModelSelected) return;
 
     setUploadedImages([]);
     setImagePreviews([]);
@@ -2154,7 +2211,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             <SettingsPanel
                 selectedModel={selectedModel}
                 onModelChange={handleModelSelection}
-                modelSettings={modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings & FluxKontexSettings}
+                modelSettings={modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings & FluxKontexSettings & FluxDevSettings}
                 onModelSettingsChange={handleModelSettingsChange}
                 isWebSearchEnabled={isWebSearchEnabled}
                 onWebSearchToggle={setIsWebSearchEnabled}
@@ -2197,32 +2254,35 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
   const showMicrophoneButton = useMemo(() => {
     if (!isSpeechRecognitionSupported) return false;
-    if (isTextToSpeechModelSelected || isImagenModelSelected || isClaudeModelSelected) return false;
+    if (isTextToSpeechModelSelected || isImagenModelSelected || isClaudeModelSelected || isFluxDevModelSelected) return false;
     return true;
-  }, [isSpeechRecognitionSupported, selectedModel, isTextToSpeechModelSelected, isImagenModelSelected, isClaudeModelSelected]);
+  }, [isSpeechRecognitionSupported, selectedModel, isTextToSpeechModelSelected, isImagenModelSelected, isClaudeModelSelected, isFluxDevModelSelected]);
 
   const showImageUploadInChatBar = useMemo(() => {
     return !isTextToSpeechModelSelected &&
            !isRealTimeTranslationMode &&
            selectedModel !== Model.DEEPSEEK &&
            !isImagenModelSelected &&
+           !isFluxDevModelSelected &&
            !isAiAgentMode &&
            !isClaudeModelSelected;
-  }, [selectedModel, isTextToSpeechModelSelected, isRealTimeTranslationMode, isImagenModelSelected, isAiAgentMode, isClaudeModelSelected]);
+  }, [selectedModel, isTextToSpeechModelSelected, isRealTimeTranslationMode, isImagenModelSelected, isFluxDevModelSelected, isAiAgentMode, isClaudeModelSelected]);
 
   const showFileUploadInChatBar = useMemo(() => {
     return !isImagenModelSelected &&
            !isTextToSpeechModelSelected &&
            !isRealTimeTranslationMode &&
            !isFluxKontexModelSelected &&
+           !isFluxDevModelSelected &&
            !isClaudeModelSelected;
-  }, [selectedModel, isImagenModelSelected, isTextToSpeechModelSelected, isRealTimeTranslationMode, isFluxKontexModelSelected, isClaudeModelSelected]);
+  }, [selectedModel, isImagenModelSelected, isTextToSpeechModelSelected, isRealTimeTranslationMode, isFluxKontexModelSelected, isFluxDevModelSelected, isClaudeModelSelected]);
 
 
   const currentPromptPlaceholder = () => {
     if (isListening && !isRealTimeTranslationMode) return "Đang nghe...";
     if (isImagenModelSelected) return "Enter prompt for image generation...";
     if (isFluxKontexModelSelected) return "Enter prompt to edit uploaded image...";
+    if (isFluxDevModelSelected) return "Enter prompt for Flux Dev image generation...";
     if (isTextToSpeechModelSelected) return "Enter text to synthesize speech...";
     if (isRealTimeTranslationMode) return "Real-Time Translation Active. Use Microphone.";
     if (isAiAgentMode) return "Enter main goal for AI Agent, or upload file...";
@@ -2246,7 +2306,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   }
 
   const sendButtonLabel = () => {
-    if (isImagenModelSelected) return "Generate Image";
+    if (isImagenModelSelected || isFluxDevModelSelected) return "Generate Image";
     if (isFluxKontexModelSelected) return "Edit Image";
     if (isTextToSpeechModelSelected) return "Synthesize Speech";
     if (isAiAgentMode) return "Set Goal";
@@ -2255,7 +2315,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   }
 
   const sendButtonIcon = () => {
-    if (isImagenModelSelected) return <PromptIcon className="w-6 h-6" />;
+    if (isImagenModelSelected || isFluxDevModelSelected) return <PromptIcon className="w-6 h-6" />;
     if (isFluxKontexModelSelected) return <EditIcon className="w-6 h-6" />;
     if (isTextToSpeechModelSelected) return <SpeakerWaveIcon className="w-6 h-6" />;
     if (isAiAgentMode || isPrivateModeSelected) return <PaperAirplaneIcon className="w-6 h-6" />;
@@ -2463,14 +2523,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   };
 
   const showGenericAttachmentPreview = useMemo(() => {
-    if (isTextToSpeechModelSelected || isRealTimeTranslationMode || isImagenModelSelected || isClaudeModelSelected) {
+    if (isTextToSpeechModelSelected || isRealTimeTranslationMode || isImagenModelSelected || isClaudeModelSelected || isFluxDevModelSelected) {
         return false;
     }
     if (imagePreviews.length > 0 || uploadedTextFileName) {
         return true;
     }
     return false;
-  }, [imagePreviews, uploadedTextFileName, isTextToSpeechModelSelected, isRealTimeTranslationMode, isImagenModelSelected, isClaudeModelSelected]);
+  }, [imagePreviews, uploadedTextFileName, isTextToSpeechModelSelected, isRealTimeTranslationMode, isImagenModelSelected, isClaudeModelSelected, isFluxDevModelSelected]);
 
 
   return (
@@ -2662,7 +2722,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
 
           {/* Hidden file inputs for chat bar buttons */}
-          <input type="file" id="image-upload-chatbar" className="hidden" onChange={handleChatBarImageUpload} accept={imageFileAcceptTypes} multiple={isFluxKontexModelSelected} />
+          <input type="file" id="image-upload-chatbar" className="hidden" onChange={handleChatBarImageUpload} accept={imageFileAcceptTypes} multiple={selectedModel === Model.FLUX_KONTEX_MAX_MULTI || selectedModel === Model.FLUX_DEV_IMAGE_GEN} />
           <input type="file" id="file-upload-chatbar" className="hidden" onChange={handleChatBarGeneralFileUpload} accept={generalFileAcceptTypes} />
 
           {/* Input Area */}
@@ -2726,7 +2786,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                     </button>
                 )}
                 {!isRealTimeTranslationMode && (
-                    <button onClick={handleSendMessage} disabled={generalChatBarInteractionDisabled || (input.trim() === '' && uploadedImages.length === 0 && !uploadedTextFileName && !isImagenModelSelected && !isFluxKontexModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode && !isPrivateModeSelected)}
+                    <button onClick={handleSendMessage} disabled={generalChatBarInteractionDisabled || (input.trim() === '' && uploadedImages.length === 0 && !uploadedTextFileName && !isImagenModelSelected && !isFluxKontexModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode && !isPrivateModeSelected && !isFluxDevModelSelected)}
                         className="p-2.5 bg-primary hover:bg-primary-dark dark:bg-primary-light dark:hover:bg-primary text-white dark:text-neutral-darker rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         aria-label={sendButtonLabel()} title={sendButtonLabel()}
                     >

@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
-import { Model, ModelSettings, SettingsPanelProps, ApiKeyStatus, getActualModelIdentifier, ImagenSettings, Persona, OpenAITtsSettings, OpenAiTtsVoice, RealTimeTranslationSettings, AiAgentSettings, FluxKontexSettings, FluxKontexAspectRatio } from '../types.ts';
-import { ArrowUpTrayIcon, PhotoIcon, XMarkIcon, MagnifyingGlassIcon, KeyIcon, InformationCircleIcon, UserCircleIcon, PlusCircleIcon, TrashIcon, PencilSquareIcon, SpeakerWaveIcon, LanguageIcon, PencilIcon as EditIcon, ArrowPathIcon } from './Icons.tsx'; // Changed EditIcon to PencilIcon as EditIcon, Added ArrowPathIcon
-import { TRANSLATION_TARGET_LANGUAGES, DEFAULT_FLUX_KONTEX_SETTINGS } from '../constants.ts';
+import { Model, ModelSettings, SettingsPanelProps, ApiKeyStatus, getActualModelIdentifier, ImagenSettings, Persona, OpenAITtsSettings, OpenAiTtsVoice, RealTimeTranslationSettings, AiAgentSettings, FluxKontexSettings, FluxKontexAspectRatio, FluxDevSettings, FluxDevImageSize } from '../types.ts';
+import { ArrowUpTrayIcon, PhotoIcon, XMarkIcon, MagnifyingGlassIcon, KeyIcon, InformationCircleIcon, UserCircleIcon, PlusCircleIcon, TrashIcon, PencilSquareIcon, SpeakerWaveIcon, LanguageIcon, PencilIcon as EditIcon, ArrowPathIcon } from './Icons.tsx';
+import { TRANSLATION_TARGET_LANGUAGES, DEFAULT_FLUX_KONTEX_SETTINGS, DEFAULT_FLUX_DEV_SETTINGS, FLUX_DEV_IMAGE_SIZES } from '../constants.ts';
 
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({
@@ -33,11 +33,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const isAiAgentModel = selectedModel === Model.AI_AGENT || currentApiKeyStatus?.isAiAgent;
   const isPrivateModel = selectedModel === Model.PRIVATE || currentApiKeyStatus?.isPrivateMode;
   const isFluxKontexModel = selectedModel === Model.FLUX_KONTEX || selectedModel === Model.FLUX_KONTEX_MAX_MULTI;
+  const isFluxDevImageGenModel = selectedModel === Model.FLUX_DEV_IMAGE_GEN || currentApiKeyStatus?.isFluxDevImageGeneration;
 
-  const showPersonaSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isPrivateModel && !isFluxKontexModel && selectedModel !== Model.CLAUDE;
-  const showChatModelSettingsSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isFluxKontexModel && !isPrivateModel && selectedModel !== Model.CLAUDE;
+  const showPersonaSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isPrivateModel && !isFluxKontexModel && !isFluxDevImageGenModel && selectedModel !== Model.CLAUDE;
+  const showChatModelSettingsSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isFluxKontexModel && !isFluxDevImageGenModel && !isPrivateModel && selectedModel !== Model.CLAUDE;
   
-  // The entire attachments section is removed from here.
 
   const handlePersonaEdit = (persona: Persona) => {
     setEditingPersona(persona);
@@ -55,12 +55,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
       instruction: personaInstruction.trim(),
     };
     onPersonaSave(newPersona);
-    if (!editingPersona) { // if it was a new persona, select it
+    if (!editingPersona) { 
         onPersonaChange(newPersona.id);
     } else if (editingPersona && activePersonaId === editingPersona.id) {
-        // If active persona was edited, ensure its changes are reflected
-        // by re-applying it (or let ChatPage handle it via useEffect on activePersonaId/personas)
-        onPersonaChange(newPersona.id); // Re-select to apply new instruction
+        onPersonaChange(newPersona.id); 
     }
     setEditingPersona(null);
     setPersonaName('');
@@ -88,12 +86,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                          !currentApiKeyStatus?.isRealTimeTranslation &&
                                          !currentApiKeyStatus?.isAiAgent &&
                                          !currentApiKeyStatus?.isImageEditing &&
-                                         !currentApiKeyStatus?.isMultiImageEditing;
+                                         !currentApiKeyStatus?.isMultiImageEditing &&
+                                         !currentApiKeyStatus?.isFluxDevImageGeneration;
 
 
   const actualModelId = getActualModelIdentifier(selectedModel);
   
-  const typedModelSettings = modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & FluxKontexSettings; 
+  const typedModelSettings = modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & FluxKontexSettings & FluxDevSettings; 
 
   const imagenAspectRatios: { value: string; label: string }[] = [
     { value: '1:1', label: '1:1 (Square)' },
@@ -125,9 +124,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     { value: 'shimmer', label: 'Shimmer' },
   ];
   
-  const handleRandomizeSeed = () => {
-    const randomSeed = Math.floor(Math.random() * 1000000000); // Generate a large random integer
-    onModelSettingsChange({ seed: randomSeed });
+  const handleRandomizeSeed = (modelType: 'fluxKontext' | 'fluxDev') => {
+    const randomSeed = Math.floor(Math.random() * 1000000000); 
+    if (modelType === 'fluxKontext' && isFluxKontexModel) {
+        onModelSettingsChange({ seed: randomSeed } as Partial<FluxKontexSettings>);
+    } else if (modelType === 'fluxDev' && isFluxDevImageGenModel) {
+        onModelSettingsChange({ seed: randomSeed } as Partial<FluxDevSettings>);
+    }
   };
   
   const isAdminUser = !userSession.isDemoUser && !userSession.isPaidUser;
@@ -147,7 +150,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
         >
           {models.map((model) => {
             const isFluxMax = model === Model.FLUX_KONTEX_MAX_MULTI;
-            const isRestricted = isFluxMax && !userSession.isPaidUser && !isAdminUser; // Admins are not restricted
+            const isRestricted = isFluxMax && !userSession.isPaidUser && !isAdminUser; 
             return (
               <option key={model} value={model} disabled={isRestricted}
                 className={isRestricted ? "text-gray-400 dark:text-gray-600" : ""}>
@@ -171,7 +174,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                       : 'bg-red-100 dark:bg-red-900 border-red-500 dark:border-red-400 text-red-700 dark:text-red-300'
               } border`}>
                   <p className="font-medium">
-                      {currentApiKeyStatus.modelName} ({currentApiKeyStatus.isMock ? "Mock" : (currentApiKeyStatus.isTextToSpeech ? "TTS API" : (currentApiKeyStatus.isRealTimeTranslation ? "Translation API" : (currentApiKeyStatus.isAiAgent ? "AI Agent API" : (currentApiKeyStatus.isImageEditing || currentApiKeyStatus.isMultiImageEditing ? "Image Editing API" : (currentApiKeyStatus.isPrivateMode ? "Local Mode" : "Live API Key")))))})
+                      {currentApiKeyStatus.modelName} ({currentApiKeyStatus.isMock ? "Mock" : (currentApiKeyStatus.isTextToSpeech ? "TTS API" : (currentApiKeyStatus.isRealTimeTranslation ? "Translation API" : (currentApiKeyStatus.isAiAgent ? "AI Agent API" : (currentApiKeyStatus.isImageEditing || currentApiKeyStatus.isMultiImageEditing ? "Image Editing API" : (currentApiKeyStatus.isFluxDevImageGeneration ? "Image Gen API (Flux Dev)" : (currentApiKeyStatus.isPrivateMode ? "Local Mode" : "Live API Key"))))))})
                   </p>
                   <p>Env Variable: <code>process.env.{currentApiKeyStatus.envVarName}</code></p>
                   {currentApiKeyStatus.isSet ? (
@@ -315,7 +318,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
             />
           </div>
-          { (currentApiKeyStatus?.isGeminiPlatform && !currentApiKeyStatus.isImageGeneration && !currentApiKeyStatus.isImageEditing && !currentApiKeyStatus.isPrivateMode && !currentApiKeyStatus.isMultiImageEditing) && ( 
+          { (currentApiKeyStatus?.isGeminiPlatform && !currentApiKeyStatus.isImageGeneration && !currentApiKeyStatus.isImageEditing && !currentApiKeyStatus.isPrivateMode && !currentApiKeyStatus.isMultiImageEditing && !currentApiKeyStatus.isFluxDevImageGeneration) && ( 
           <div>
             <label htmlFor="top-k" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
               Top K: {typedModelSettings.topK}
@@ -505,6 +508,91 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             </div>
         </div>
       )}
+      
+      {isFluxDevImageGenModel && (
+        <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
+            <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
+                <PhotoIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" /> 
+                Flux Dev Image Gen Settings
+            </h3>
+             <div>
+                <label htmlFor="flux-dev-image-size" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Image Size</label>
+                <select 
+                    id="flux-dev-image-size"
+                    value={typedModelSettings.image_size || DEFAULT_FLUX_DEV_SETTINGS.image_size}
+                    onChange={(e) => onModelSettingsChange({ image_size: e.target.value as FluxDevImageSize })}
+                    disabled={disabled}
+                    className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
+                >
+                    {FLUX_DEV_IMAGE_SIZES.map(sizeOpt => (
+                        <option key={sizeOpt.value} value={sizeOpt.value}>{sizeOpt.label}</option>
+                    ))}
+                </select>
+            </div>
+            <div>
+                <label htmlFor="flux-dev-num-inference-steps" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+                Inference Steps: {typedModelSettings.num_inference_steps ?? DEFAULT_FLUX_DEV_SETTINGS.num_inference_steps}
+                </label>
+                <input
+                type="range" id="flux-dev-num-inference-steps" min="10" max="50" step="1"
+                value={typedModelSettings.num_inference_steps ?? DEFAULT_FLUX_DEV_SETTINGS.num_inference_steps}
+                onChange={(e) => onModelSettingsChange({ num_inference_steps: parseInt(e.target.value, 10) })}
+                disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
+                />
+            </div>
+             <div>
+                <label htmlFor="flux-dev-guidance-scale" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+                Guidance Scale: {(typedModelSettings.guidance_scale ?? DEFAULT_FLUX_DEV_SETTINGS.guidance_scale!).toFixed(1)}
+                </label>
+                <input
+                type="range" id="flux-dev-guidance-scale" min="0" max="10" step="0.1"
+                value={typedModelSettings.guidance_scale ?? DEFAULT_FLUX_DEV_SETTINGS.guidance_scale}
+                onChange={(e) => onModelSettingsChange({ guidance_scale: parseFloat(e.target.value) })}
+                disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
+                />
+            </div>
+            <div>
+                <label htmlFor="flux-dev-num-images" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+                Number of Images: {typedModelSettings.num_images ?? DEFAULT_FLUX_DEV_SETTINGS.num_images}
+                </label>
+                <input
+                type="range" id="flux-dev-num-images" min="1" max="4" step="1"
+                value={typedModelSettings.num_images ?? DEFAULT_FLUX_DEV_SETTINGS.num_images}
+                onChange={(e) => onModelSettingsChange({ num_images: parseInt(e.target.value, 10) })}
+                disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
+                />
+            </div>
+            <div className="flex items-end space-x-2">
+                <div className="flex-grow">
+                    <label htmlFor="flux-dev-seed" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Seed (empty for random)</label>
+                    <input type="number" id="flux-dev-seed"
+                        value={typedModelSettings.seed === null || typedModelSettings.seed === undefined ? '' : typedModelSettings.seed}
+                        onChange={(e) => onModelSettingsChange({ seed: e.target.value === '' ? null : parseInt(e.target.value, 10) })}
+                        placeholder="Random" disabled={disabled}
+                        className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none" />
+                </div>
+                <button onClick={() => handleRandomizeSeed('fluxDev')} disabled={disabled}
+                    className="p-2 border border-secondary dark:border-neutral-darkest rounded-md text-neutral-darker dark:text-secondary-light hover:bg-secondary/50 dark:hover:bg-neutral-dark/50" title="Randomize Seed">
+                    <ArrowPathIcon className="w-5 h-5"/>
+                </button>
+            </div>
+            <div className="flex items-center justify-between mt-2">
+                <label htmlFor="flux-dev-enable-safety-checker" className="text-sm font-medium text-neutral-darker dark:text-secondary-light">Enable Safety Checker</label>
+                <button
+                  onClick={() => onModelSettingsChange({ enable_safety_checker: !(typedModelSettings.enable_safety_checker ?? DEFAULT_FLUX_DEV_SETTINGS.enable_safety_checker) })}
+                  disabled={disabled}
+                  className={`${(typedModelSettings.enable_safety_checker ?? DEFAULT_FLUX_DEV_SETTINGS.enable_safety_checker) ? 'bg-primary dark:bg-primary-light' : 'bg-secondary dark:bg-neutral-darkest'} relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:ring-offset-2 dark:focus:ring-offset-neutral-dark`}
+                  role="switch" aria-checked={typedModelSettings.enable_safety_checker ?? DEFAULT_FLUX_DEV_SETTINGS.enable_safety_checker}>
+                  <span className={`${(typedModelSettings.enable_safety_checker ?? DEFAULT_FLUX_DEV_SETTINGS.enable_safety_checker) ? 'translate-x-6' : 'translate-x-1'} inline-block w-4 h-4 transform bg-white rounded-full transition-transform`} />
+                </button>
+            </div>
+             <div className="mt-2 p-3 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-sm text-blue-700 dark:text-blue-300">
+                <InformationCircleIcon className="w-5 h-5 inline mr-1.5 align-text-bottom" />
+                Enter a prompt in the chat input to generate images.
+            </div>
+        </div>
+      )}
+
 
       {isTextToSpeechModel && (
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
@@ -646,13 +734,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               min="10" max="100" step="1"
               value={typedModelSettings.num_inference_steps ?? DEFAULT_FLUX_KONTEX_SETTINGS.num_inference_steps}
               onChange={(e) => onModelSettingsChange({ num_inference_steps: parseInt(e.target.value, 10) })}
-              disabled={disabled}
-              className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
+              disabled={disabled || selectedModel === Model.FLUX_KONTEX_MAX_MULTI} // MAX_MULTI doesn't use num_inference_steps directly
+              className={`w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light ${selectedModel === Model.FLUX_KONTEX_MAX_MULTI ? 'opacity-50' : ''}`}
             />
+             {selectedModel === Model.FLUX_KONTEX_MAX_MULTI && <p className="text-xs text-neutral-400 mt-0.5">Inference steps are fixed for Flux Max.</p>}
           </div>
            <div>
             <label htmlFor="flux-num-images" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              Number of Images: {typedModelSettings.num_images ?? DEFAULT_FLUX_KONTEX_SETTINGS.num_images}
+              Number of Images (output): {typedModelSettings.num_images ?? DEFAULT_FLUX_KONTEX_SETTINGS.num_images}
             </label>
             <input
               type="range"
@@ -680,7 +769,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 />
             </div>
             <button 
-                onClick={handleRandomizeSeed}
+                onClick={() => handleRandomizeSeed('fluxKontext')}
                 disabled={disabled}
                 className="p-2 border border-secondary dark:border-neutral-darkest rounded-md text-neutral-darker dark:text-secondary-light hover:bg-secondary/50 dark:hover:bg-neutral-dark/50"
                 title="Randomize Seed"
