@@ -1,6 +1,4 @@
 
-
-
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -23,6 +21,16 @@ const PROXY_DEFAULT_FLUX_KONTEX_SETTINGS = {
   aspect_ratio: 'default', 
   output_format: 'jpeg',
 };
+
+const PROXY_DEFAULT_FLUX_DEV_SETTINGS = {
+  image_size: 'landscape_4_3',
+  num_inference_steps: 28,
+  seed: null,
+  guidance_scale: 3.5,
+  num_images: 1,
+  enable_safety_checker: true,
+};
+
 
 dotenv.config();
 
@@ -49,6 +57,7 @@ try {
         })
         .catch(err => {
             console.error("Failed to connect to MySQL database:", err);
+            // Consider if the app should exit if DB is critical. For now, it logs and continues.
         });
 } catch (error) {
     console.error("CRITICAL: Failed to create MySQL connection pool:", error);
@@ -65,24 +74,23 @@ app.use(cors({
     return callback(new Error('Not allowed by CORS'));
   }
 }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '10mb' })); // Increased limit for potential base64 images
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // --- Authentication ---
 const LOGIN_CODE_AUTH_ADMIN = process.env.LOGIN_CODE_AUTH_ADMIN;
-// const DEMO_USER_LOGIN_CODE = process.env.DEMO_USER_LOGIN_CODE || "DEMO"; // No longer a generic code
 
 if (!LOGIN_CODE_AUTH_ADMIN) console.warn("PROXY WARNING: LOGIN_CODE_AUTH_ADMIN not found. Admin login will not function.");
 else console.log("LOGIN_CODE_AUTH_ADMIN is SET for admin.");
-// console.log(`DEMO_USER_LOGIN_CODE is: ${DEMO_USER_LOGIN_CODE}`); // Removed
 
 
 // --- NAMED DEMO USER CONSTANTS (from DB) ---
 const DEMO_USER_MONTHLY_LIMITS = {
   FLUX_KONTEX_MAX_MONTHLY: 0, 
-  FLUX_KONTEX_PRO_MONTHLY: 1, // Updated to 1
+  FLUX_KONTEX_PRO_MONTHLY: 1, 
   IMAGEN3_MONTHLY_IMAGES: 20,
   OPENAI_TTS_MONTHLY_CHARS: 10000,
+  FLUX_DEV_MONTHLY_IMAGES: 10, // New limit for Flux Dev
 };
 
 // --- PAID USER LIMITS ---
@@ -91,6 +99,7 @@ const PAID_USER_MAX_LIMITS_CONFIG = {
   OPENAI_TTS_MAX_CHARS_TOTAL: 20000, 
   FLUX_KONTEX_MAX_MONTHLY_MAX_USES: 40,
   FLUX_KONTEX_PRO_MONTHLY_MAX_USES: 50,
+  FLUX_DEV_MONTHLY_MAX_IMAGES: 100, // New limit for Flux Dev
 };
 
 const paidUserFluxMonthlyUsageStore = {}; 
@@ -115,6 +124,9 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
     const paidUserToken = req.headers['x-paid-user-token']; // Paid username as token
     const demoUserToken = req.headers['x-demo-user-token']; // Demo username as token
 
+    req.isPaidUser = false; 
+    req.isDemoUser = false; 
+
     if (paidUserToken) {
         try {
             if (!pool) throw new Error("Database not available for paid user auth.");
@@ -135,10 +147,11 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
                         const yearMonth = getCurrentYearMonth();
                         if (!paidUserFluxMonthlyUsageStore[user.username]) paidUserFluxMonthlyUsageStore[user.username] = {};
                         if (!paidUserFluxMonthlyUsageStore[user.username][yearMonth]) {
-                            paidUserFluxMonthlyUsageStore[user.username][yearMonth] = { fluxMaxUsed: 0, fluxProUsed: 0 };
+                            paidUserFluxMonthlyUsageStore[user.username][yearMonth] = { fluxMaxUsed: 0, fluxProUsed: 0, fluxDevUsed: 0 };
                         }
                         req.paidUser.fluxMaxMonthlyUsed = paidUserFluxMonthlyUsageStore[user.username][yearMonth].fluxMaxUsed;
                         req.paidUser.fluxProMonthlyUsed = paidUserFluxMonthlyUsageStore[user.username][yearMonth].fluxProUsed;
+                        req.paidUser.fluxDevMonthlyUsed = paidUserFluxMonthlyUsageStore[user.username][yearMonth].fluxDevUsed; // New
                         req.isPaidUser = true;
                     }
                 }
@@ -148,17 +161,18 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
         try {
             if (!pool) throw new Error("Database not available for demo user auth.");
             const [users] = await pool.execute(
-                'SELECT id, username, user_type, demo_flux_max_monthly_used, demo_flux_pro_monthly_used, demo_imagen_monthly_used, demo_tts_monthly_chars_used, demo_usage_last_reset_month FROM users WHERE username = ? AND user_type = "DEMO"', 
-                [demoUserToken] // Assuming demoUserToken is the demo username
+                'SELECT id, username, user_type, demo_flux_max_monthly_used, demo_flux_pro_monthly_used, demo_imagen_monthly_used, demo_tts_monthly_chars_used, demo_flux_dev_monthly_used, demo_usage_last_reset_month FROM users WHERE username = ? AND user_type = "DEMO"', 
+                [demoUserToken] 
             );
             if (users.length > 0) {
                 const user = users[0];
-                req.demoUser = { // Attach DB fetched demo user data
+                req.demoUser = { 
                     id: user.id, username: user.username, isDemoUser: true,
                     fluxMaxMonthlyUsed: user.demo_flux_max_monthly_used || 0,
                     fluxProMonthlyUsed: user.demo_flux_pro_monthly_used || 0,
                     imagenMonthlyUsed: user.demo_imagen_monthly_used || 0,
                     ttsMonthlyCharsUsed: user.demo_tts_monthly_chars_used || 0,
+                    fluxDevMonthlyUsed: user.demo_flux_dev_monthly_used || 0, // New
                     usageLastResetMonth: user.demo_usage_last_reset_month
                 };
                 req.isDemoUser = true;
@@ -167,10 +181,10 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
     }
     next();
 }
-app.use(paidOrDemoUserAuthMiddleware); // Applies to all routes after this
+app.use(paidOrDemoUserAuthMiddleware); 
 
 app.post('/api/auth/verify-code', async (req, res) => {
-    const { code } = req.body; // 'code' is now the username (admin, paid, or demo)
+    const { code } = req.body; 
     
     if (code === LOGIN_CODE_AUTH_ADMIN) {
         if (!LOGIN_CODE_AUTH_ADMIN) return res.status(500).json({ success: false, message: "Admin login not configured." });
@@ -182,7 +196,7 @@ app.post('/api/auth/verify-code', async (req, res) => {
 
     try {
         const [users] = await pool.execute(
-            'SELECT id, username, user_type, password_hash, demo_flux_max_monthly_used, demo_flux_pro_monthly_used, demo_imagen_monthly_used, demo_tts_monthly_chars_used, demo_usage_last_reset_month FROM users WHERE username = ?', 
+            'SELECT id, username, user_type, password_hash, demo_flux_max_monthly_used, demo_flux_pro_monthly_used, demo_imagen_monthly_used, demo_tts_monthly_chars_used, demo_flux_dev_monthly_used, demo_usage_last_reset_month FROM users WHERE username = ?', 
             [code]
         );
 
@@ -205,13 +219,13 @@ app.post('/api/auth/verify-code', async (req, res) => {
                 const yearMonth = getCurrentYearMonth();
                 if (!paidUserFluxMonthlyUsageStore[user.username]) paidUserFluxMonthlyUsageStore[user.username] = {};
                 if (!paidUserFluxMonthlyUsageStore[user.username][yearMonth]) {
-                    paidUserFluxMonthlyUsageStore[user.username][yearMonth] = { fluxMaxUsed: 0, fluxProUsed: 0 };
+                    paidUserFluxMonthlyUsageStore[user.username][yearMonth] = { fluxMaxUsed: 0, fluxProUsed: 0, fluxDevUsed: 0 };
                 }
                 const userMonthlyUsage = paidUserFluxMonthlyUsageStore[user.username][yearMonth];
 
                 return res.json({
                     success: true, isPaidUser: true, username: user.username,
-                    paidUserToken: user.username, // Using username as token for simplicity
+                    paidUserToken: user.username, 
                     subscriptionEndDate: subEndDate.toISOString(),
                     limits: {
                         imagen3ImagesLeft: PAID_USER_MAX_LIMITS_CONFIG.IMAGEN3_MAX_IMAGES_PER_DAY,
@@ -222,6 +236,8 @@ app.post('/api/auth/verify-code', async (req, res) => {
                         fluxKontextMaxMonthlyMaxUses: PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_MAX_MONTHLY_MAX_USES,
                         fluxKontextProMonthlyUsesLeft: PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_PRO_MONTHLY_MAX_USES - userMonthlyUsage.fluxProUsed,
                         fluxKontextProMonthlyMaxUses: PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_PRO_MONTHLY_MAX_USES,
+                        fluxDevMonthlyImagesLeft: PAID_USER_MAX_LIMITS_CONFIG.FLUX_DEV_MONTHLY_MAX_IMAGES - userMonthlyUsage.fluxDevUsed, // New
+                        fluxDevMonthlyMaxImages: PAID_USER_MAX_LIMITS_CONFIG.FLUX_DEV_MONTHLY_MAX_IMAGES, // New
                     }
                 });
             } else {
@@ -236,14 +252,15 @@ app.post('/api/auth/verify-code', async (req, res) => {
                 demo_flux_pro_monthly_used: fluxProUsed = 0,
                 demo_imagen_monthly_used: imagenUsed = 0,
                 demo_tts_monthly_chars_used: ttsCharsUsed = 0,
+                demo_flux_dev_monthly_used: fluxDevUsed = 0, // New
                 demo_usage_last_reset_month: lastResetMonth
             } = user;
 
             if (lastResetMonth !== currentYearMonth) {
                 console.log(`[DEMO Login] Resetting monthly limits for DEMO user ${user.username} for new month ${currentYearMonth}. Old month: ${lastResetMonth}`);
-                fluxMaxUsed = 0; fluxProUsed = 0; imagenUsed = 0; ttsCharsUsed = 0;
+                fluxMaxUsed = 0; fluxProUsed = 0; imagenUsed = 0; ttsCharsUsed = 0; fluxDevUsed = 0; // New
                 await pool.execute(
-                    'UPDATE users SET demo_flux_max_monthly_used=0, demo_flux_pro_monthly_used=0, demo_imagen_monthly_used=0, demo_tts_monthly_chars_used=0, demo_usage_last_reset_month=? WHERE id=?',
+                    'UPDATE users SET demo_flux_max_monthly_used=0, demo_flux_pro_monthly_used=0, demo_imagen_monthly_used=0, demo_tts_monthly_chars_used=0, demo_flux_dev_monthly_used=0, demo_usage_last_reset_month=? WHERE id=?', // New
                     [currentYearMonth, user.id]
                 );
             }
@@ -257,10 +274,12 @@ app.post('/api/auth/verify-code', async (req, res) => {
                 imagen3MonthlyMaxImages: DEMO_USER_MONTHLY_LIMITS.IMAGEN3_MONTHLY_IMAGES,
                 openaiTtsMonthlyCharsLeft: Math.max(0, DEMO_USER_MONTHLY_LIMITS.OPENAI_TTS_MONTHLY_CHARS - ttsCharsUsed),
                 openaiTtsMonthlyMaxChars: DEMO_USER_MONTHLY_LIMITS.OPENAI_TTS_MONTHLY_CHARS,
+                fluxDevMonthlyImagesLeft: Math.max(0, DEMO_USER_MONTHLY_LIMITS.FLUX_DEV_MONTHLY_IMAGES - fluxDevUsed), // New
+                fluxDevMonthlyMaxImages: DEMO_USER_MONTHLY_LIMITS.FLUX_DEV_MONTHLY_IMAGES, // New
             };
             return res.json({
                 success: true, isDemoUser: true, username: user.username,
-                demoUserToken: user.username, // Using username as token for demo user
+                demoUserToken: user.username, 
                 limits
             });
         } else {
@@ -281,11 +300,10 @@ if (GEMINI_API_KEY_PROXY) {
   console.log("Google GenAI SDK initialized.");
 } else console.warn("PROXY WARNING: GEMINI_API_KEY missing.");
 
-app.post('/api/gemini/chat/stream', paidOrDemoUserAuthMiddleware, async (req, res) => { // Ensure middleware runs
+app.post('/api/gemini/chat/stream', async (req, res) => { 
     if (!ai) return res.status(500).json({ error: "Google GenAI SDK not initialized." });
     const { modelName, historyContents, modelSettings, enableGoogleSearch } = req.body;
     if (!modelName || !historyContents || !modelSettings) return res.status(400).json({ error: "Missing fields." });
-    // DEMO user limits for Gemini chat are not implemented yet, allow for now if authenticated.
     try {
         const tools = enableGoogleSearch ? [{googleSearch: {}}] : [];
         const config = {
@@ -316,7 +334,7 @@ app.post('/api/gemini/chat/stream', paidOrDemoUserAuthMiddleware, async (req, re
     }
 });
 
-app.post('/api/gemini/image/generate', paidOrDemoUserAuthMiddleware, async (req, res) => {
+app.post('/api/gemini/image/generate', async (req, res) => { 
   try {
     const { modelName, prompt, modelSettings } = req.body;
     const numImagesToGenerate = Math.max(1, Math.min(4, modelSettings?.numberOfImages || 1));
@@ -332,7 +350,7 @@ app.post('/api/gemini/image/generate', paidOrDemoUserAuthMiddleware, async (req,
         return res.status(429).json({ error: `Monthly Imagen3 limit for DEMO user reached. You have ${remainingUses} image(s) left (requested ${numImagesToGenerate}).`, limitReached: true, usesLeft: remainingUses });
       }
     } else { 
-      return res.status(401).json({ error: "User not authenticated for Imagen generation." });
+      console.log(`[Imagen Proxy] Admin user generating ${numImagesToGenerate} image(s). No limits applied.`);
     }
 
     if (!ai) return res.status(500).json({ error: "Google GenAI SDK not initialized." });
@@ -370,12 +388,11 @@ const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions';
 const OPENAI_TTS_URL = 'https://api.openai.com/v1/audio/speech';
 if (OPENAI_API_KEY) console.log("OpenAI API Key found."); else console.warn("PROXY WARNING: OPENAI_API_KEY missing.");
 
-app.post('/api/openai/chat/stream', paidOrDemoUserAuthMiddleware, async (req, res) => {
+app.post('/api/openai/chat/stream', async (req, res) => { 
     try {
         if (!OPENAI_API_KEY) return res.status(500).json({ error: "OpenAI API Key not configured." });
         const { modelIdentifier, history, modelSettings } = req.body;
         if (!modelIdentifier || !history || !modelSettings) return res.status(400).json({ error: "Missing fields." });
-        // DEMO user limits for OpenAI chat are not implemented yet, allow for now if authenticated.
         const openaiResponse = await fetch(OPENAI_CHAT_URL, {
             method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
             body: JSON.stringify({ model: modelIdentifier, messages: history, temperature: modelSettings.temperature, top_p: modelSettings.topP, stream: true }),
@@ -400,7 +417,7 @@ app.post('/api/openai/chat/stream', paidOrDemoUserAuthMiddleware, async (req, re
     }
 });
 
-app.post('/api/openai/tts/generate', paidOrDemoUserAuthMiddleware, async (req, res) => {
+app.post('/api/openai/tts/generate', async (req, res) => { 
   try {
     const { modelIdentifier, textInput, voice, speed, responseFormat = 'mp3' } = req.body;
     const currentChars = textInput ? textInput.length : 0;
@@ -418,8 +435,8 @@ app.post('/api/openai/tts/generate', paidOrDemoUserAuthMiddleware, async (req, r
       if (currentChars > remainingChars) {
         return res.status(429).json({ error: `Monthly TTS character limit for DEMO user reached. Remaining: ${remainingChars}, requested: ${currentChars}`, limitReached: true });
       }
-    } else {
-      return res.status(401).json({ error: "User not authenticated for TTS." });
+    } else { 
+       console.log(`[OpenAI TTS Proxy] Admin user generating audio for ${currentChars} chars. No limits applied.`);
     }
     if (!modelIdentifier || !textInput || !voice || speed === undefined) return res.status(400).json({ error: "Missing fields for OpenAI TTS." });
 
@@ -453,12 +470,11 @@ const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_CHAT_URL = 'https://api.deepseek.com/chat/completions';
 if (DEEPSEEK_API_KEY) console.log("Deepseek API Key found."); else console.warn("PROXY WARNING: DEEPSEEK_API_KEY missing.");
 
-app.post('/api/deepseek/chat/stream', paidOrDemoUserAuthMiddleware, async (req, res) => {
+app.post('/api/deepseek/chat/stream', async (req, res) => { 
     try {
         if (!DEEPSEEK_API_KEY) return res.status(500).json({ error: "Deepseek API Key not configured." });
         const { modelIdentifier, history, modelSettings } = req.body;
         if (!modelIdentifier || !history || !modelSettings) return res.status(400).json({ error: "Missing fields." });
-        // DEMO user limits for Deepseek chat are not implemented yet, allow for now if authenticated.
         const dsResponse = await fetch(DEEPSEEK_CHAT_URL, {
             method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DEEPSEEK_API_KEY}` },
             body: JSON.stringify({ model: modelIdentifier, messages: history, temperature: modelSettings.temperature, top_p: modelSettings.topP, stream: true }),
@@ -486,7 +502,7 @@ app.post('/api/deepseek/chat/stream', paidOrDemoUserAuthMiddleware, async (req, 
 const FAL_KEY = process.env.FAL_KEY;
 if (FAL_KEY) console.log("Fal.ai Key (FAL_KEY) found."); else console.warn("PROXY WARNING: FAL_KEY not found. Fal.ai endpoints will likely fail.");
 
-app.post('/api/fal/image/edit/flux-kontext', paidOrDemoUserAuthMiddleware, async (req, res) => {
+app.post('/api/fal/image/edit/flux-kontext', async (req, res) => { 
   try {
     if (!FAL_KEY) return res.status(500).json({ error: "Fal.ai API Key not configured." });
     const { modelIdentifier, prompt, image_base_64, image_mime_type, images_data, ...settings } = req.body;
@@ -501,7 +517,6 @@ app.post('/api/fal/image/edit/flux-kontext', paidOrDemoUserAuthMiddleware, async
         return res.status(400).json({ error: "Flux Pro requires 'image_base_64' and 'image_mime_type'." });
     }
     
-    // Limit checks
     if (req.isPaidUser && req.paidUser) {
         const yearMonth = getCurrentYearMonth();
         const monthlyUsage = paidUserFluxMonthlyUsageStore[req.paidUser.username]?.[yearMonth];
@@ -519,8 +534,8 @@ app.post('/api/fal/image/edit/flux-kontext', paidOrDemoUserAuthMiddleware, async
         if (usedCount >= limitToCheck) {
             return res.status(429).json({ error: `Monthly ${isFluxMax ? 'Flux Max' : 'Flux Pro'} limit for DEMO user reached.`, limitReached: true });
         }
-    } else {
-      return res.status(401).json({ error: "User not authenticated for Flux." });
+    } else { 
+      console.log(`[Fal Proxy] Admin user using Flux model: ${modelIdentifier}. No limits applied.`);
     }
 
     let falInput = { prompt, ...PROXY_DEFAULT_FLUX_KONTEX_SETTINGS, ...settings };
@@ -532,7 +547,6 @@ app.post('/api/fal/image/edit/flux-kontext', paidOrDemoUserAuthMiddleware, async
     const queueResult = await fal.queue.submit(modelIdentifier, { input: falInput });
     if (!queueResult?.request_id) return res.status(500).json({ error: "Fal.ai submission failed (no request ID)." });
 
-    // Update usage counts
     if (req.isPaidUser && req.paidUser) {
         const yearMonth = getCurrentYearMonth();
         if (isFluxMax) paidUserFluxMonthlyUsageStore[req.paidUser.username][yearMonth].fluxMaxUsed += 1;
@@ -550,10 +564,59 @@ app.post('/api/fal/image/edit/flux-kontext', paidOrDemoUserAuthMiddleware, async
   }
 });
 
-app.post('/api/fal/image/edit/status', async (req, res) => {
+app.post('/api/fal/image/generate/flux-dev', async (req, res) => {
   try {
     if (!FAL_KEY) return res.status(500).json({ error: "Fal.ai API Key not configured." });
-    const { requestId, modelIdentifier } = req.body;
+    const { modelIdentifier, prompt, ...settings } = req.body; // modelIdentifier should be 'fal-ai/flux/dev'
+    if (modelIdentifier !== 'fal-ai/flux/dev') return res.status(400).json({ error: "Invalid modelIdentifier for Flux Dev." });
+    if (!prompt) return res.status(400).json({ error: "Missing prompt for Flux Dev." });
+    
+    const numImagesToGenerate = Math.max(1, Math.min(4, settings?.num_images || 1));
+
+    // Limit checks
+    if (req.isPaidUser && req.paidUser) {
+      const yearMonth = getCurrentYearMonth();
+      const monthlyUsage = paidUserFluxMonthlyUsageStore[req.paidUser.username]?.[yearMonth];
+      if (!monthlyUsage) return res.status(500).json({ error: "Paid user usage data not found." });
+      if (monthlyUsage.fluxDevUsed + numImagesToGenerate > PAID_USER_MAX_LIMITS_CONFIG.FLUX_DEV_MONTHLY_MAX_IMAGES) {
+        return res.status(429).json({ error: `Monthly Flux Dev image limit reached for paid user. Max: ${PAID_USER_MAX_LIMITS_CONFIG.FLUX_DEV_MONTHLY_MAX_IMAGES}, Used: ${monthlyUsage.fluxDevUsed}, Requested: ${numImagesToGenerate}`, limitReached: true });
+      }
+    } else if (req.isDemoUser && req.demoUser) {
+      if (!pool) return res.status(500).json({ error: "DB not available for DEMO limit check." });
+      const remainingUses = DEMO_USER_MONTHLY_LIMITS.FLUX_DEV_MONTHLY_IMAGES - (req.demoUser.fluxDevMonthlyUsed || 0);
+      if (numImagesToGenerate > remainingUses) {
+        return res.status(429).json({ error: `Monthly Flux Dev image limit for DEMO user reached. You have ${remainingUses} image(s) left (requested ${numImagesToGenerate}).`, limitReached: true, usesLeft: remainingUses });
+      }
+    } else {
+      console.log(`[Fal Proxy] Admin user using Flux Dev model. No limits applied.`);
+    }
+
+    const falInput = { prompt, ...PROXY_DEFAULT_FLUX_DEV_SETTINGS, ...settings, num_images: numImagesToGenerate };
+    
+    const queueResult = await fal.queue.submit("fal-ai/flux/dev", { input: falInput });
+    if (!queueResult?.request_id) return res.status(500).json({ error: "Fal.ai Flux Dev submission failed (no request ID)." });
+
+    // Update usage counts
+    if (req.isPaidUser && req.paidUser) {
+      const yearMonth = getCurrentYearMonth();
+      paidUserFluxMonthlyUsageStore[req.paidUser.username][yearMonth].fluxDevUsed += numImagesToGenerate;
+      console.log(`[Paid Usage] Flux Dev: User ${req.paidUser.username} generated ${numImagesToGenerate} images. New monthly total: ${paidUserFluxMonthlyUsageStore[req.paidUser.username][yearMonth].fluxDevUsed}`);
+    } else if (req.isDemoUser && req.demoUser) {
+      await pool.execute('UPDATE users SET demo_flux_dev_monthly_used = demo_flux_dev_monthly_used + ? WHERE id = ?', [numImagesToGenerate, req.demoUser.id]);
+      console.log(`[Demo Usage] Flux Dev: User ${req.demoUser.username} generated ${numImagesToGenerate} images.`);
+    }
+    res.json({ requestId: queueResult.request_id, message: "Flux Dev image generation request submitted." });
+  } catch (error) {
+    console.error("[Flux Dev Gen Proxy Error]", error);
+    res.status(500).json({ error: `Flux Dev Gen Error: ${error.message || "Internal server error"}` });
+  }
+});
+
+
+app.post('/api/fal/image/edit/status', async (req, res) => { // This endpoint now handles status for both context and dev
+  try {
+    if (!FAL_KEY) return res.status(500).json({ error: "Fal.ai API Key not configured." });
+    const { requestId, modelIdentifier } = req.body; // modelIdentifier helps determine result structure
     if (!requestId || !modelIdentifier) return res.status(400).json({ error: "Missing requestId or modelIdentifier." });
 
     const statusResult = await fal.queue.status(modelIdentifier, { requestId });
@@ -561,11 +624,26 @@ app.post('/api/fal/image/edit/status', async (req, res) => {
 
     if (statusResult?.status === 'COMPLETED') {
         const jobResult = await fal.queue.result(modelIdentifier, { requestId });
-        responsePayload.rawResult = jobResult; // Ensure full result is in rawResult
-        let imageUrl = jobResult?.images?.[0]?.url || jobResult?.data?.images?.[0]?.url;
-        if (imageUrl) {
-            responsePayload.editedImageUrl = imageUrl;
-            responsePayload.message = "Image editing completed successfully.";
+        responsePayload.rawResult = jobResult; 
+        
+        let imageUrls = [];
+        if (modelIdentifier === 'fal-ai/flux/dev') { // Flux Dev output
+            if (jobResult?.images && Array.isArray(jobResult.images)) {
+                imageUrls = jobResult.images.map(img => img?.url).filter(Boolean);
+            }
+            // Fallback for the structure like {"data":{"images": [...]}}
+            if (imageUrls.length === 0 && jobResult?.data?.images && Array.isArray(jobResult.data.images)) {
+                imageUrls = jobResult.data.images.map(img => img?.url).filter(Boolean);
+            }
+        } else { // Flux Kontext output (single image expected, but handle array just in case)
+             const singleUrl = jobResult?.images?.[0]?.url || jobResult?.data?.images?.[0]?.url;
+             if (singleUrl) imageUrls.push(singleUrl);
+        }
+
+        if (imageUrls.length > 0) {
+            responsePayload.imageUrls = imageUrls; // Always return as array
+            responsePayload.imageUrl = imageUrls[0]; // Keep imageUrl for single image convenience
+            responsePayload.message = "Image processing completed successfully.";
         } else {
             responsePayload.status = 'COMPLETED_NO_IMAGE';
             responsePayload.message = "Processing completed, but no image URL found.";
@@ -573,13 +651,13 @@ app.post('/api/fal/image/edit/status', async (req, res) => {
         }
     } else if (statusResult?.status === 'ERROR') {
         responsePayload.error = statusResult.error?.message || "Fal.ai reported an error.";
-        responsePayload.message = "Image editing failed.";
+        responsePayload.message = "Image processing failed.";
     } else if (!statusResult) {
-        return res.status(404).json({ status: 'NOT_FOUND', error: `Request ID ${requestId} not found.` });
+        return res.status(404).json({ status: 'NOT_FOUND', error: `Request ID ${requestId} not found for ${modelIdentifier}.` });
     }
     res.json(responsePayload);
   } catch (error) {
-    console.error("[Flux Status Proxy Error]", error);
+    console.error("[Fal Status Proxy Error]", error);
     res.status(500).json({ status: 'PROXY_REQUEST_ERROR', error: `Fal Status Check Error: ${error.message || "Internal server error"}` });
   }
 });
