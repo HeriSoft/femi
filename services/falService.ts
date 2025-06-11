@@ -1,22 +1,28 @@
 
-import { FluxKontexSettings, EditImageWithFluxKontexParams as BaseEditParams, SingleImageData, MultiImageData } from '../types.ts';
+
+import { FluxKontexSettings, EditImageWithFluxKontexParams as BaseEditParams, SingleImageData, MultiImageData, FluxDevSettings, GenerateImageWithFluxDevParams } from '../types.ts';
 
 // Interface for parameters including optional request headers
 export interface FalServiceEditParams extends BaseEditParams {
   requestHeaders?: HeadersInit;
 }
+export interface FalServiceGenerateParams extends GenerateImageWithFluxDevParams {
+  requestHeaders?: HeadersInit;
+}
+
 
 // Updated response type for the initial submission from the proxy
-export interface FluxKontexSubmitProxyResponse {
+export interface FalSubmitProxyResponse {
   requestId?: string;
   message?: string;
   error?: string;
 }
 
 // Updated response type for the status check from the proxy
-export interface FluxKontexStatusProxyResponse {
+export interface FalStatusProxyResponse {
   status?: 'COMPLETED' | 'IN_PROGRESS' | 'IN_QUEUE' | 'ERROR' | 'COMPLETED_NO_IMAGE' | 'NOT_FOUND' | 'PROXY_REQUEST_ERROR' | 'NETWORK_ERROR' | string;
-  editedImageUrl?: string;
+  imageUrl?: string; // Generic field for resulting image URL
+  imageUrls?: string[]; // For models that return multiple images
   error?: string;
   message?: string; 
   rawResult?: any; 
@@ -25,7 +31,7 @@ export interface FluxKontexStatusProxyResponse {
 
 export async function editImageWithFluxKontexProxy(
   params: FalServiceEditParams 
-): Promise<FluxKontexSubmitProxyResponse> {
+): Promise<FalSubmitProxyResponse> {
   const { modelIdentifier, prompt, settings, imageData, requestHeaders } = params; 
 
   let bodyPayload: any = {
@@ -55,14 +61,14 @@ export async function editImageWithFluxKontexProxy(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(requestHeaders || {}), // Spread the passed headers here
+        ...(requestHeaders || {}), 
       },
       body: JSON.stringify(bodyPayload),
     };
     
     const response = await fetch('/api/fal/image/edit/flux-kontext', fetchOptions);
 
-    const data: FluxKontexSubmitProxyResponse = await response.json();
+    const data: FalSubmitProxyResponse = await response.json();
 
     if (!response.ok || data.error) {
       return { error: data.error || `Fal.ai Flux Kontext proxy submission failed: ${response.statusText}` };
@@ -80,18 +86,60 @@ export async function editImageWithFluxKontexProxy(
   }
 }
 
-export async function checkFluxKontexStatusProxy(
+
+export async function generateImageWithFluxDevProxy(
+  params: FalServiceGenerateParams
+): Promise<FalSubmitProxyResponse> {
+  const { modelIdentifier, prompt, settings, requestHeaders } = params;
+
+  const bodyPayload = {
+    modelIdentifier,
+    prompt,
+    ...settings // Spread all settings from FluxDevSettings
+  };
+
+  try {
+    const fetchOptions: RequestInit = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(requestHeaders || {}),
+      },
+      body: JSON.stringify(bodyPayload),
+    };
+
+    const response = await fetch('/api/fal/image/generate/flux-dev', fetchOptions);
+    const data: FalSubmitProxyResponse = await response.json();
+
+    if (!response.ok || data.error) {
+      return { error: data.error || `Fal.ai Flux Dev proxy submission failed: ${response.statusText}` };
+    }
+    
+    if (data.requestId) {
+      return { requestId: data.requestId, message: data.message };
+    } else {
+      return { error: data.error || "Fal.ai Flux Dev proxy did not return a requestId." };
+    }
+
+  } catch (error: any) {
+    console.error("Error calling Fal.ai Flux Dev proxy service for submission:", error);
+    return { error: `Network or unexpected error calling Fal.ai Flux Dev proxy for submission: ${error.message}` };
+  }
+}
+
+
+export async function checkFalQueueStatusProxy( // Renamed for generality
   requestId: string,
   modelIdentifier: string 
-): Promise<FluxKontexStatusProxyResponse> {
+): Promise<FalStatusProxyResponse> {
   try {
-    const response = await fetch('/api/fal/image/edit/status', {
+    const response = await fetch('/api/fal/image/edit/status', { // Keep using existing status endpoint, as it's now generic
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' }, // Status check typically doesn't need auth token, but could be added if proxy requires
+      headers: { 'Content-Type': 'application/json' }, 
       body: JSON.stringify({ requestId, modelIdentifier }), 
     });
     
-    const data: FluxKontexStatusProxyResponse = await response.json();
+    const data: FalStatusProxyResponse = await response.json();
     
     if (!response.ok) {
         return { 
@@ -100,9 +148,11 @@ export async function checkFluxKontexStatusProxy(
             rawResult: data 
         };
     }
+    // The proxy now handles extracting the correct image URL(s) based on modelIdentifier
     return { 
         status: data.status, 
-        editedImageUrl: data.editedImageUrl, 
+        imageUrl: data.imageUrl, 
+        imageUrls: data.imageUrls,
         error: data.error, 
         message: data.message,
         rawResult: data.rawResult 
