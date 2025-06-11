@@ -42,6 +42,8 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
     }
   ];
 
+  const promotionalImageUrl = "https://i.ibb.co/MkfbJgzt/45fc503f-f120-419e-90f0-1c0c8c6e740a.jpg";
+
   return (
     <div
       className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[90] p-4 transition-opacity duration-300"
@@ -78,6 +80,31 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
               </ul>
             </div>
           ))}
+          <div className="mt-4 pt-4 border-t border-secondary/50 dark:border-neutral-dark/50">
+            <img src={promotionalImageUrl} alt="Promotional Offer" className="w-full rounded-md shadow-md mb-3" />
+            <p className="font-semibold text-md text-accent dark:text-accent-light text-center mb-1">
+              Chỉ 200.000đ/tháng sử dụng không giới hạn!
+            </p>
+            <p className="text-neutral-600 dark:text-neutral-300 text-center mb-1">
+              Sau khi chuyển khoản bạn cần:
+            </p>
+            <p className="text-center">
+              <a
+                href="https://www.facebook.com/herishop213"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-500 hover:text-blue-400 dark:text-blue-400 dark:hover:text-blue-300 underline font-medium"
+              >
+                Liên hệ FB: Lee Thinh
+              </a>
+            </p>
+            <p className="text-neutral-600 dark:text-neutral-300 text-center mt-1">
+              Zalo: 0901984741
+            </p>
+            <p className="text-neutral-600 dark:text-neutral-300 text-center mt-1">
+              Để được hỗ trợ tạo tài khoản riêng. Xin cám ơn!
+            </p>
+          </div>
         </div>
 
         <div className="mt-6 pt-4 border-t border-secondary dark:border-neutral-darkest">
