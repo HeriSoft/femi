@@ -1,7 +1,6 @@
 
 
-
-import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank, AiAgentSettings, CreditPackage, PrivateModeSettings, FluxKontexSettings, FluxKontexAspectRatio, DemoUserLimits, PaidUserLimits } from './types.ts'; // Update to .ts, Add DemoUserLimits, PaidUserLimits
+import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank, AiAgentSettings, CreditPackage, PrivateModeSettings, FluxKontexSettings, FluxKontexAspectRatio, DemoUserLimits, PaidUserLimits, FluxDevSettings, FluxDevImageSize } from './types.ts';
 
 export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
   temperature: 0.7,
@@ -63,8 +62,17 @@ export const DEFAULT_FLUX_KONTEX_SETTINGS: FluxKontexSettings = {
   num_inference_steps: 30,
   seed: null, // Represents random
   num_images: 1,
-  aspect_ratio: 'default', // Changed to 'default'
+  aspect_ratio: 'default', 
   output_format: 'jpeg', 
+};
+
+export const DEFAULT_FLUX_DEV_SETTINGS: FluxDevSettings = {
+  image_size: 'landscape_4_3',
+  num_inference_steps: 28,
+  seed: null, // Represents random
+  guidance_scale: 3.5,
+  num_images: 1,
+  enable_safety_checker: true,
 };
 
 
@@ -82,23 +90,23 @@ export const ALL_MODEL_DEFAULT_SETTINGS: AllModelSettings = {
   [Model.GEMINI]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: `You are a helpful and creative AI assistant powered by Gemini Flash.${GENERIC_FILE_HANDLING_INSTRUCTION}` },
   [Model.GEMINI_ADVANCED]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: `You are Gemini Advanced, a powerful multimodal AI by Google.${GENERIC_FILE_HANDLING_INSTRUCTION}` },
   [Model.GPT4O]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: `You are ChatGPT (gpt-4.1), a powerful AI by OpenAI.${GENERIC_FILE_HANDLING_INSTRUCTION}` }, 
-  [Model.GPT4O_MINI]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: `You are ChatGPT (gpt-4.1-mini), an efficient AI by OpenAI.${GENERIC_FILE_HANDLING_INSTRUCTION}` }, // Updated
+  [Model.GPT4O_MINI]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: `You are ChatGPT (gpt-4.1-mini), an efficient AI by OpenAI.${GENERIC_FILE_HANDLING_INSTRUCTION}` }, 
   [Model.DEEPSEEK]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: `You are Deepseek Coder, an AI specialized in coding and chat, powered by the deepseek-chat model.${GENERIC_FILE_HANDLING_INSTRUCTION}` },
-  [Model.CLAUDE]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: `You are Claude, a helpful AI assistant by Anthropic. ${GENERIC_FILE_HANDLING_INSTRUCTION}` }, // Mock, but good to have consistent instruction pattern
+  [Model.CLAUDE]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: `You are Claude, a helpful AI assistant by Anthropic. ${GENERIC_FILE_HANDLING_INSTRUCTION}` },
   [Model.IMAGEN3]: { 
     ...DEFAULT_MODEL_SETTINGS, 
     ...DEFAULT_IMAGEN_SETTINGS, 
     systemInstruction: 'Image generation prompt.', 
   },
   [Model.OPENAI_TTS]: {
-    ...DEFAULT_MODEL_SETTINGS, // Basic settings, mostly unused
+    ...DEFAULT_MODEL_SETTINGS, 
     ...DEFAULT_OPENAI_TTS_SETTINGS,
-    systemInstruction: 'Text to speech synthesis.', // Placeholder
+    systemInstruction: 'Text to speech synthesis.', 
   },
   [Model.REAL_TIME_TRANSLATION]: {
-    ...DEFAULT_MODEL_SETTINGS, // Basic settings, mostly unused
+    ...DEFAULT_MODEL_SETTINGS, 
     ...DEFAULT_REAL_TIME_TRANSLATION_SETTINGS,
-    systemInstruction: 'Translate the given text accurately.', // Placeholder system instruction
+    systemInstruction: 'Translate the given text accurately.', 
   },
   [Model.AI_AGENT]: { ...DEFAULT_AI_AGENT_SETTINGS },
   [Model.PRIVATE]: { ...DEFAULT_PRIVATE_MODE_SETTINGS },
@@ -110,8 +118,13 @@ export const ALL_MODEL_DEFAULT_SETTINGS: AllModelSettings = {
   [Model.FLUX_KONTEX_MAX_MULTI]: {
     ...DEFAULT_MODEL_SETTINGS,
     ...DEFAULT_FLUX_KONTEX_SETTINGS, 
-    num_images: 2, // Default to 2 for multi-image editing, user can adjust in UI
+    num_images: 2, 
     systemInstruction: 'Advanced multi-image editing context using Fal.ai Flux Pro Kontext Max Multi.',
+  },
+  [Model.FLUX_DEV_IMAGE_GEN]: {
+    ...DEFAULT_MODEL_SETTINGS, // Basic settings, mostly unused for system instruction here
+    ...DEFAULT_FLUX_DEV_SETTINGS,
+    systemInstruction: 'Flux Dev image generation prompt context.', // Placeholder, mainly for consistency
   },
 };
  
@@ -119,26 +132,22 @@ export const LOCAL_STORAGE_SETTINGS_KEY = 'femiAiChatSettings';
 export const LOCAL_STORAGE_HISTORY_KEY = 'femiAiChatHistory';
 export const LOCAL_STORAGE_PERSONAS_KEY = 'femiAiChatPersonas';
 export const LOCAL_STORAGE_NOTIFICATIONS_KEY = 'femiAiNotifications';
-export const MAX_NOTIFICATIONS = 50; // Max notifications to store
+export const MAX_NOTIFICATIONS = 50; 
 export const LOCAL_STORAGE_DEVICE_LOGS_KEY = 'femiAiDeviceLogs';
 export const MAX_DEVICE_LOGS = 5;
 export const LOCAL_STORAGE_CHAT_BACKGROUND_KEY = 'femiAiChatBackgroundUrl';
-export const MAX_SAVED_CHAT_SESSIONS = 10; // Max number of chat sessions to store
+export const MAX_SAVED_CHAT_SESSIONS = 10; 
 
 
-// DEMO USER CONSTANTS (Now for named DEMO accounts from DB)
-// The specific "DEMO" login code (e.g., "guest_demo") will be managed on the server or communicated to users.
-// This DEMO_USER_KEY is no longer the primary login mechanism.
-// export const DEMO_USER_KEY = "DEMO"; // REPLACED: DEMO login now uses specific usernames via verify-code
-
-export const DEMO_USER_DEFAULT_MONTHLY_LIMITS = { // Max values for a DEMO user per month
+export const DEMO_USER_DEFAULT_MONTHLY_LIMITS = { 
   FLUX_KONTEX_MAX_MONTHLY: 0, 
-  FLUX_KONTEX_PRO_MONTHLY: 1, // Updated to 1
+  FLUX_KONTEX_PRO_MONTHLY: 1, 
   IMAGEN3_MONTHLY_IMAGES: 20,
   OPENAI_TTS_MONTHLY_CHARS: 10000,
+  FLUX_DEV_MONTHLY_IMAGES: 10, // New Flux Dev limit
 };
 
-export const INITIAL_DEMO_USER_LIMITS: DemoUserLimits = { // For client-side display if needed, actuals from server
+export const INITIAL_DEMO_USER_LIMITS: DemoUserLimits = { 
   fluxKontextMaxMonthlyUsesLeft: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_KONTEX_MAX_MONTHLY,
   fluxKontextMaxMonthlyMaxUses: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_KONTEX_MAX_MONTHLY,
   fluxKontextProMonthlyUsesLeft: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_KONTEX_PRO_MONTHLY,
@@ -147,24 +156,24 @@ export const INITIAL_DEMO_USER_LIMITS: DemoUserLimits = { // For client-side dis
   imagen3MonthlyMaxImages: DEMO_USER_DEFAULT_MONTHLY_LIMITS.IMAGEN3_MONTHLY_IMAGES,
   openaiTtsMonthlyCharsLeft: DEMO_USER_DEFAULT_MONTHLY_LIMITS.OPENAI_TTS_MONTHLY_CHARS,
   openaiTtsMonthlyMaxChars: DEMO_USER_DEFAULT_MONTHLY_LIMITS.OPENAI_TTS_MONTHLY_CHARS,
+  fluxDevMonthlyImagesLeft: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_DEV_MONTHLY_IMAGES,
+  fluxDevMonthlyMaxImages: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_DEV_MONTHLY_IMAGES,
 };
 
 
-// PAID USER CONSTANTS - These are MAX values for the proxy to construct the "limits" object
 export const PAID_USER_LIMITS_CONFIG: PaidUserLimits = {
   imagen3ImagesLeft: 0, 
-  imagen3MaxImages: 50, // Daily limit
+  imagen3MaxImages: 50, 
   openaiTtsCharsLeft: 0, 
-  openaiTtsMaxChars: 20000, // Per use or session limit
+  openaiTtsMaxChars: 20000, 
   fluxKontextMaxMonthlyUsesLeft: 0, 
-  fluxKontextMaxMonthlyMaxUses: 40, // Monthly limit
+  fluxKontextMaxMonthlyMaxUses: 40, 
   fluxKontextProMonthlyUsesLeft: 0, 
-  fluxKontextProMonthlyMaxUses: 50,  // Monthly limit
+  fluxKontextProMonthlyMaxUses: 50,  
+  fluxDevMonthlyImagesLeft: 0,    // New Flux Dev limit for paid
+  fluxDevMonthlyMaxImages: 100,  // New Flux Dev limit for paid
 };
 
-// Used by frontend to check input length before sending for OpenAI TTS.
-// This should be based on the user's actual limits (paid or demo from server).
-// For simplicity, if a generic max is needed before knowing user type, using paid.
 export const OPENAI_TTS_MAX_INPUT_LENGTH = PAID_USER_LIMITS_CONFIG.openaiTtsMaxChars;
 
 
@@ -233,12 +242,11 @@ export const getNextMilestone = (currentExp: number): { milestoneExp: number, re
     }
     currentLevelMilestone = milestone.exp;
   }
-  // If all milestones passed or no milestones defined
   const lastMilestoneExp = sortedMilestones.length > 0 ? sortedMilestones[sortedMilestones.length - 1].exp : 0;
   return { 
-    milestoneExp: lastMilestoneExp + 500, // Arbitrary next goal if all passed
+    milestoneExp: lastMilestoneExp + 500, 
     remainingExp: (lastMilestoneExp + 500) - currentExp, 
-    progressPercentage: currentExp > lastMilestoneExp && lastMilestoneExp > 0 ? 100 : 0, // Simplified if past all known milestones
+    progressPercentage: currentExp > lastMilestoneExp && lastMilestoneExp > 0 ? 100 : 0, 
     currentLevelMilestone: lastMilestoneExp,
     nextLevelMilestone: lastMilestoneExp + 500 
   }; 
@@ -247,11 +255,10 @@ export const getNextMilestone = (currentExp: number): { milestoneExp: number, re
 // Account Settings Constants
 export const ACCOUNT_MENU_ITEMS: Array<{ id: AccountTabType; label: string; status?: 'coming_soon' }> = [
   { id: 'profile', label: 'My Profile' },
-  { id: 'credits', label: 'Credits & Billing'}, // New Credits tab
+  { id: 'credits', label: 'Credits & Billing'}, 
   { id: 'devices', label: 'Devices' },
   { id: 'background', label: 'Background' },
   { id: 'avatar', label: 'Avatar', status: 'coming_soon' },
-  // { id: 'payment', label: 'Payment Methods', status: 'coming_soon' }, // "Payment" can be part of "Credits" now
 ];
 
 export const DEMO_BACKGROUNDS: BackgroundOption[] = [
@@ -291,7 +298,6 @@ export const TIEN_LEN_RANKS: CardRank[] = [
   CardRank.KING, CardRank.ACE, CardRank.TWO
 ];
 
-// Numerical values for ranks (3 is lowest, 2 is highest)
 export const TIEN_LEN_RANK_VALUES: Record<CardRank, number> = {
   [CardRank.THREE]: 0, [CardRank.FOUR]: 1, [CardRank.FIVE]: 2, [CardRank.SIX]: 3,
   [CardRank.SEVEN]: 4, [CardRank.EIGHT]: 5, [CardRank.NINE]: 6, [CardRank.TEN]: 7,
@@ -299,14 +305,23 @@ export const TIEN_LEN_RANK_VALUES: Record<CardRank, number> = {
   [CardRank.TWO]: 12,
 };
 
-// Suit priorities (lower value is weaker suit for same rank)
 export const TIEN_LEN_SUIT_VALUES: Record<CardSuit, number> = {
-  [CardSuit.SPADES]: 0,   // Bích
-  [CardSuit.CLUBS]: 1,    // Chuồn (Tép)
-  [CardSuit.DIAMONDS]: 2, // Rô
-  [CardSuit.HEARTS]: 3,   // Cơ
+  [CardSuit.SPADES]: 0,   
+  [CardSuit.CLUBS]: 1,    
+  [CardSuit.DIAMONDS]: 2, 
+  [CardSuit.HEARTS]: 3,   
 };
 
-export const CARDS_PER_PLAYER = 12; // Changed from 13 to 12
+export const CARDS_PER_PLAYER = 12; 
 export const TIEN_LEN_TURN_COUNTDOWN_SECONDS = 10;
 export const TIEN_LEN_AI_THINKING_MILLISECONDS = 1500;
+
+// Flux Dev Image Size Options
+export const FLUX_DEV_IMAGE_SIZES: { value: FluxDevImageSize; label: string }[] = [
+  { value: 'square_hd', label: 'Square HD (1024x1024)' },
+  { value: 'square', label: 'Square (512x512)' }, // Assuming Fal's 'square' might be different from 'square_hd'
+  { value: 'portrait_4_3', label: 'Portrait 4:3 (768x1024)' },
+  { value: 'portrait_16_9', label: 'Portrait 9:16 (576x1024)' },
+  { value: 'landscape_4_3', label: 'Landscape 4:3 (1024x768)' },
+  { value: 'landscape_16_9', label: 'Landscape 16:9 (1024x576)' },
+];

@@ -15,8 +15,9 @@ export enum Model {
   REAL_TIME_TRANSLATION = 'Real-Time Translation (Gemini)', // New Real-Time Translation Model
   AI_AGENT = 'AI Agent (gemini-2.5-flash-preview-04-17)', // Renamed from AI_TASK_ORCHESTRATOR and updated model ID
   PRIVATE = 'Private (Local Data Storage)', // New Private Mode
-  FLUX_KONTEX = 'Flux Kontext (fal-ai/flux-pro/kontext)', 
-  FLUX_KONTEX_MAX_MULTI = 'Flux Kontext Max (fal-ai/flux-pro/kontext/max/multi)', // New: Advanced multi-image editing
+  FLUX_KONTEX = 'Flux Kontext Image Edit (fal-ai/flux-pro/kontext)', 
+  FLUX_KONTEX_MAX_MULTI = 'Flux Kontext Max Multi-Image (fal-ai/flux-pro/kontext/max/multi)',
+  FLUX_DEV_IMAGE_GEN = 'Flux Dev Image Gen (fal-ai/flux/dev)', // New Flux Dev model
 }
 
 export interface ChatMessage {
@@ -48,7 +49,7 @@ export interface ChatMessage {
   isNote?: boolean; // For private mode text-only entries
   // Field for Flux Kontex polling
   fluxRequestId?: string; // Stores the request ID for polling Flux Kontex results
-  fluxModelId?: string; // Stores the Fal model ID used for this request (e.g. standard or max/multi)
+  fluxModelId?: string; // Stores the Fal model ID used for this request (e.g. standard or max/multi or flux/dev)
 }
 
 export interface GroundingSource {
@@ -104,9 +105,23 @@ export interface FluxKontexSettings {
   // image_urls field is handled by the proxy when using Fal.ai JS client; client sends base64
 }
 
+// Image size options for Flux Dev Image Gen
+export type FluxDevImageSize = 'square_hd' | 'square' | 'portrait_4_3' | 'portrait_16_9' | 'landscape_4_3' | 'landscape_16_9';
+
+export interface FluxDevSettings {
+  image_size?: FluxDevImageSize;
+  num_inference_steps?: number;
+  seed?: number | null;
+  guidance_scale?: number;
+  num_images?: number; // 1 to 4
+  enable_safety_checker?: boolean;
+  // Note: output_format is not explicitly listed as input for fal-ai/flux/dev, but images in output have content_type.
+  // Fal.ai output for flux/dev is typically JPEG.
+}
+
 
 export type AllModelSettings = {
-  [key in Model]?: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings> & Partial<FluxKontexSettings>;
+  [key in Model]?: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings> & Partial<FluxKontexSettings> & Partial<FluxDevSettings>;
 };
 
 export interface ThemeContextType {
@@ -138,13 +153,14 @@ export interface ApiKeyStatus {
   modelName: string; 
   isMock: boolean;
   isGeminiPlatform: boolean; // True if the model runs on Google's Gemini platform (AI Studio API Key)
-  isImageGeneration?: boolean; // Flag for image generation models
+  isImageGeneration?: boolean; // Flag for image generation models (like Imagen3)
   isTextToSpeech?: boolean; // Flag for TTS models
   isRealTimeTranslation?: boolean; // Flag for real-time translation model
   isAiAgent?: boolean; // Flag for AI Agent model (renamed from isTaskOrchestrator)
   isPrivateMode?: boolean; // Flag for Private (Local Data Storage) mode
   isImageEditing?: boolean; // Flag for image editing models like Flux Kontex (single image)
   isMultiImageEditing?: boolean; // Flag for multi-image editing models like Flux Kontext Max
+  isFluxDevImageGeneration?: boolean; // Flag for fal-ai/flux/dev
 }
 
 export interface Persona {
@@ -156,8 +172,8 @@ export interface Persona {
 export interface SettingsPanelProps {
   selectedModel: Model;
   onModelChange: (model: Model) => void;
-  modelSettings: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings> & Partial<FluxKontexSettings>; 
-  onModelSettingsChange: (settings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings & FluxKontexSettings>) => void;
+  modelSettings: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings> & Partial<FluxKontexSettings> & Partial<FluxDevSettings>; 
+  onModelSettingsChange: (settings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings & FluxKontexSettings & FluxDevSettings>) => void;
   isWebSearchEnabled: boolean;
   onWebSearchToggle: (enabled: boolean) => void;
   disabled: boolean;
@@ -191,7 +207,7 @@ export interface ChatSession {
   timestamp: number;
   model: Model;
   messages: ChatMessage[];
-  modelSettingsSnapshot: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings> & Partial<FluxKontexSettings>;
+  modelSettingsSnapshot: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings> & Partial<FluxKontexSettings> & Partial<FluxDevSettings>;
   isPinned: boolean;
   activePersonaIdSnapshot: string | null; // Save active persona with the session
 }
@@ -456,17 +472,21 @@ export interface DemoUserLimits {
   imagen3MonthlyMaxImages: number;
   openaiTtsMonthlyCharsLeft: number;
   openaiTtsMonthlyMaxChars: number;
+  fluxDevMonthlyImagesLeft: number; // New limit for Flux Dev
+  fluxDevMonthlyMaxImages: number;  // New limit for Flux Dev
 }
 
 export interface PaidUserLimits {
-  imagen3ImagesLeft: number; // This could be daily or monthly depending on how proxy sets it for paid
+  imagen3ImagesLeft: number; 
   imagen3MaxImages: number;
-  openaiTtsCharsLeft: number; // This could be daily or monthly
+  openaiTtsCharsLeft: number; 
   openaiTtsMaxChars: number;
   fluxKontextMaxMonthlyUsesLeft: number;
   fluxKontextMaxMonthlyMaxUses: number;
   fluxKontextProMonthlyUsesLeft: number;
   fluxKontextProMonthlyMaxUses: number;
+  fluxDevMonthlyImagesLeft: number; // New limit for Flux Dev
+  fluxDevMonthlyMaxImages: number;  // New limit for Flux Dev
 }
 
 export interface UserSessionState {
@@ -474,7 +494,6 @@ export interface UserSessionState {
   demoUsername?: string; // Username for the specific DEMO account
   demoUserToken: string | null; // Token issued by the server for this DEMO user
   demoLimits: DemoUserLimits | null; // Specific limits for this DEMO user
-  // isDemoBlockedByVpn: boolean; // This might become less relevant if DEMO requires specific accounts
 
   isPaidUser: boolean;
   paidUsername?: string;
@@ -491,7 +510,6 @@ export interface DemoUserLoginResponse {
     username: string; // The specific DEMO username
     demoUserToken: string; // Token for this session
     limits: DemoUserLimits; // Their specific, potentially monthly, limits
-    // cooldownActive and tryAgainAfter might be removed if demo users are persistent DB accounts
 }
 
 export interface AdminLoginResponse {
@@ -530,6 +548,14 @@ export interface EditImageWithFluxKontexParams {
   settings: FluxKontexSettings;
   imageData: SingleImageData | MultiImageData; 
 }
+
+// For Flux Dev Image Generation Proxy Service
+export interface GenerateImageWithFluxDevParams {
+  modelIdentifier: string; // Should be 'fal-ai/flux/dev'
+  prompt: string;
+  settings: FluxDevSettings;
+}
+
 
 export interface HandwritingCanvasProps {
   width: number;
