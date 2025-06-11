@@ -19,7 +19,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onPersonaChange,
   onPersonaSave,
   onPersonaDelete,
-  userSession, // Added userSession for admin check
+  userSession, 
 }) => {
   const [showPersonaForm, setShowPersonaForm] = useState(false);
   const [editingPersona, setEditingPersona] = useState<Persona | null>(null);
@@ -145,11 +145,16 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           disabled={disabled}
           className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
         >
-          {models.map((model) => (
-            <option key={model} value={model}>
-              {model} 
-            </option>
-          ))}
+          {models.map((model) => {
+            const isFluxMax = model === Model.FLUX_KONTEX_MAX_MULTI;
+            const isRestricted = isFluxMax && !userSession.isPaidUser && !isAdminUser; // Admins are not restricted
+            return (
+              <option key={model} value={model} disabled={isRestricted}
+                className={isRestricted ? "text-gray-400 dark:text-gray-600" : ""}>
+                {model} {isRestricted ? '(Paid Only)' : ''}
+              </option>
+            );
+          })}
         </select>
       </div>
 

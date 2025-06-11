@@ -1,4 +1,5 @@
 
+
 // Fix: Remove triple-slash directive for 'vite/client' as its types are not found and import.meta.env is manually typed.
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo, useContext } from 'react';
@@ -892,6 +893,17 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     });
   }, [selectedModel, activePersonaId, personas]);
 
+  const handleModelSelection = (newModel: Model) => {
+    const isAdmin = !userSession.isDemoUser && !userSession.isPaidUser;
+    if (newModel === Model.FLUX_KONTEX_MAX_MULTI && !userSession.isPaidUser && !isAdmin) {
+      addNotification("Flux Kontext Max chỉ dành cho người dùng trả phí", "error");
+      return; // Do not change the model
+    }
+    if (newModel !== Model.GPT4O) gpt41ModalInteractionFlagRef.current = false;
+    setSelectedModel(newModel);
+    clearSearch();
+  };
+
   const handlePersonaChange = (personaId: string | null) => {
     setActivePersonaId(personaId);
   };
@@ -1519,7 +1531,15 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     const aiMessageTimestamp = Date.now();
     const aiMessageId = isRegenerationOfAiMsgId || (aiMessageTimestamp + 1).toString();
     const actualModelIdentifierForFlux = isFluxKontexModelSelected ? getActualModelIdentifier(selectedModel) : undefined;
+    const isAdminUser = !userSession.isDemoUser && !userSession.isPaidUser;
 
+    // Flux Kontext Max Restriction
+    if (selectedModel === Model.FLUX_KONTEX_MAX_MULTI && !userSession.isPaidUser && !isAdminUser) {
+        addNotification("Flux Kontext Max chỉ dành cho người dùng trả phí", "error");
+        setIsLoading(false); // Ensure loading state is reset
+        // Do not add AI placeholder, do not proceed.
+        return;
+    }
 
     let aiPlaceholderText = isRegenerationOfAiMsgId ? 'Regenerating...' : '';
     if (!isRegenerationOfAiMsgId) {
@@ -2125,11 +2145,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         {activeSidebarTab === 'settings' && (
             <SettingsPanel
                 selectedModel={selectedModel}
-                onModelChange={(model) => {
-                    if (model !== Model.GPT4O) gpt41ModalInteractionFlagRef.current = false;
-                    setSelectedModel(model);
-                    clearSearch();
-                }}
+                onModelChange={handleModelSelection}
                 modelSettings={modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings & FluxKontexSettings}
                 onModelSettingsChange={handleModelSettingsChange}
                 isWebSearchEnabled={isWebSearchEnabled}
