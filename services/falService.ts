@@ -1,16 +1,10 @@
 
-import { FluxKontexSettings, EditImageWithFluxKontexParams as ClientEditImageWithFluxKontexParams, SingleImageData, MultiImageData } from '../types.ts';
+import { FluxKontexSettings, EditImageWithFluxKontexParams as BaseEditParams, SingleImageData, MultiImageData } from '../types.ts';
 
-// Matches the parameters expected by the updated proxy endpoint
-// This interface is now defined in types.ts as EditImageWithFluxKontexParams
-// For clarity, let's ensure client-side usage matches what's in types.ts.
-// export interface EditImageWithFluxKontexParams { // This definition is now in types.ts
-//   modelIdentifier: string;
-//   prompt: string;
-//   settings: FluxKontexSettings;
-//   imageData: SingleImageData | MultiImageData; // Use the union type
-// }
-
+// Interface for parameters including optional request headers
+export interface FalServiceEditParams extends BaseEditParams {
+  requestHeaders?: HeadersInit;
+}
 
 // Updated response type for the initial submission from the proxy
 export interface FluxKontexSubmitProxyResponse {
@@ -21,7 +15,7 @@ export interface FluxKontexSubmitProxyResponse {
 
 // Updated response type for the status check from the proxy
 export interface FluxKontexStatusProxyResponse {
-  status?: 'COMPLETED' | 'IN_PROGRESS' | 'IN_QUEUE' | 'ERROR' | 'COMPLETED_NO_IMAGE' | 'NOT_FOUND' | 'PROXY_REQUEST_ERROR' | 'NETWORK_ERROR' | string; // Added more specific statuses from proxy
+  status?: 'COMPLETED' | 'IN_PROGRESS' | 'IN_QUEUE' | 'ERROR' | 'COMPLETED_NO_IMAGE' | 'NOT_FOUND' | 'PROXY_REQUEST_ERROR' | 'NETWORK_ERROR' | string;
   editedImageUrl?: string;
   error?: string;
   message?: string; 
@@ -30,9 +24,9 @@ export interface FluxKontexStatusProxyResponse {
 
 
 export async function editImageWithFluxKontexProxy(
-  params: ClientEditImageWithFluxKontexParams // Use the type from types.ts
+  params: FalServiceEditParams 
 ): Promise<FluxKontexSubmitProxyResponse> {
-  const { modelIdentifier, prompt, settings, imageData } = params; 
+  const { modelIdentifier, prompt, settings, imageData, requestHeaders } = params; 
 
   let bodyPayload: any = {
     modelIdentifier,
@@ -48,23 +42,25 @@ export async function editImageWithFluxKontexProxy(
   if (settings.aspect_ratio && settings.aspect_ratio !== 'default') {
     bodyPayload.aspect_ratio = settings.aspect_ratio;
   }
-  // If settings.aspect_ratio is 'default' or undefined, it's omitted from the payload.
 
-  if ('images_data' in imageData) { // Check if it's MultiImageData
+  if ('images_data' in imageData) { 
     bodyPayload.images_data = imageData.images_data;
-  } else { // It's SingleImageData
+  } else { 
     bodyPayload.image_base_64 = imageData.image_base_64;
     bodyPayload.image_mime_type = imageData.image_mime_type;
   }
 
   try {
-    const response = await fetch('/api/fal/image/edit/flux-kontext', {
+    const fetchOptions: RequestInit = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(requestHeaders || {}), // Spread the passed headers here
       },
       body: JSON.stringify(bodyPayload),
-    });
+    };
+    
+    const response = await fetch('/api/fal/image/edit/flux-kontext', fetchOptions);
 
     const data: FluxKontexSubmitProxyResponse = await response.json();
 
@@ -86,13 +82,13 @@ export async function editImageWithFluxKontexProxy(
 
 export async function checkFluxKontexStatusProxy(
   requestId: string,
-  modelIdentifier: string // Added modelIdentifier
+  modelIdentifier: string 
 ): Promise<FluxKontexStatusProxyResponse> {
   try {
     const response = await fetch('/api/fal/image/edit/status', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requestId, modelIdentifier }), // Send modelIdentifier
+      headers: { 'Content-Type': 'application/json' }, // Status check typically doesn't need auth token, but could be added if proxy requires
+      body: JSON.stringify({ requestId, modelIdentifier }), 
     });
     
     const data: FluxKontexStatusProxyResponse = await response.json();
