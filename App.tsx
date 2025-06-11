@@ -7,6 +7,7 @@ import LanguageLearningModal from './components/LanguageLearningModal.tsx';
 import GamesModal from './components/GamesModal.tsx';
 import WebGamePlayerModal from './components/WebGamePlayerModal.tsx';
 import TienLenGameModal from './components/games/tienlen/TienLenGameModal.tsx';
+import NewsModal from './components/NewsModal.tsx'; // Import NewsModal
 import { NotificationProvider, useNotification } from './contexts/NotificationContext.tsx';
 import { KeyIcon } from './components/Icons.tsx';
 import { LOCAL_STORAGE_USER_PROFILE_KEY, DEFAULT_USER_LANGUAGE_PROFILE, EXP_MILESTONES_CONFIG, BADGES_CATALOG, LOCAL_STORAGE_CHAT_BACKGROUND_KEY, DEMO_CREDIT_PACKAGES, DEMO_USER_KEY, INITIAL_DEMO_USER_LIMITS, PAID_USER_LIMITS_CONFIG } from './constants.ts';
@@ -53,6 +54,9 @@ interface AppContentProps {
 
   userSession: UserSessionState;
   onUpdateDemoLimits: (updatedLimits: Partial<DemoUserLimits>) => void;
+
+  isNewsModalOpen: boolean; // Added for NewsModal
+  onCloseNewsModal: () => void; // Added for NewsModal
 }
 
 const AppContent: React.FC<AppContentProps> = ({
@@ -66,7 +70,8 @@ const AppContent: React.FC<AppContentProps> = ({
   chatBackgroundUrl, onChatBackgroundChange,
   isAppReady,
   currentUserCredits, onPurchaseCredits, paypalEmail, onSavePayPalEmail,
-  userSession, onUpdateDemoLimits
+  userSession, onUpdateDemoLimits,
+  isNewsModalOpen, onCloseNewsModal // Added for NewsModal
 }) => {
 
   if (!isAppReady && !userSession.isDemoUser && !userSession.isPaidUser) { 
@@ -126,6 +131,7 @@ const AppContent: React.FC<AppContentProps> = ({
           </div>
         )}
       </main>
+      {isNewsModalOpen && <NewsModal isOpen={isNewsModalOpen} onClose={onCloseNewsModal} />}
       {(currentUser || userSession.isDemoUser || userSession.isPaidUser) && (
         <>
           <LanguageLearningModal isOpen={isLanguageLearningModalOpen} onClose={onToggleLanguageLearningModal} userProfile={userProfile} onUpdateProfile={onUpdateUserProfile} onAddExp={onAddExpWithNotification} />
@@ -170,6 +176,8 @@ const App = (): JSX.Element => {
     paidSubscriptionEndDate: null,
     paidLimits: null,
   });
+
+  const [isNewsModalOpen, setIsNewsModalOpen] = useState(false); // Added for NewsModal
 
   const notificationsHook = useNotification(); 
   const addAppNotification = notificationsHook.addNotification;
@@ -238,6 +246,7 @@ const App = (): JSX.Element => {
         isDemoUser: false, demoUserToken: null, demoLimits: null, isDemoBlockedByVpn: false,
         isPaidUser: false, paidUsername: undefined, paidUserToken: null, paidSubscriptionEndDate: null, paidLimits: null,
     });
+    setIsNewsModalOpen(false); // Ensure news modal is closed before new login attempt
 
     if (loginCode.toUpperCase() === DEMO_USER_KEY) { 
         try {
@@ -261,7 +270,7 @@ const App = (): JSX.Element => {
                 addAppNotification("Logged in as DEMO user. Usage limits apply.", "info");
                 if (data.isBlocked) addAppNotification("DEMO access for your IP is restricted.", "error");
                 if (data.cooldownActive) addAppNotification(data.message || "DEMO user is in cool-down.", "warning");
-
+                setIsNewsModalOpen(true); // Show news modal on successful DEMO login
             } else {
                 addAppNotification(data.message || "DEMO login failed.", "error", data.isBlocked ? "VPN/Proxy likely detected." : (data.message?.includes("cool-down") ? data.message : undefined));
                 setUserSession(prev => ({ ...prev, isDemoBlockedByVpn: data.isBlocked || false }));
@@ -286,6 +295,7 @@ const App = (): JSX.Element => {
                     setCurrentUser({ name: "Admin User" });
                     setUserSession(prev => ({ ...prev, isPaidUser: false, isDemoUser: false })); 
                     addAppNotification("Admin login successful!", "success");
+                    setIsNewsModalOpen(true); // Show news modal on successful ADMIN login
                 } else if ((data as PaidLoginResponse).isPaidUser) {
                     const paidData = data as PaidLoginResponse;
                     setCurrentUser({ name: paidData.username });
@@ -298,6 +308,7 @@ const App = (): JSX.Element => {
                         isDemoUser: false, demoUserToken: null, demoLimits: null, isDemoBlockedByVpn: false, 
                     });
                     addAppNotification(`Welcome back, ${paidData.username}! Subscription active until ${new Date(paidData.subscriptionEndDate || 0).toLocaleDateString()}.`, "success");
+                    setIsNewsModalOpen(true); // Show news modal on successful PAID login
                 } else {
                      addAppNotification(data.message || "Login successful, but user type undetermined.", "warning");
                 }
@@ -317,6 +328,7 @@ const App = (): JSX.Element => {
         isPaidUser: false, paidUsername: undefined, paidUserToken: null, paidSubscriptionEndDate: null, paidLimits: null,
     }); 
     addAppNotification("You have been logged out.", "info");
+    setIsNewsModalOpen(false); // Ensure news modal is closed on logout
   }, [addAppNotification]);
   
   const updateDemoLimits = useCallback((updatedLimits: Partial<DemoUserLimits>) => {
@@ -400,6 +412,8 @@ const App = (): JSX.Element => {
         isAppReady={isAppReady}
         currentUserCredits={userProfile.credits} onPurchaseCredits={handlePurchaseCredits} paypalEmail={userProfile.paypalEmail} onSavePayPalEmail={handleSavePayPalEmail}
         userSession={userSession} onUpdateDemoLimits={updateDemoLimits}
+        isNewsModalOpen={isNewsModalOpen} // Pass state to AppContent
+        onCloseNewsModal={() => setIsNewsModalOpen(false)} // Pass handler to AppContent
       />
     </ThemeContext.Provider>
   );
