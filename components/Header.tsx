@@ -338,8 +338,7 @@ const Header: React.FC<HeaderProps> = ({
                 type="password"
                 value={loginCodeInput}
                 onChange={(e) => setLoginCodeInput(e.target.value)}
-                onKeyPress={(e) => { if (e.key === 'Enter' && !isLoginLoading) handleLoginSubmit(); }}
-                placeholder="e.g., 'guest_demo' or your code"
+                placeholder="Enter code"
                 className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none mb-4"
                 autoFocus
                 disabled={isLoginLoading}
