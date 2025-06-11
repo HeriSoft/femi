@@ -15,7 +15,7 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
       title: "Flux Kontext Max (Advanced image editing) features:",
       points: [
         "Upload up to 4 images for editing requests.",
-        "80 images/month for paid users.",
+        "40 images/month for paid users.", // Updated
         "Not available for DEMO users."
       ]
     },
@@ -23,7 +23,7 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
       title: "Flux Kontext Pro (image editing) features:",
       points: [
         "Upload up to 1 image for editing requests.",
-        "15 images per day for paid users.",
+        "50 images/month for paid users.", // Updated
         "DEMO users: 2 images trial."
       ]
     },
