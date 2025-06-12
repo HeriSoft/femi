@@ -38,8 +38,8 @@ export async function editImageWithFluxKontexProxy(
     modelIdentifier,
     prompt,
     guidance_scale: settings.guidance_scale,
-    safety_tolerance: settings.safety_tolerance,
-    num_inference_steps: settings.num_inference_steps,
+    // safety_tolerance is typically not used for kontext, proxy will filter
+    // num_inference_steps is typically not used for kontext edit, proxy will filter
     seed: settings.seed,
     num_images: settings.num_images,
     output_format: settings.output_format,
@@ -48,6 +48,10 @@ export async function editImageWithFluxKontexProxy(
   if (settings.aspect_ratio && settings.aspect_ratio !== 'default') {
     bodyPayload.aspect_ratio = settings.aspect_ratio;
   }
+   // Add other known valid settings if they are part of FluxKontexSettings type
+  if (settings.safety_tolerance !== undefined) bodyPayload.safety_tolerance = settings.safety_tolerance;
+  if (settings.num_inference_steps !== undefined) bodyPayload.num_inference_steps = settings.num_inference_steps;
+
 
   if ('images_data' in imageData) { 
     bodyPayload.images_data = imageData.images_data;
@@ -67,16 +71,28 @@ export async function editImageWithFluxKontexProxy(
     };
     
     const response = await fetch('/api/fal/image/edit/flux-kontext', fetchOptions);
+    const responseText = await response.text();
+    let data: FalSubmitProxyResponse;
 
-    const data: FalSubmitProxyResponse = await response.json();
+    try {
+        if (!responseText) {
+             console.error("[FalService Error] editImageWithFluxKontexProxy: Proxy returned an empty response. Status:", response.status, response.statusText);
+             return { error: `Proxy returned an empty response (Status: ${response.status}) for Flux Kontext submission.`};
+        }
+        data = JSON.parse(responseText);
+    } catch (e) {
+        console.error("[FalService Error] editImageWithFluxKontexProxy: Proxy response was not valid JSON. Status:", response.status, response.statusText, "Response Text (first 500 chars):", responseText.substring(0, 500));
+        return { error: `Proxy returned non-JSON response (Status: ${response.status}) for Flux Kontext. Response (partial): ${responseText.substring(0,100)}...`};
+    }
 
-    if (!response.ok || data.error) {
+    if (!response.ok || data.error) { // Check response.ok *after* trying to parse potential JSON error
       return { error: data.error || `Fal.ai Flux Kontext proxy submission failed: ${response.statusText}` };
     }
     
     if (data.requestId) {
       return { requestId: data.requestId, message: data.message };
     } else {
+      // This case might be redundant if the check above catches it, but good for safety.
       return { error: data.error || "Fal.ai Flux Kontext proxy did not return a requestId." };
     }
 
@@ -109,7 +125,20 @@ export async function generateImageWithFluxDevProxy(
     };
 
     const response = await fetch('/api/fal/image/generate/flux-dev', fetchOptions);
-    const data: FalSubmitProxyResponse = await response.json();
+    const responseText = await response.text();
+    let data: FalSubmitProxyResponse;
+
+    try {
+        if (!responseText) {
+             console.error("[FalService Error] generateImageWithFluxDevProxy: Proxy returned an empty response. Status:", response.status, response.statusText);
+             return { error: `Proxy returned an empty response (Status: ${response.status}) for Flux Dev submission.`};
+        }
+        data = JSON.parse(responseText);
+    } catch (e) {
+        console.error("[FalService Error] generateImageWithFluxDevProxy: Proxy response was not valid JSON. Status:", response.status, response.statusText, "Response Text (first 500 chars):", responseText.substring(0, 500));
+        return { error: `Proxy returned non-JSON response (Status: ${response.status}) for Flux Dev. Response (partial): ${responseText.substring(0,100)}...`};
+    }
+
 
     if (!response.ok || data.error) {
       return { error: data.error || `Fal.ai Flux Dev proxy submission failed: ${response.statusText}` };
@@ -139,7 +168,9 @@ export async function checkFalQueueStatusProxy( // Renamed for generality
       body: JSON.stringify({ requestId, modelIdentifier }), 
     });
     
-    const data: FalStatusProxyResponse = await response.json();
+    // Similar robust parsing for status check if needed, though often simpler.
+    // For now, assuming status endpoint is more stable with its JSON.
+    const data: FalStatusProxyResponse = await response.json(); 
     
     if (!response.ok) {
         return { 
