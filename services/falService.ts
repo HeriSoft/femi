@@ -1,12 +1,10 @@
-
-
-import { FluxKontexSettings, EditImageWithFluxKontexParams as BaseEditParams, SingleImageData, MultiImageData, FluxDevSettings, GenerateImageWithFluxDevParams } from '../types.ts';
+import { FluxKontexSettings, EditImageWithFluxKontexParams as BaseEditParams, SingleImageData, MultiImageData, FluxUltraSettings, GenerateImageWithFluxUltraParams } from '../types.ts'; // Updated
 
 // Interface for parameters including optional request headers
 export interface FalServiceEditParams extends BaseEditParams {
   requestHeaders?: HeadersInit;
 }
-export interface FalServiceGenerateParams extends GenerateImageWithFluxDevParams {
+export interface FalServiceGenerateParams extends GenerateImageWithFluxUltraParams { // Updated
   requestHeaders?: HeadersInit;
 }
 
@@ -103,15 +101,15 @@ export async function editImageWithFluxKontexProxy(
 }
 
 
-export async function generateImageWithFluxDevProxy(
-  params: FalServiceGenerateParams
+export async function generateImageWithFluxUltraProxy( // Renamed from generateImageWithFluxDevProxy
+  params: FalServiceGenerateParams // Updated type
 ): Promise<FalSubmitProxyResponse> {
   const { modelIdentifier, prompt, settings, requestHeaders } = params;
 
   const bodyPayload = {
     modelIdentifier,
     prompt,
-    ...settings // Spread all settings from FluxDevSettings
+    ...settings // Spread all settings from FluxUltraSettings
   };
 
   try {
@@ -124,52 +122,50 @@ export async function generateImageWithFluxDevProxy(
       body: JSON.stringify(bodyPayload),
     };
 
-    const response = await fetch('/api/fal/image/generate/flux-dev', fetchOptions);
+    const response = await fetch('/api/fal/image/generate/flux-ultra', fetchOptions); // Updated endpoint
     const responseText = await response.text();
     let data: FalSubmitProxyResponse;
 
     try {
         if (!responseText) {
-             console.error("[FalService Error] generateImageWithFluxDevProxy: Proxy returned an empty response. Status:", response.status, response.statusText);
-             return { error: `Proxy returned an empty response (Status: ${response.status}) for Flux Dev submission.`};
+             console.error("[FalService Error] generateImageWithFluxUltraProxy: Proxy returned an empty response. Status:", response.status, response.statusText);
+             return { error: `Proxy returned an empty response (Status: ${response.status}) for Flux Ultra submission.`};
         }
         data = JSON.parse(responseText);
     } catch (e) {
-        console.error("[FalService Error] generateImageWithFluxDevProxy: Proxy response was not valid JSON. Status:", response.status, response.statusText, "Response Text (first 500 chars):", responseText.substring(0, 500));
-        return { error: `Proxy returned non-JSON response (Status: ${response.status}) for Flux Dev. Response (partial): ${responseText.substring(0,100)}...`};
+        console.error("[FalService Error] generateImageWithFluxUltraProxy: Proxy response was not valid JSON. Status:", response.status, response.statusText, "Response Text (first 500 chars):", responseText.substring(0, 500));
+        return { error: `Proxy returned non-JSON response (Status: ${response.status}) for Flux Ultra. Response (partial): ${responseText.substring(0,100)}...`};
     }
 
 
     if (!response.ok || data.error) {
-      return { error: data.error || `Fal.ai Flux Dev proxy submission failed: ${response.statusText}` };
+      return { error: data.error || `Fal.ai Flux Ultra proxy submission failed: ${response.statusText}` };
     }
     
     if (data.requestId) {
       return { requestId: data.requestId, message: data.message };
     } else {
-      return { error: data.error || "Fal.ai Flux Dev proxy did not return a requestId." };
+      return { error: data.error || "Fal.ai Flux Ultra proxy did not return a requestId." };
     }
 
   } catch (error: any) {
-    console.error("Error calling Fal.ai Flux Dev proxy service for submission:", error);
-    return { error: `Network or unexpected error calling Fal.ai Flux Dev proxy for submission: ${error.message}` };
+    console.error("Error calling Fal.ai Flux Ultra proxy service for submission:", error);
+    return { error: `Network or unexpected error calling Fal.ai Flux Ultra proxy for submission: ${error.message}` };
   }
 }
 
 
-export async function checkFalQueueStatusProxy( // Renamed for generality
+export async function checkFalQueueStatusProxy( 
   requestId: string,
   modelIdentifier: string 
 ): Promise<FalStatusProxyResponse> {
   try {
-    const response = await fetch('/api/fal/image/edit/status', { // Keep using existing status endpoint, as it's now generic
+    const response = await fetch('/api/fal/image/edit/status', { 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }, 
       body: JSON.stringify({ requestId, modelIdentifier }), 
     });
     
-    // Similar robust parsing for status check if needed, though often simpler.
-    // For now, assuming status endpoint is more stable with its JSON.
     const data: FalStatusProxyResponse = await response.json(); 
     
     if (!response.ok) {
@@ -179,7 +175,6 @@ export async function checkFalQueueStatusProxy( // Renamed for generality
             rawResult: data 
         };
     }
-    // The proxy now handles extracting the correct image URL(s) based on modelIdentifier
     return { 
         status: data.status, 
         imageUrl: data.imageUrl, 
