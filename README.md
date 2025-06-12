@@ -16,14 +16,14 @@
 *   Mini entertainment games
 *   Voice translation in real-time
 *   Change Theme, Avatar
-*   Optimize UX/UI design for good experience on Windows / Mobile
+*   Optimize UX/UI design for a good experience on Windows / Mobile
 *   AI agent with Voice chat by Elevenlabs
 *   AI agent sets a plan for an individual plan, work on request, advice ... etc
 *   Payment & Credit system
 *   Flux Kontext Pro/Max Multi Editing Images **( NEW HOT )**
 *   Flux 1.1 Ultra - Very Ultra HD+ Image Generate
 *   Online multiple chat with friends **( coming soon )**
-*   Login with the code key, Easy system
+*   Log in with the code key to the MySQL system
 
 ## 🛠️ Tech Stack
 
