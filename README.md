@@ -20,7 +20,8 @@
 *   AI agent with Voice chat by Elevenlabs
 *   AI agent sets a plan for an individual plan, work on request, advice ... etc
 *   Payment & Credit system
-*   Flux Kontext - Flux Pro Editing Images **( NEW HOT )**
+*   Flux Kontext Pro/Max Multi Editing Images **( NEW HOT )**
+*   Flux 1.1 Ultra - Very Ultra HD+ Image Generate
 *   Online multiple chat with friends **( coming soon )**
 *   Login with Google / Connect to MySQL user database **( coming soon )**
 
