@@ -1,4 +1,5 @@
 
+
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -14,8 +15,8 @@ console.log(`[Proxy Server] Starting up at ${new Date().toISOString()}...`);
 // Define DEFAULT_FLUX_KONTEX_SETTINGS directly.
 const PROXY_DEFAULT_FLUX_KONTEX_SETTINGS = {
   guidance_scale: 7.5,
-  safety_tolerance: 5,
-  num_inference_steps: 30,
+  // safety_tolerance: 5, // REMOVED - Not standard for Flux Kontext by Fal.ai
+  // num_inference_steps: 30, // REMOVED - Not standard for Flux Kontext edit models by Fal.ai
   seed: null,
   num_images: 1,
   aspect_ratio: 'default', 
@@ -505,17 +506,11 @@ if (FAL_KEY) console.log("Fal.ai Key (FAL_KEY) found."); else console.warn("PROX
 app.post('/api/fal/image/edit/flux-kontext', async (req, res) => { 
   try {
     if (!FAL_KEY) return res.status(500).json({ error: "Fal.ai API Key not configured." });
-    const { modelIdentifier, prompt, image_base_64, image_mime_type, images_data, ...settings } = req.body;
+    const { modelIdentifier, prompt, image_base_64, image_mime_type, images_data, ...clientSettings } = req.body;
     if (!modelIdentifier || !prompt) return res.status(400).json({ error: "Missing modelIdentifier or prompt for Flux." });
     
     const isFluxMax = modelIdentifier === 'fal-ai/flux-pro/kontext/max/multi';
     const isFluxPro = modelIdentifier === 'fal-ai/flux-pro/kontext';
-
-    if (isFluxMax && (!images_data || !Array.isArray(images_data) || images_data.length === 0)) {
-        return res.status(400).json({ error: "Flux Max requires 'images_data' array." });
-    } else if (isFluxPro && (!image_base_64 || !image_mime_type)) {
-        return res.status(400).json({ error: "Flux Pro requires 'image_base_64' and 'image_mime_type'." });
-    }
     
     if (req.isPaidUser && req.paidUser) {
         const yearMonth = getCurrentYearMonth();
@@ -538,13 +533,54 @@ app.post('/api/fal/image/edit/flux-kontext', async (req, res) => {
       console.log(`[Fal Proxy] Admin user using Flux model: ${modelIdentifier}. No limits applied.`);
     }
 
-    let falInput = { prompt, ...PROXY_DEFAULT_FLUX_KONTEX_SETTINGS, ...settings };
-    if (isFluxMax) falInput.image_urls = images_data.map(img => `data:${img.mimeType};base64,${img.base64}`);
-    else falInput.image_url = `data:${image_mime_type};base64,${image_base_64}`;
-    if (modelIdentifier === 'fal-ai/flux-pro/kontext/max/multi' && falInput.num_inference_steps) delete falInput.num_inference_steps;
+    const effectiveSettings = {
+        ...PROXY_DEFAULT_FLUX_KONTEX_SETTINGS, // Base defaults from proxy
+        ...clientSettings // Client-provided settings override defaults
+    };
+    
+    let falInputPayload = { prompt };
+
+    if (isFluxMax) {
+        if (!images_data || !Array.isArray(images_data) || images_data.length === 0) {
+            return res.status(400).json({ error: "Flux Max requires 'images_data' array." });
+        }
+        falInputPayload.image_urls = images_data.map(img => {
+            if (!img.base64 || !img.mimeType) { // Validate each item
+                console.error("Invalid item in images_data:", img);
+                throw new Error("Invalid image data item in images_data array. Each item must have base64 and mimeType.");
+            }
+            return `data:${img.mimeType};base64,${img.base64}`;
+        });
+    } else { // isFluxPro (standard)
+        if (!image_base_64 || !image_mime_type) {
+            return res.status(400).json({ error: "Flux Pro requires 'image_base_64' and 'image_mime_type'." });
+        }
+        falInputPayload.image_url = `data:${image_mime_type};base64,${image_base_64}`;
+    }
+    
+    // Selectively add known valid parameters for Fal Flux Kontext models
+    if (effectiveSettings.seed !== undefined && effectiveSettings.seed !== null) falInputPayload.seed = effectiveSettings.seed;
+    if (effectiveSettings.guidance_scale !== undefined) falInputPayload.guidance_scale = effectiveSettings.guidance_scale;
+    if (effectiveSettings.num_images !== undefined) falInputPayload.num_images = effectiveSettings.num_images;
+    if (effectiveSettings.aspect_ratio && effectiveSettings.aspect_ratio !== 'default') falInputPayload.aspect_ratio = effectiveSettings.aspect_ratio;
+    if (effectiveSettings.output_format) falInputPayload.output_format = effectiveSettings.output_format;
+    
+    // num_inference_steps and safety_tolerance are generally NOT primary parameters for Kontext models
+    // Fal.ai's specific implementation of these models might handle them differently or ignore them.
+    // The client's `DEFAULT_FLUX_KONTEX_SETTINGS` still contains them, but `PROXY_DEFAULT_FLUX_KONTEX_SETTINGS` does not.
+    // If clientSettings from req.body includes them, they *will* be passed from `effectiveSettings`.
+    // For flux-pro/kontext (standard), `num_inference_steps` might be relevant if the underlying model supports it.
+    // For flux-pro/kontext/max/multi, Fal docs often show it's fixed or not user-configurable.
+    if (modelIdentifier === 'fal-ai/flux-pro/kontext' && effectiveSettings.num_inference_steps !== undefined) {
+        falInputPayload.num_inference_steps = effectiveSettings.num_inference_steps;
+    }
+    // safety_tolerance: if client sends it via clientSettings, it will be included. If not, it won't be.
+    if (effectiveSettings.safety_tolerance !== undefined) {
+        falInputPayload.safety_tolerance = effectiveSettings.safety_tolerance;
+    }
 
 
-    const queueResult = await fal.queue.submit(modelIdentifier, { input: falInput });
+    const queueResult = await fal.queue.submit(modelIdentifier, { input: falInputPayload });
     if (!queueResult?.request_id) return res.status(500).json({ error: "Fal.ai submission failed (no request ID)." });
 
     if (req.isPaidUser && req.paidUser) {
