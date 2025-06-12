@@ -573,6 +573,32 @@ export interface BackgroundOption {
   thumbnailUrl: string;
 }
 
+export interface MockUser {
+  name: string;
+  email?: string;
+}
+
+export interface HeaderProps {
+  currentUser: MockUser | null;
+  onLogin: (code: string) => void;
+  onLogout: () => void;
+  openLoginModalInitially?: boolean;
+  onLoginModalOpened?: () => void;
+  onToggleLanguageLearningModal: () => void;
+  onToggleGamesModal: () => void;
+  onToggleVoiceAgentWidget: () => void;
+  chatBackgroundUrl: string | null;
+  onChatBackgroundChange: (newUrl: string | null) => void;
+  userProfile: UserGlobalProfile | null;
+  onUpdateUserProfile: (updatedProfile: UserGlobalProfile) => void;
+  currentUserCredits: number;
+  onPurchaseCredits: (packageId: string, paymentMethod: 'paypal' | 'stripe' | 'vietqr') => void;
+  paypalEmail: string | undefined;
+  onSavePayPalEmail: (email: string) => void;
+  onToggleNewsModal: () => void; // Added new prop
+}
+
+
 // Function to get actual model ID (especially for models with display names)
 export const getActualModelIdentifier = (model: Model): string => {
   const match = model.match(/\(([^)]+)\)$/);

@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { ThemeContextType, Model, UserGlobalProfile, LanguageOption, UserLanguageProfile, WebGameType, NotificationType as AppNotificationType, TienLenGameModalProps, CreditPackage, UserSessionState, DemoUserLoginResponse, DemoUserLimits, LoginResponseType, PaidLoginResponse, AdminLoginResponse, PaidUserLimits } from './types.ts';
+import { ThemeContextType, Model, UserGlobalProfile, LanguageOption, UserLanguageProfile, WebGameType, NotificationType as AppNotificationType, TienLenGameModalProps, CreditPackage, UserSessionState, DemoUserLoginResponse, DemoUserLimits, LoginResponseType, PaidLoginResponse, AdminLoginResponse, PaidUserLimits, HeaderProps, MockUser } from './types.ts'; // Added HeaderProps, MockUser
 import ChatPage from './components/ChatPage.tsx';
-import Header, { MockUser } from './components/Header.tsx';
+import Header from './components/Header.tsx'; // MockUser is now imported via types.ts
 import LanguageLearningModal from './components/LanguageLearningModal.tsx';
 import GamesModal from './components/GamesModal.tsx';
 import WebGamePlayerModal from './components/WebGamePlayerModal.tsx';
@@ -55,8 +55,9 @@ interface AppContentProps {
   userSession: UserSessionState;
   onUpdateDemoLimits: (updatedLimits: Partial<DemoUserLimits>) => void;
 
-  isNewsModalOpen: boolean; // Added for NewsModal
-  onCloseNewsModal: () => void; // Added for NewsModal
+  isNewsModalOpen: boolean; 
+  onCloseNewsModal: () => void; 
+  onToggleNewsModal: () => void; // Added for manual news toggle
 }
 
 const AppContent: React.FC<AppContentProps> = ({
@@ -71,7 +72,7 @@ const AppContent: React.FC<AppContentProps> = ({
   isAppReady,
   currentUserCredits, onPurchaseCredits, paypalEmail, onSavePayPalEmail,
   userSession, onUpdateDemoLimits,
-  isNewsModalOpen, onCloseNewsModal // Added for NewsModal
+  isNewsModalOpen, onCloseNewsModal, onToggleNewsModal // Added onToggleNewsModal
 }) => {
 
   if (!isAppReady && !userSession.isDemoUser && !userSession.isPaidUser) { 
@@ -110,6 +111,7 @@ const AppContent: React.FC<AppContentProps> = ({
         onPurchaseCredits={onPurchaseCredits}
         paypalEmail={paypalEmail}
         onSavePayPalEmail={onSavePayPalEmail}
+        onToggleNewsModal={onToggleNewsModal} // Pass handler
       />
       <main className="flex-grow flex flex-col overflow-hidden min-h-0"> {/* Ensured flex-col and min-h-0 for the main content area */}
         {currentUser || userSession.isDemoUser || userSession.isPaidUser ? ( 
@@ -179,7 +181,7 @@ const App = (): JSX.Element => {
     paidLimits: null,
   });
 
-  const [isNewsModalOpen, setIsNewsModalOpen] = useState(false); // Added for NewsModal
+  const [isNewsModalOpen, setIsNewsModalOpen] = useState(false); 
 
   const notificationsHook = useNotification(); 
   const addAppNotification = notificationsHook.addNotification;
@@ -377,6 +379,8 @@ const App = (): JSX.Element => {
     addAppNotification("Mock: PayPal email saved.", "info");
   }, [addAppNotification]);
 
+  const handleToggleNewsModal = useCallback(() => setIsNewsModalOpen(true), []);
+
   const themeContextValue = useMemo(() => ({ theme, toggleTheme }), [theme, toggleTheme]);
 
   return (
@@ -393,8 +397,9 @@ const App = (): JSX.Element => {
         isAppReady={isAppReady}
         currentUserCredits={userProfile.credits} onPurchaseCredits={handlePurchaseCredits} paypalEmail={userProfile.paypalEmail} onSavePayPalEmail={handleSavePayPalEmail}
         userSession={userSession} onUpdateDemoLimits={updateDemoLimits}
-        isNewsModalOpen={isNewsModalOpen} // Pass state to AppContent
-        onCloseNewsModal={() => setIsNewsModalOpen(false)} // Pass handler to AppContent
+        isNewsModalOpen={isNewsModalOpen} 
+        onCloseNewsModal={() => setIsNewsModalOpen(false)} 
+        onToggleNewsModal={handleToggleNewsModal} // Pass handler
       />
     </ThemeContext.Provider>
   );
