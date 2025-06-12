@@ -1,5 +1,6 @@
 
 
+
 import { Chat } from '@google/genai'; // Updated import
 import React from 'react'; // Added for React.DetailedHTMLProps
 
@@ -17,7 +18,7 @@ export enum Model {
   PRIVATE = 'Private (Local Data Storage)', // New Private Mode
   FLUX_KONTEX = 'Flux Kontext Image Edit (fal-ai/flux-pro/kontext)', 
   FLUX_KONTEX_MAX_MULTI = 'Flux Kontext Max Multi-Image (fal-ai/flux-pro/kontext/max/multi)',
-  FLUX_DEV_IMAGE_GEN = 'Flux Dev Image Gen (fal-ai/flux/dev)', // New Flux Dev model
+  FLUX_ULTRA = 'Flux1.1 [Ultra] (fal-ai/flux-pro/v1.1-ultra)', // Renamed from FLUX_DEV_IMAGE_GEN
 }
 
 export interface ChatMessage {
@@ -105,23 +106,25 @@ export interface FluxKontexSettings {
   // image_urls field is handled by the proxy when using Fal.ai JS client; client sends base64
 }
 
-// Image size options for Flux Dev Image Gen
-export type FluxDevImageSize = 'square_hd' | 'square' | 'portrait_4_3' | 'portrait_16_9' | 'landscape_4_3' | 'landscape_16_9';
+// Aspect ratio options for Flux Ultra Image Gen (replaces FluxUltraImageSize)
+// Adding 'default' here for type compatibility with FluxKontexAspectRatio in shared settings structures,
+// but the actual API call for Flux Ultra will handle 'default' by mapping it to its real default (e.g., '16:9') or omitting it.
+export type FluxUltraAspectRatio = 'default' | '21:9' | '16:9' | '4:3' | '3:2' | '1:1' | '2:3' | '3:4' | '9:16' | '9:21';
 
-export interface FluxDevSettings {
-  image_size?: FluxDevImageSize;
+export interface FluxUltraSettings { // Renamed from FluxDevSettings
+  aspect_ratio?: FluxUltraAspectRatio; // Replaced image_size
   num_inference_steps?: number;
   seed?: number | null;
   guidance_scale?: number;
   num_images?: number; // 1 to 4
   enable_safety_checker?: boolean;
-  // Note: output_format is not explicitly listed as input for fal-ai/flux/dev, but images in output have content_type.
-  // Fal.ai output for flux/dev is typically JPEG.
+  // Note: output_format is not explicitly listed as input for fal-ai/flux-pro/v1.1-ultra, but Fal.ai SDK defaults to jpeg
+  output_format?: 'jpeg' | 'png'; // Added output_format for consistency, proxy might use this
 }
 
 
 export type AllModelSettings = {
-  [key in Model]?: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings> & Partial<FluxKontexSettings> & Partial<FluxDevSettings>;
+  [key in Model]?: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings> & Partial<FluxKontexSettings> & Partial<FluxUltraSettings>;
 };
 
 export interface ThemeContextType {
@@ -160,7 +163,7 @@ export interface ApiKeyStatus {
   isPrivateMode?: boolean; // Flag for Private (Local Data Storage) mode
   isImageEditing?: boolean; // Flag for image editing models like Flux Kontex (single image)
   isMultiImageEditing?: boolean; // Flag for multi-image editing models like Flux Kontext Max
-  isFluxDevImageGeneration?: boolean; // Flag for fal-ai/flux/dev
+  isFluxUltraImageGeneration?: boolean; // Renamed from isFluxDevImageGeneration
 }
 
 export interface Persona {
@@ -172,8 +175,8 @@ export interface Persona {
 export interface SettingsPanelProps {
   selectedModel: Model;
   onModelChange: (model: Model) => void;
-  modelSettings: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings> & Partial<FluxKontexSettings> & Partial<FluxDevSettings>; 
-  onModelSettingsChange: (settings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings & FluxKontexSettings & FluxDevSettings>) => void;
+  modelSettings: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings> & Partial<FluxKontexSettings> & Partial<FluxUltraSettings>;
+  onModelSettingsChange: (settings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings & FluxKontexSettings & FluxUltraSettings>) => void;
   isWebSearchEnabled: boolean;
   onWebSearchToggle: (enabled: boolean) => void;
   disabled: boolean;
@@ -207,7 +210,7 @@ export interface ChatSession {
   timestamp: number;
   model: Model;
   messages: ChatMessage[];
-  modelSettingsSnapshot: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings> & Partial<FluxKontexSettings> & Partial<FluxDevSettings>;
+  modelSettingsSnapshot: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings> & Partial<FluxKontexSettings> & Partial<FluxUltraSettings>;
   isPinned: boolean;
   activePersonaIdSnapshot: string | null; // Save active persona with the session
 }
@@ -472,8 +475,8 @@ export interface DemoUserLimits {
   imagen3MonthlyMaxImages: number;
   openaiTtsMonthlyCharsLeft: number;
   openaiTtsMonthlyMaxChars: number;
-  fluxDevMonthlyImagesLeft: number; // New limit for Flux Dev
-  fluxDevMonthlyMaxImages: number;  // New limit for Flux Dev
+  fluxUltraMonthlyImagesLeft: number; // Added for demo if ever needed, usually 0
+  fluxUltraMonthlyMaxImages: number;  // Added for demo if ever needed, usually 0
 }
 
 export interface PaidUserLimits {
@@ -485,8 +488,8 @@ export interface PaidUserLimits {
   fluxKontextMaxMonthlyMaxUses: number;
   fluxKontextProMonthlyUsesLeft: number;
   fluxKontextProMonthlyMaxUses: number;
-  fluxDevMonthlyImagesLeft: number; // New limit for Flux Dev
-  fluxDevMonthlyMaxImages: number;  // New limit for Flux Dev
+  fluxUltraMonthlyImagesLeft: number; 
+  fluxUltraMonthlyMaxImages: number;  
 }
 
 export interface UserSessionState {
@@ -549,11 +552,11 @@ export interface EditImageWithFluxKontexParams {
   imageData: SingleImageData | MultiImageData; 
 }
 
-// For Flux Dev Image Generation Proxy Service
-export interface GenerateImageWithFluxDevParams {
-  modelIdentifier: string; // Should be 'fal-ai/flux/dev'
+// For Flux Ultra Image Generation Proxy Service
+export interface GenerateImageWithFluxUltraParams {
+  modelIdentifier: string; // Should be 'fal-ai/flux-pro/v1.1-ultra'
   prompt: string;
-  settings: FluxDevSettings;
+  settings: FluxUltraSettings;
 }
 
 

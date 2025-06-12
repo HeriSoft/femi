@@ -1,6 +1,7 @@
 
 
-import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank, AiAgentSettings, CreditPackage, PrivateModeSettings, FluxKontexSettings, FluxKontexAspectRatio, DemoUserLimits, PaidUserLimits, FluxDevSettings, FluxDevImageSize } from './types.ts';
+
+import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank, AiAgentSettings, CreditPackage, PrivateModeSettings, FluxKontexSettings, FluxKontexAspectRatio, DemoUserLimits, PaidUserLimits, FluxUltraSettings, FluxUltraAspectRatio } from './types.ts';
 
 export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
   temperature: 0.7,
@@ -66,13 +67,14 @@ export const DEFAULT_FLUX_KONTEX_SETTINGS: FluxKontexSettings = {
   output_format: 'jpeg', 
 };
 
-export const DEFAULT_FLUX_DEV_SETTINGS: FluxDevSettings = {
-  image_size: 'landscape_4_3',
+export const DEFAULT_FLUX_ULTRA_SETTINGS: FluxUltraSettings = {
+  aspect_ratio: '16:9', // Fal.ai default for this model is 16:9
   num_inference_steps: 28,
-  seed: null, // Represents random
+  seed: null, 
   guidance_scale: 3.5,
   num_images: 1,
   enable_safety_checker: true,
+  output_format: 'jpeg', // Fal.ai default
 };
 
 
@@ -121,10 +123,10 @@ export const ALL_MODEL_DEFAULT_SETTINGS: AllModelSettings = {
     num_images: 2, 
     systemInstruction: 'Advanced multi-image editing context using Fal.ai Flux Pro Kontext Max Multi.',
   },
-  [Model.FLUX_DEV_IMAGE_GEN]: {
-    ...DEFAULT_MODEL_SETTINGS, // Basic settings, mostly unused for system instruction here
-    ...DEFAULT_FLUX_DEV_SETTINGS,
-    systemInstruction: 'Flux Dev image generation prompt context.', // Placeholder, mainly for consistency
+  [Model.FLUX_ULTRA]: {
+    ...DEFAULT_MODEL_SETTINGS,
+    ...DEFAULT_FLUX_ULTRA_SETTINGS,
+    systemInstruction: 'Flux1.1 [Ultra] image generation prompt context.',
   },
 };
  
@@ -144,7 +146,7 @@ export const DEMO_USER_DEFAULT_MONTHLY_LIMITS = {
   FLUX_KONTEX_PRO_MONTHLY: 1, 
   IMAGEN3_MONTHLY_IMAGES: 20,
   OPENAI_TTS_MONTHLY_CHARS: 10000,
-  FLUX_DEV_MONTHLY_IMAGES: 10, // New Flux Dev limit
+  FLUX_ULTRA_MONTHLY_IMAGES: 0,
 };
 
 export const INITIAL_DEMO_USER_LIMITS: DemoUserLimits = { 
@@ -156,8 +158,8 @@ export const INITIAL_DEMO_USER_LIMITS: DemoUserLimits = {
   imagen3MonthlyMaxImages: DEMO_USER_DEFAULT_MONTHLY_LIMITS.IMAGEN3_MONTHLY_IMAGES,
   openaiTtsMonthlyCharsLeft: DEMO_USER_DEFAULT_MONTHLY_LIMITS.OPENAI_TTS_MONTHLY_CHARS,
   openaiTtsMonthlyMaxChars: DEMO_USER_DEFAULT_MONTHLY_LIMITS.OPENAI_TTS_MONTHLY_CHARS,
-  fluxDevMonthlyImagesLeft: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_DEV_MONTHLY_IMAGES,
-  fluxDevMonthlyMaxImages: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_DEV_MONTHLY_IMAGES,
+  fluxUltraMonthlyImagesLeft: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_ULTRA_MONTHLY_IMAGES,
+  fluxUltraMonthlyMaxImages: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_ULTRA_MONTHLY_IMAGES,
 };
 
 
@@ -170,8 +172,8 @@ export const PAID_USER_LIMITS_CONFIG: PaidUserLimits = {
   fluxKontextMaxMonthlyMaxUses: 40, 
   fluxKontextProMonthlyUsesLeft: 0, 
   fluxKontextProMonthlyMaxUses: 50,  
-  fluxDevMonthlyImagesLeft: 0,    // New Flux Dev limit for paid
-  fluxDevMonthlyMaxImages: 100,  // New Flux Dev limit for paid
+  fluxUltraMonthlyImagesLeft: 0,
+  fluxUltraMonthlyMaxImages: 100,
 };
 
 export const OPENAI_TTS_MAX_INPUT_LENGTH = PAID_USER_LIMITS_CONFIG.openaiTtsMaxChars;
@@ -316,12 +318,15 @@ export const CARDS_PER_PLAYER = 12;
 export const TIEN_LEN_TURN_COUNTDOWN_SECONDS = 10;
 export const TIEN_LEN_AI_THINKING_MILLISECONDS = 1500;
 
-// Flux Dev Image Size Options
-export const FLUX_DEV_IMAGE_SIZES: { value: FluxDevImageSize; label: string }[] = [
-  { value: 'square_hd', label: 'Square HD (1024x1024)' },
-  { value: 'square', label: 'Square (512x512)' }, // Assuming Fal's 'square' might be different from 'square_hd'
-  { value: 'portrait_4_3', label: 'Portrait 4:3 (768x1024)' },
-  { value: 'portrait_16_9', label: 'Portrait 9:16 (576x1024)' },
-  { value: 'landscape_4_3', label: 'Landscape 4:3 (1024x768)' },
-  { value: 'landscape_16_9', label: 'Landscape 16:9 (1024x576)' },
+// Flux Ultra Aspect Ratio Options
+export const FLUX_ULTRA_ASPECT_RATIOS: { value: FluxUltraAspectRatio; label: string }[] = [
+  { value: '16:9', label: '16:9 (Widescreen)' },
+  { value: '1:1', label: '1:1 (Square)' },
+  { value: '4:3', label: '4:3 (Standard)' },
+  { value: '3:2', label: '3:2 (Photo)' },
+  { value: '21:9', label: '21:9 (Ultra Wide)' },
+  { value: '2:3', label: '2:3 (Tall Photo)' },
+  { value: '3:4', label: '3:4 (Portrait)' },
+  { value: '9:16', label: '9:16 (Tall Screen)' },
+  { value: '9:21', label: '9:21 (Ultra Tall)' },
 ];
