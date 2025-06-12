@@ -1,37 +1,14 @@
 
 import React, { useContext, useState, useRef, useEffect } from 'react';
 import { ThemeContext } from '../App.tsx';
-import { ThemeContextType, UserGlobalProfile, LoginDeviceLog, CreditPackage } from '../types.ts'; 
-import { SunIcon, MoonIcon, BellIcon, UserCircleIcon as AvatarIcon, KeyIcon, XMarkIcon, AcademicCapIcon, PuzzlePieceIcon, UserCogIcon, ComputerDesktopIcon, IdentificationIcon, ChatBubbleLeftEllipsisIcon } from './Icons.tsx';
+import { ThemeContextType, UserGlobalProfile, LoginDeviceLog, CreditPackage, HeaderProps } from '../types.ts'; 
+import { SunIcon, MoonIcon, BellIcon, UserCircleIcon as AvatarIcon, KeyIcon, XMarkIcon, AcademicCapIcon, PuzzlePieceIcon, UserCogIcon, ComputerDesktopIcon, IdentificationIcon, ChatBubbleLeftEllipsisIcon, MegaphoneIcon } from './Icons.tsx'; // Added MegaphoneIcon
 import { useNotification } from '../contexts/NotificationContext.tsx';
 import NotificationPanel from './NotificationPanel.tsx';
 import AccountSettingsModal from './AccountSettingsModal.tsx';
 import { LOCAL_STORAGE_DEVICE_LOGS_KEY, MAX_DEVICE_LOGS } from '../constants.ts'; // Removed DEMO_USER_KEY
 
-
-export interface MockUser {
-  name: string;
-  email?: string;
-}
-
-interface HeaderProps {
-  currentUser: MockUser | null;
-  onLogin: (code: string) => void; // Changed to accept code string
-  onLogout: () => void;
-  openLoginModalInitially?: boolean;
-  onLoginModalOpened?: () => void; 
-  onToggleLanguageLearningModal: () => void; 
-  onToggleGamesModal: () => void; 
-  onToggleVoiceAgentWidget: () => void;
-  chatBackgroundUrl: string | null;
-  onChatBackgroundChange: (newUrl: string | null) => void;
-  userProfile: UserGlobalProfile | null;
-  onUpdateUserProfile: (updatedProfile: UserGlobalProfile) => void;
-  currentUserCredits: number;
-  onPurchaseCredits: (packageId: string, paymentMethod: 'paypal' | 'stripe' | 'vietqr') => void;
-  paypalEmail: string | undefined;
-  onSavePayPalEmail: (email: string) => void;
-}
+// MockUser interface moved to types.ts
 
 const getDeviceType = (): string => {
   const ua = navigator.userAgent;
@@ -65,6 +42,7 @@ const Header: React.FC<HeaderProps> = ({
   onPurchaseCredits,
   paypalEmail,
   onSavePayPalEmail,
+  onToggleNewsModal, // Added new prop
 }) => {
   const themeContext = useContext(ThemeContext);
   const { unreadCount, markAllAsRead, addNotification } = useNotification();
@@ -230,6 +208,14 @@ const Header: React.FC<HeaderProps> = ({
           >
             <ChatBubbleLeftEllipsisIcon className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
+          <button
+              onClick={onToggleNewsModal}
+              className="p-2 rounded-full hover:bg-secondary dark:hover:bg-neutral-darkest text-neutral-darker dark:text-secondary-light transition-colors"
+              aria-label="Show updates and news"
+              title="Updates & News"
+            >
+              <MegaphoneIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+            </button>
           <div className="relative">
             <button
               ref={notificationButtonRef}
