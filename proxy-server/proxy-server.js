@@ -1,5 +1,6 @@
 
 
+
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -649,10 +650,10 @@ app.post('/api/fal/image/generate/flux-dev', async (req, res) => {
 });
 
 
-app.post('/api/fal/image/edit/status', async (req, res) => { // This endpoint now handles status for both context and dev
+app.post('/api/fal/image/edit/status', async (req, res) => { 
   try {
     if (!FAL_KEY) return res.status(500).json({ error: "Fal.ai API Key not configured." });
-    const { requestId, modelIdentifier } = req.body; // modelIdentifier helps determine result structure
+    const { requestId, modelIdentifier } = req.body; 
     if (!requestId || !modelIdentifier) return res.status(400).json({ error: "Missing requestId or modelIdentifier." });
 
     const statusResult = await fal.queue.status(modelIdentifier, { requestId });
@@ -663,37 +664,48 @@ app.post('/api/fal/image/edit/status', async (req, res) => { // This endpoint no
         responsePayload.rawResult = jobResult; 
         
         let imageUrls = [];
-        if (modelIdentifier === 'fal-ai/flux/dev') { // Flux Dev output
-            if (jobResult?.images && Array.isArray(jobResult.images)) {
-                imageUrls = jobResult.images.map(img => img?.url).filter(Boolean);
-            }
-            // Fallback for the structure like {"data":{"images": [...]}}
-            if (imageUrls.length === 0 && jobResult?.data?.images && Array.isArray(jobResult.data.images)) {
-                imageUrls = jobResult.data.images.map(img => img?.url).filter(Boolean);
-            }
-        } else { // Flux Kontext output (single image expected, but handle array just in case)
-             const singleUrl = jobResult?.images?.[0]?.url || jobResult?.data?.images?.[0]?.url;
-             if (singleUrl) imageUrls.push(singleUrl);
+        // General handling for models that return an array of image objects in 'images' property
+        // This covers Flux Dev and Flux Kontext (standard/max) when num_images > 1
+        if (jobResult?.images && Array.isArray(jobResult.images)) {
+            imageUrls = jobResult.images.map(img => img?.url).filter(Boolean);
         }
-
+        // Fallback for structures like {"data":{"images": [...]}} if needed for some models
+        if (imageUrls.length === 0 && jobResult?.data?.images && Array.isArray(jobResult.data.images)) {
+            imageUrls = jobResult.data.images.map(img => img?.url).filter(Boolean);
+        }
+        // Fallback for a single top-level image_url (less common for multi-image capable models)
+        if (imageUrls.length === 0 && jobResult?.image_url && typeof jobResult.image_url === 'string') {
+            imageUrls.push(jobResult.image_url);
+        }
+        
         if (imageUrls.length > 0) {
             responsePayload.imageUrls = imageUrls; // Always return as array
-            responsePayload.imageUrl = imageUrls[0]; // Keep imageUrl for single image convenience
+            responsePayload.imageUrl = imageUrls[0]; // Keep imageUrl for single image convenience (backward compat/optional)
             responsePayload.message = "Image processing completed successfully.";
         } else {
             responsePayload.status = 'COMPLETED_NO_IMAGE';
-            responsePayload.message = "Processing completed, but no image URL found.";
-            responsePayload.error = "Fal.ai result did not contain an image URL.";
+            responsePayload.message = "Processing completed, but no image URL found in the result.";
+            responsePayload.error = "Fal.ai result did not contain expected image URL(s). Raw result logged on proxy.";
+            console.warn(`[Fal Status] COMPLETED_NO_IMAGE for ${modelIdentifier}, reqId ${requestId}. Raw result:`, JSON.stringify(jobResult, null, 2));
         }
     } else if (statusResult?.status === 'ERROR') {
         responsePayload.error = statusResult.error?.message || "Fal.ai reported an error.";
         responsePayload.message = "Image processing failed.";
-    } else if (!statusResult) {
+    } else if (!statusResult) { // Fal.ai might return null if request ID is invalid or very old
         return res.status(404).json({ status: 'NOT_FOUND', error: `Request ID ${requestId} not found for ${modelIdentifier}.` });
     }
     res.json(responsePayload);
   } catch (error) {
     console.error("[Fal Status Proxy Error]", error);
+    // Distinguish between Fal API error (e.g. 422 Unprocessable Entity) and network/proxy errors
+    if (error.response && error.response.status === 422) { // Example check for Fal specific error
+        const falError = await error.response.json().catch(() => ({}));
+        return res.status(422).json({ 
+            status: 'FAL_API_ERROR', 
+            error: `Fal API Error: Unprocessable Entity. ${falError.detail || ""}`,
+            rawResult: falError
+        });
+    }
     res.status(500).json({ status: 'PROXY_REQUEST_ERROR', error: `Fal Status Check Error: ${error.message || "Internal server error"}` });
   }
 });
