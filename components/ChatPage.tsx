@@ -1732,10 +1732,15 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             };
           }
 
+          const fluxKontextApiSettings: Partial<FluxKontexSettings> = { ...currentModelSpecificSettings };
+          if (fluxKontextApiSettings.aspect_ratio === 'default') {
+              delete fluxKontextApiSettings.aspect_ratio;
+          }
+
           const fluxParams: FalServiceEditParams = {
               modelIdentifier: actualModelIdentifier, 
               prompt: textForApi,
-              settings: currentModelSpecificSettings as FluxKontexSettings,
+              settings: fluxKontextApiSettings as FluxKontexSettings, // Use the modified settings
               imageData: fluxImageData,
               requestHeaders: requestHeaders, 
           };
