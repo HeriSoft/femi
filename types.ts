@@ -234,6 +234,7 @@ export interface GeneralApiSendMessageParams {
   modelIdentifier: string; 
   history: ApiChatMessage[];
   modelSettings: ModelSettings;
+  userSession: UserSessionState; // Added userSession
   // apiKey?: string; // API Key will be handled by the proxy
 }
 
@@ -316,6 +317,7 @@ export interface LanguageLearningModalProps {
   isOpen: boolean;
   onClose: () => void;
   userProfile: UserGlobalProfile | null;
+  userSession: UserSessionState; // Added userSession
   onUpdateProfile: (profile: UserGlobalProfile) => void;
   onAddExp: (language: LanguageOption, expPoints: number) => void;
 }
@@ -550,6 +552,8 @@ export interface EditImageWithFluxKontexParams {
   prompt: string;
   settings: FluxKontexSettings;
   imageData: SingleImageData | MultiImageData; 
+  userSession: UserSessionState;
+  requestHeaders?: HeadersInit; // Added for ChatPage to pass auth headers
 }
 
 // For Flux Ultra Image Generation Proxy Service
@@ -557,6 +561,8 @@ export interface GenerateImageWithFluxUltraParams {
   modelIdentifier: string; // Should be 'fal-ai/flux-pro/v1.1-ultra'
   prompt: string;
   settings: FluxUltraSettings;
+  userSession: UserSessionState;
+  requestHeaders?: HeadersInit; // Added for ChatPage to pass auth headers
 }
 
 

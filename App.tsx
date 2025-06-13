@@ -53,7 +53,7 @@ interface AppContentProps {
   onSavePayPalEmail: (email: string) => void;
 
   userSession: UserSessionState;
-  onUpdateDemoLimits: (updatedLimits: Partial<DemoUserLimits>) => void;
+  onUpdateDemoLimits: (updatedLimits: Partial<DemoUserLimits | PaidUserLimits>) => void; // Updated to include PaidUserLimits
 
   isNewsModalOpen: boolean; 
   onCloseNewsModal: () => void; 
@@ -137,7 +137,13 @@ const AppContent: React.FC<AppContentProps> = ({
       {isNewsModalOpen && <NewsModal isOpen={isNewsModalOpen} onClose={onCloseNewsModal} />}
       {(currentUser || userSession.isDemoUser || userSession.isPaidUser) && (
         <>
-          <LanguageLearningModal isOpen={isLanguageLearningModalOpen} onClose={onToggleLanguageLearningModal} userProfile={userProfile} onUpdateProfile={onUpdateUserProfile} onAddExp={onAddExpWithNotification} />
+          <LanguageLearningModal 
+            isOpen={isLanguageLearningModalOpen} 
+            onClose={onToggleLanguageLearningModal} 
+            userProfile={userProfile} 
+            userSession={userSession}
+            onUpdateProfile={onUpdateUserProfile} 
+            onAddExp={onAddExpWithNotification} />
           <GamesModal isOpen={isGamesModalOpen} onClose={onToggleGamesModal} onPlayWebGame={onPlayWebGame} />
           {activeWebGameType !== 'tien-len' && activeWebGameType !== '8-ball-pool' && ( <WebGamePlayerModal isOpen={isWebGamePlayerModalOpen} onClose={onCloseWebGamePlayerModal} gameType={activeWebGameType} gameTitle={activeWebGameTitle} /> )}
           {activeWebGameType === 'tien-len' && ( <TienLenGameModal isOpen={isWebGamePlayerModalOpen} onClose={onCloseWebGamePlayerModal} /> )}
@@ -173,7 +179,6 @@ const App = (): JSX.Element => {
     demoUsername: undefined,
     demoUserToken: null,
     demoLimits: null,
-    // isDemoBlockedByVpn: false, // This is removed as VPN blocking is no longer a client-side concern with named demo users
     isPaidUser: false,
     paidUsername: undefined,
     paidUserToken: null,
@@ -276,7 +281,7 @@ const App = (): JSX.Element => {
                 setCurrentUser({ name: demoData.username }); // Set current user for DEMO as well
                 setUserSession({ 
                     isDemoUser: true, demoUsername: demoData.username, demoUserToken: demoData.demoUserToken, demoLimits: demoData.limits,
-                    isPaidUser: false, paidLimits: null 
+                    isPaidUser: false, paidLimits: null, paidSubscriptionEndDate: null, paidUserToken: null, paidUsername: undefined,
                 });
                 addAppNotification(`Logged in as DEMO user: ${demoData.username}. Monthly limits apply.`, "info");
                 setIsNewsModalOpen(true);
@@ -286,7 +291,7 @@ const App = (): JSX.Element => {
                 setUserSession({
                     isPaidUser: true, paidUsername: paidData.username, paidUserToken: paidData.paidUserToken || null, 
                     paidSubscriptionEndDate: paidData.subscriptionEndDate || null, paidLimits: paidData.limits,
-                    isDemoUser: false, demoUserToken: null, demoLimits: null, 
+                    isDemoUser: false, demoUserToken: null, demoLimits: null, demoUsername: undefined, 
                 });
                 addAppNotification(`Welcome back, ${paidData.username}! Subscription active until ${new Date(paidData.subscriptionEndDate || 0).toLocaleDateString()}.`, "success");
                 setIsNewsModalOpen(true);
@@ -311,17 +316,14 @@ const App = (): JSX.Element => {
     setIsNewsModalOpen(false);
   }, [addAppNotification]);
   
-  // This function might become a no-op if all limit updates are server-side and fetched on login/action
-  // For now, keeping it, but it won't be called as frequently.
-  const updateDemoLimits = useCallback((updatedLimits: Partial<DemoUserLimits>) => {
+  const updateDemoLimits = useCallback((updatedLimits: Partial<DemoUserLimits | PaidUserLimits>) => {
     setUserSession(prev => {
-        if (prev.isDemoUser && prev.demoLimits) {
-            // Client-side update of demoLimits is less critical if server is source of truth
-            // This could be used to reflect an immediate local change before next server sync
-            // but for now, let's assume server will always provide the latest.
-            // const newLimits = { ...prev.demoLimits, ...updatedLimits };
-            // return { ...prev, demoLimits: newLimits };
-            console.warn("[App.tsx] updateDemoLimits called, but DEMO limits are now primarily server-managed.");
+        if (prev.isDemoUser && prev.demoLimits && ('fluxKontextMaxMonthlyUsesLeft' in updatedLimits || 'imagen3MonthlyImagesLeft' in updatedLimits)) { // Type guard for DemoUserLimits
+            const newDemoLimits = { ...prev.demoLimits, ...(updatedLimits as Partial<DemoUserLimits>) };
+            return { ...prev, demoLimits: newDemoLimits };
+        } else if (prev.isPaidUser && prev.paidLimits && ('imagen3ImagesLeft' in updatedLimits || 'fluxUltraMonthlyImagesLeft' in updatedLimits)) { // Type guard for PaidUserLimits
+            const newPaidLimits = { ...prev.paidLimits, ...(updatedLimits as Partial<PaidUserLimits>) };
+            return { ...prev, paidLimits: newPaidLimits };
         }
         return prev;
     });
