@@ -126,10 +126,15 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
 
     req.isPaidUser = false;
     req.isDemoUser = false;
+    req.authDbError = false; // Initialize new flag
 
     if (paidUserToken) {
         try {
-            if (!pool) throw new Error("Database not available for paid user auth.");
+            if (!pool) {
+                console.error("[Paid Auth Middleware Error] Database pool not available.");
+                req.authDbError = true;
+                return next(); // Critical error, stop further processing in this try-catch
+            }
             const [users] = await pool.execute('SELECT id, username, user_type FROM users WHERE username = ?', [paidUserToken]);
             if (users.length > 0) {
                 const user = users[0];
@@ -147,21 +152,28 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
                         const yearMonth = getCurrentYearMonth();
                         if (!paidUserFluxMonthlyUsageStore[user.username]) paidUserFluxMonthlyUsageStore[user.username] = {};
                         if (!paidUserFluxMonthlyUsageStore[user.username][yearMonth]) {
-                            paidUserFluxMonthlyUsageStore[user.username][yearMonth] = { fluxMaxUsed: 0, fluxProUsed: 0, fluxUltraUsed: 0 }; // Updated fluxDevUsed to fluxUltraUsed
+                            paidUserFluxMonthlyUsageStore[user.username][yearMonth] = { fluxMaxUsed: 0, fluxProUsed: 0, fluxUltraUsed: 0 };
                         }
                         req.paidUser.fluxMaxMonthlyUsed = paidUserFluxMonthlyUsageStore[user.username][yearMonth].fluxMaxUsed;
                         req.paidUser.fluxProMonthlyUsed = paidUserFluxMonthlyUsageStore[user.username][yearMonth].fluxProUsed;
-                        req.paidUser.fluxUltraMonthlyUsed = paidUserFluxMonthlyUsageStore[user.username][yearMonth].fluxUltraUsed; // Updated
+                        req.paidUser.fluxUltraMonthlyUsed = paidUserFluxMonthlyUsageStore[user.username][yearMonth].fluxUltraUsed;
                         req.isPaidUser = true;
                     }
                 }
             }
-        } catch (dbError) { console.error("[Paid Auth DB Error]", dbError); }
+        } catch (dbError) {
+            console.error("[Paid Auth DB Error]", dbError);
+            req.authDbError = true;
+        }
     } else if (demoUserToken) {
         try {
-            if (!pool) throw new Error("Database not available for demo user auth.");
+            if (!pool) {
+                console.error("[Demo Auth Middleware Error] Database pool not available.");
+                req.authDbError = true;
+                return next(); // Critical error
+            }
             const [users] = await pool.execute(
-                'SELECT id, username, user_type, demo_flux_max_monthly_used, demo_flux_pro_monthly_used, demo_imagen_monthly_used, demo_tts_monthly_chars_used, demo_flux_ultra_monthly_used, demo_usage_last_reset_month FROM users WHERE username = ? AND user_type = "DEMO"', // Updated demo_flux_dev_monthly_used
+                'SELECT id, username, user_type, demo_flux_max_monthly_used, demo_flux_pro_monthly_used, demo_imagen_monthly_used, demo_tts_monthly_chars_used, demo_flux_ultra_monthly_used, demo_usage_last_reset_month FROM users WHERE username = ? AND user_type = "DEMO"',
                 [demoUserToken]
             );
             if (users.length > 0) {
@@ -172,12 +184,15 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
                     fluxProMonthlyUsed: user.demo_flux_pro_monthly_used || 0,
                     imagenMonthlyUsed: user.demo_imagen_monthly_used || 0,
                     ttsMonthlyCharsUsed: user.demo_tts_monthly_chars_used || 0,
-                    fluxUltraMonthlyUsed: user.demo_flux_ultra_monthly_used || 0, // Updated
+                    fluxUltraMonthlyUsed: user.demo_flux_ultra_monthly_used || 0,
                     usageLastResetMonth: user.demo_usage_last_reset_month
                 };
                 req.isDemoUser = true;
             }
-        } catch (dbError) { console.error("[Demo Auth DB Error]", dbError); }
+        } catch (dbError) {
+            console.error("[Demo Auth DB Error]", dbError);
+            req.authDbError = true;
+        }
     }
     next();
 }
@@ -196,7 +211,7 @@ app.post('/api/auth/verify-code', async (req, res) => {
 
     try {
         const [users] = await pool.execute(
-            'SELECT id, username, user_type, password_hash, demo_flux_max_monthly_used, demo_flux_pro_monthly_used, demo_imagen_monthly_used, demo_tts_monthly_chars_used, demo_flux_ultra_monthly_used, demo_usage_last_reset_month FROM users WHERE username = ?', // Updated demo_flux_dev_monthly_used
+            'SELECT id, username, user_type, password_hash, demo_flux_max_monthly_used, demo_flux_pro_monthly_used, demo_imagen_monthly_used, demo_tts_monthly_chars_used, demo_flux_ultra_monthly_used, demo_usage_last_reset_month FROM users WHERE username = ?',
             [code]
         );
 
@@ -219,25 +234,25 @@ app.post('/api/auth/verify-code', async (req, res) => {
                 const yearMonth = getCurrentYearMonth();
                 if (!paidUserFluxMonthlyUsageStore[user.username]) paidUserFluxMonthlyUsageStore[user.username] = {};
                 if (!paidUserFluxMonthlyUsageStore[user.username][yearMonth]) {
-                    paidUserFluxMonthlyUsageStore[user.username][yearMonth] = { fluxMaxUsed: 0, fluxProUsed: 0, fluxUltraUsed: 0 }; // Updated fluxDevUsed
+                    paidUserFluxMonthlyUsageStore[user.username][yearMonth] = { fluxMaxUsed: 0, fluxProUsed: 0, fluxUltraUsed: 0 };
                 }
                 const userMonthlyUsage = paidUserFluxMonthlyUsageStore[user.username][yearMonth];
 
                 return res.json({
                     success: true, isPaidUser: true, username: user.username,
-                    paidUserToken: user.username, // Using username as token for simplicity here
+                    paidUserToken: user.username, 
                     subscriptionEndDate: subEndDate.toISOString(),
                     limits: {
-                        imagen3ImagesLeft: PAID_USER_MAX_LIMITS_CONFIG.IMAGEN3_MAX_IMAGES_PER_DAY, // This should be daily, not monthly
+                        imagen3ImagesLeft: PAID_USER_MAX_LIMITS_CONFIG.IMAGEN3_MAX_IMAGES_PER_DAY,
                         imagen3MaxImages: PAID_USER_MAX_LIMITS_CONFIG.IMAGEN3_MAX_IMAGES_PER_DAY,
-                        openaiTtsCharsLeft: PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL, // This is total, not monthly reset in this simple store
+                        openaiTtsCharsLeft: PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL,
                         openaiTtsMaxChars: PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL,
                         fluxKontextMaxMonthlyUsesLeft: PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_MAX_MONTHLY_MAX_USES - userMonthlyUsage.fluxMaxUsed,
                         fluxKontextMaxMonthlyMaxUses: PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_MAX_MONTHLY_MAX_USES,
                         fluxKontextProMonthlyUsesLeft: PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_PRO_MONTHLY_MAX_USES - userMonthlyUsage.fluxProUsed,
                         fluxKontextProMonthlyMaxUses: PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_PRO_MONTHLY_MAX_USES,
-                        fluxUltraMonthlyImagesLeft: PAID_USER_MAX_LIMITS_CONFIG.FLUX_ULTRA_MONTHLY_MAX_IMAGES - userMonthlyUsage.fluxUltraUsed, // Updated
-                        fluxUltraMonthlyMaxImages: PAID_USER_MAX_LIMITS_CONFIG.FLUX_ULTRA_MONTHLY_MAX_IMAGES, // Updated
+                        fluxUltraMonthlyImagesLeft: PAID_USER_MAX_LIMITS_CONFIG.FLUX_ULTRA_MONTHLY_MAX_IMAGES - userMonthlyUsage.fluxUltraUsed,
+                        fluxUltraMonthlyMaxImages: PAID_USER_MAX_LIMITS_CONFIG.FLUX_ULTRA_MONTHLY_MAX_IMAGES,
                     }
                 });
             } else {
@@ -252,15 +267,15 @@ app.post('/api/auth/verify-code', async (req, res) => {
                 demo_flux_pro_monthly_used: fluxProUsed = 0,
                 demo_imagen_monthly_used: imagenUsed = 0,
                 demo_tts_monthly_chars_used: ttsCharsUsed = 0,
-                demo_flux_ultra_monthly_used: fluxUltraUsed = 0, // Updated from demo_flux_dev_monthly_used
+                demo_flux_ultra_monthly_used: fluxUltraUsed = 0,
                 demo_usage_last_reset_month: lastResetMonth
             } = user;
 
             if (lastResetMonth !== currentYearMonth) {
                 console.log(`[DEMO Login] Resetting monthly limits for DEMO user ${user.username} for new month ${currentYearMonth}. Old month: ${lastResetMonth}`);
-                fluxMaxUsed = 0; fluxProUsed = 0; imagenUsed = 0; ttsCharsUsed = 0; fluxUltraUsed = 0; // Updated fluxDevUsed
+                fluxMaxUsed = 0; fluxProUsed = 0; imagenUsed = 0; ttsCharsUsed = 0; fluxUltraUsed = 0;
                 await pool.execute(
-                    'UPDATE users SET demo_flux_max_monthly_used=0, demo_flux_pro_monthly_used=0, demo_imagen_monthly_used=0, demo_tts_monthly_chars_used=0, demo_flux_ultra_monthly_used=0, demo_usage_last_reset_month=? WHERE id=?', // Updated demo_flux_dev_monthly_used
+                    'UPDATE users SET demo_flux_max_monthly_used=0, demo_flux_pro_monthly_used=0, demo_imagen_monthly_used=0, demo_tts_monthly_chars_used=0, demo_flux_ultra_monthly_used=0, demo_usage_last_reset_month=? WHERE id=?',
                     [currentYearMonth, user.id]
                 );
             }
@@ -274,12 +289,12 @@ app.post('/api/auth/verify-code', async (req, res) => {
                 imagen3MonthlyMaxImages: DEMO_USER_MONTHLY_LIMITS.IMAGEN3_MONTHLY_IMAGES,
                 openaiTtsMonthlyCharsLeft: Math.max(0, DEMO_USER_MONTHLY_LIMITS.OPENAI_TTS_MONTHLY_CHARS - ttsCharsUsed),
                 openaiTtsMonthlyMaxChars: DEMO_USER_MONTHLY_LIMITS.OPENAI_TTS_MONTHLY_CHARS,
-                fluxUltraMonthlyImagesLeft: Math.max(0, DEMO_USER_MONTHLY_LIMITS.FLUX_ULTRA_MONTHLY_IMAGES - fluxUltraUsed), // Updated
-                fluxUltraMonthlyMaxImages: DEMO_USER_MONTHLY_LIMITS.FLUX_ULTRA_MONTHLY_IMAGES, // Updated
+                fluxUltraMonthlyImagesLeft: Math.max(0, DEMO_USER_MONTHLY_LIMITS.FLUX_ULTRA_MONTHLY_IMAGES - fluxUltraUsed),
+                fluxUltraMonthlyMaxImages: DEMO_USER_MONTHLY_LIMITS.FLUX_ULTRA_MONTHLY_IMAGES,
             };
             return res.json({
                 success: true, isDemoUser: true, username: user.username,
-                demoUserToken: user.username, // Using username as token for demo users as well
+                demoUserToken: user.username, 
                 limits
             });
         } else {
@@ -301,6 +316,10 @@ if (GEMINI_API_KEY_PROXY) {
 } else console.warn("PROXY WARNING: GEMINI_API_KEY missing.");
 
 app.post('/api/gemini/chat/stream', async (req, res) => {
+    if (req.authDbError) {
+        console.log(`[Gemini Chat Stream Proxy] Access denied due to database error during authentication (IP: ${getClientIp(req)}).`);
+        return res.status(503).json({ error: "Service temporarily unavailable due to a database issue during authentication. Please try again later." });
+    }
     if (!req.isPaidUser && !req.isDemoUser) {
         console.log(`[Gemini Chat Stream Proxy] Access denied for non-validated user (IP: ${getClientIp(req)}).`);
         return res.status(403).json({ error: "Access Denied. Please log in or ensure your account is active for chat." });
@@ -309,8 +328,6 @@ app.post('/api/gemini/chat/stream', async (req, res) => {
     if (!ai) return res.status(500).json({ error: "Google GenAI SDK not initialized." });
     const { modelName, historyContents, modelSettings, enableGoogleSearch } = req.body;
     if (!modelName || !historyContents || !modelSettings) return res.status(400).json({ error: "Missing fields." });
-
-    // TODO: Add specific limit checks for chat (if any) for demo/paid users.
 
     try {
         const tools = enableGoogleSearch ? [{googleSearch: {}}] : [];
@@ -360,6 +377,9 @@ app.post('/api/gemini/chat/stream', async (req, res) => {
 
 app.post('/api/gemini/image/generate', async (req, res) => {
   try {
+    if (req.authDbError) {
+        return res.status(503).json({ error: "Service temporarily unavailable due to a database issue during authentication." });
+    }
     if (!ai) return res.status(500).json({ error: "Google GenAI SDK not initialized." });
     const { modelName, prompt, modelSettings } = req.body;
     if (!modelName || !prompt || !modelSettings) return res.status(400).json({ error: "Missing fields for Imagen." });
@@ -414,6 +434,9 @@ const OPENAI_TTS_URL = 'https://api.openai.com/v1/audio/speech';
 if (OPENAI_API_KEY) console.log("OpenAI API Key found."); else console.warn("PROXY WARNING: OPENAI_API_KEY missing.");
 
 app.post('/api/openai/chat/stream', async (req, res) => {
+    if (req.authDbError) {
+        return res.status(503).json({ error: "Service temporarily unavailable due to a database issue during authentication. Please try again later." });
+    }
     if (!req.isPaidUser && !req.isDemoUser) {
         console.log(`[OpenAI Chat Stream Proxy] Access denied for non-validated user (IP: ${getClientIp(req)}).`);
         return res.status(403).json({ error: "Access Denied. Please log in or ensure your account is active for chat." });
@@ -424,8 +447,6 @@ app.post('/api/openai/chat/stream', async (req, res) => {
         const { modelIdentifier, history, modelSettings } = req.body;
         if (!modelIdentifier || !history || !modelSettings) return res.status(400).json({ error: "Missing fields." });
         
-        // TODO: Add specific limit checks for chat (if any) for demo/paid users.
-
         const openaiResponse = await fetch(OPENAI_CHAT_URL, {
             method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
             body: JSON.stringify({ model: modelIdentifier, messages: history, temperature: modelSettings.temperature, top_p: modelSettings.topP, stream: true }),
@@ -452,6 +473,9 @@ app.post('/api/openai/chat/stream', async (req, res) => {
 
 app.post('/api/openai/tts/generate', async (req, res) => {
   try {
+    if (req.authDbError) {
+        return res.status(503).json({ error: "Service temporarily unavailable due to a database issue during authentication." });
+    }
     if (!OPENAI_API_KEY) return res.status(500).json({ error: "OpenAI API Key not configured." });
     const { modelIdentifier, textInput, voice, speed, responseFormat = 'mp3' } = req.body;
     if (!modelIdentifier || !textInput || !voice || speed === undefined) return res.status(400).json({ error: "Missing fields for OpenAI TTS." });
@@ -508,6 +532,9 @@ const DEEPSEEK_CHAT_URL = 'https://api.deepseek.com/chat/completions';
 if (DEEPSEEK_API_KEY) console.log("Deepseek API Key found."); else console.warn("PROXY WARNING: DEEPSEEK_API_KEY missing.");
 
 app.post('/api/deepseek/chat/stream', async (req, res) => {
+    if (req.authDbError) {
+        return res.status(503).json({ error: "Service temporarily unavailable due to a database issue during authentication. Please try again later." });
+    }
     if (!req.isPaidUser && !req.isDemoUser) {
         console.log(`[Deepseek Chat Stream Proxy] Access denied for non-validated user (IP: ${getClientIp(req)}).`);
         return res.status(403).json({ error: "Access Denied. Please log in or ensure your account is active for chat." });
@@ -517,8 +544,6 @@ app.post('/api/deepseek/chat/stream', async (req, res) => {
         if (!DEEPSEEK_API_KEY) return res.status(500).json({ error: "Deepseek API Key not configured." });
         const { modelIdentifier, history, modelSettings } = req.body;
         if (!modelIdentifier || !history || !modelSettings) return res.status(400).json({ error: "Missing fields." });
-
-        // TODO: Add specific limit checks for chat (if any) for demo/paid users.
 
         const dsResponse = await fetch(DEEPSEEK_CHAT_URL, {
             method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DEEPSEEK_API_KEY}` },
@@ -549,6 +574,9 @@ if (FAL_KEY) console.log("Fal.ai Key (FAL_KEY) found."); else console.warn("PROX
 
 app.post('/api/fal/image/edit/flux-kontext', async (req, res) => {
   try {
+    if (req.authDbError) {
+        return res.status(503).json({ error: "Service temporarily unavailable due to a database issue during authentication." });
+    }
     if (!FAL_KEY) return res.status(500).json({ error: "Fal.ai API Key not configured." });
     const { modelIdentifier, prompt, image_base_64, image_mime_type, images_data, ...clientSettings } = req.body;
     if (!modelIdentifier || !prompt) return res.status(400).json({ error: "Missing modelIdentifier or prompt for Flux." });
@@ -641,6 +669,9 @@ app.post('/api/fal/image/edit/flux-kontext', async (req, res) => {
 
 app.post('/api/fal/image/generate/flux-ultra', async (req, res) => { 
   try {
+    if (req.authDbError) {
+        return res.status(503).json({ error: "Service temporarily unavailable due to a database issue during authentication." });
+    }
     if (!FAL_KEY) return res.status(500).json({ error: "Fal.ai API Key not configured." });
     const { modelIdentifier, prompt, ...settings } = req.body; 
     
@@ -690,6 +721,9 @@ app.post('/api/fal/image/generate/flux-ultra', async (req, res) => {
 
 app.post('/api/fal/image/edit/status', async (req, res) => {
   try {
+    if (req.authDbError && req.method === 'POST') { // Only apply for POST if needed, status might be less sensitive
+        return res.status(503).json({ error: "Service temporarily unavailable due to a database issue during authentication." });
+    }
     if (!FAL_KEY) return res.status(500).json({ error: "Fal.ai API Key not configured." });
     const { requestId, modelIdentifier } = req.body;
     if (!requestId || !modelIdentifier) return res.status(400).json({ error: "Missing requestId or modelIdentifier." });
