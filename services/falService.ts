@@ -1,13 +1,9 @@
-import { FluxKontexSettings, EditImageWithFluxKontexParams as BaseEditParams, SingleImageData, MultiImageData, FluxUltraSettings, GenerateImageWithFluxUltraParams } from '../types.ts'; // Updated
 
-// Interface for parameters including optional request headers
-export interface FalServiceEditParams extends BaseEditParams {
-  requestHeaders?: HeadersInit;
-}
-export interface FalServiceGenerateParams extends GenerateImageWithFluxUltraParams { // Updated
-  requestHeaders?: HeadersInit;
-}
 
+import { FluxKontexSettings, EditImageWithFluxKontexParams, SingleImageData, MultiImageData, FluxUltraSettings, GenerateImageWithFluxUltraParams, UserSessionState } from '../types.ts'; // Updated
+
+// FalServiceEditParams and FalServiceGenerateParams are now directly EditImageWithFluxKontexParams and GenerateImageWithFluxUltraParams
+// as these base types now include userSession and requestHeaders.
 
 // Updated response type for the initial submission from the proxy
 export interface FalSubmitProxyResponse {
@@ -28,9 +24,22 @@ export interface FalStatusProxyResponse {
 
 
 export async function editImageWithFluxKontexProxy(
-  params: FalServiceEditParams 
+  params: EditImageWithFluxKontexParams 
 ): Promise<FalSubmitProxyResponse> {
-  const { modelIdentifier, prompt, settings, imageData, requestHeaders } = params; 
+  const { modelIdentifier, prompt, settings, imageData, requestHeaders, userSession } = params; 
+
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...(requestHeaders || {}), // Spread headers passed from ChatPage (which should contain auth tokens)
+  };
+
+  // Removed internal header construction from userSession, as ChatPage now provides it in requestHeaders.
+  // if (userSession.isPaidUser && userSession.paidUserToken) {
+  //   headers['X-Paid-User-Token'] = userSession.paidUserToken;
+  // } else if (userSession.isDemoUser && userSession.demoUserToken) {
+  //   headers['X-Demo-Token'] = userSession.demoUserToken;
+  // }
+
 
   let bodyPayload: any = {
     modelIdentifier,
@@ -61,10 +70,7 @@ export async function editImageWithFluxKontexProxy(
   try {
     const fetchOptions: RequestInit = {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(requestHeaders || {}), 
-      },
+      headers: headers, 
       body: JSON.stringify(bodyPayload),
     };
     
@@ -101,10 +107,22 @@ export async function editImageWithFluxKontexProxy(
 }
 
 
-export async function generateImageWithFluxUltraProxy( // Renamed from generateImageWithFluxDevProxy
-  params: FalServiceGenerateParams // Updated type
+export async function generateImageWithFluxUltraProxy(
+  params: GenerateImageWithFluxUltraParams
 ): Promise<FalSubmitProxyResponse> {
-  const { modelIdentifier, prompt, settings, requestHeaders } = params;
+  const { modelIdentifier, prompt, settings, requestHeaders, userSession } = params;
+
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...(requestHeaders || {}), // Spread headers passed from ChatPage
+  };
+
+  // Removed internal header construction from userSession
+  // if (userSession.isPaidUser && userSession.paidUserToken) {
+  //   headers['X-Paid-User-Token'] = userSession.paidUserToken;
+  // } else if (userSession.isDemoUser && userSession.demoUserToken) {
+  //   headers['X-Demo-Token'] = userSession.demoUserToken;
+  // }
 
   const bodyPayload = {
     modelIdentifier,
@@ -115,10 +133,7 @@ export async function generateImageWithFluxUltraProxy( // Renamed from generateI
   try {
     const fetchOptions: RequestInit = {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(requestHeaders || {}),
-      },
+      headers: headers, 
       body: JSON.stringify(bodyPayload),
     };
 

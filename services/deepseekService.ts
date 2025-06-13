@@ -1,24 +1,31 @@
 
-import { ModelSettings, ApiChatMessage, ApiStreamChunk, GeneralApiSendMessageParams } from '../types.ts';
+
+import { ModelSettings, ApiChatMessage, ApiStreamChunk, GeneralApiSendMessageParams, UserSessionState } from '../types.ts';
 
 // GeneralApiSendMessageParams will no longer include apiKey
 interface ProxiedGeneralApiSendMessageParams {
   modelIdentifier: string;
   history: ApiChatMessage[]; 
   modelSettings: ModelSettings;
+  userSession: UserSessionState; // Added userSession
 }
 
 export async function* sendDeepseekMessageStream(
   params: ProxiedGeneralApiSendMessageParams // Updated params type
 ): AsyncGenerator<ApiStreamChunk, void, undefined> {
-  const { modelIdentifier, history, modelSettings } = params;
+  const { modelIdentifier, history, modelSettings, userSession } = params;
+
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+  if (userSession.isPaidUser && userSession.paidUserToken) {
+    headers['X-Paid-User-Token'] = userSession.paidUserToken;
+  } else if (userSession.isDemoUser && userSession.demoUserToken) {
+    headers['X-Demo-Token'] = userSession.demoUserToken;
+  }
 
   try {
     const response = await fetch('/api/deepseek/chat/stream', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: headers,
       body: JSON.stringify({ modelIdentifier, history, modelSettings }),
     });
 

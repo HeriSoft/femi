@@ -1,5 +1,6 @@
 
-import { ModelSettings, Part, GroundingSource, GeminiChatState, ImagenSettings } from '../types.ts';
+
+import { ModelSettings, Part, GroundingSource, GeminiChatState, ImagenSettings, UserSessionState } from '../types.ts';
 import type { Content, GenerateImagesResponse } from "@google/genai"; // Only for type if needed, not direct use
 
 // Interface for the chunk structure expected from the proxy's Gemini stream
@@ -18,6 +19,7 @@ interface SendMessageParams {
   modelSettings: ModelSettings;
   enableGoogleSearch: boolean;
   modelName: string;
+  userSession: UserSessionState; // Added userSession
   // apiKey parameter removed
 }
 
@@ -25,20 +27,26 @@ interface GenerateImageParams {
   prompt: string;
   modelSettings: ImagenSettings;
   modelName: string; // e.g., 'imagen-3.0-generate-002'
+  userSession: UserSessionState; // Added userSession
   // apiKey parameter removed
 }
 
 export async function* sendGeminiMessageStream(
   params: SendMessageParams
 ): AsyncGenerator<GeminiProxyStreamChunk, void, undefined> {
-  const { historyContents, modelSettings, enableGoogleSearch, modelName } = params;
+  const { historyContents, modelSettings, enableGoogleSearch, modelName, userSession } = params;
+
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+  if (userSession.isPaidUser && userSession.paidUserToken) {
+    headers['X-Paid-User-Token'] = userSession.paidUserToken;
+  } else if (userSession.isDemoUser && userSession.demoUserToken) {
+    headers['X-Demo-Token'] = userSession.demoUserToken;
+  }
 
   try {
     const response = await fetch('/api/gemini/chat/stream', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: headers,
       body: JSON.stringify({
         modelName,
         historyContents,
@@ -104,14 +112,19 @@ export async function* sendGeminiMessageStream(
 export async function generateImageWithImagen(
   params: GenerateImageParams
 ): Promise<{ imageBases64?: string[]; error?: string, rawResponse?: GenerateImagesResponse }> {
-  const { prompt, modelSettings, modelName } = params;
+  const { prompt, modelSettings, modelName, userSession } = params;
+
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+  if (userSession.isPaidUser && userSession.paidUserToken) {
+    headers['X-Paid-User-Token'] = userSession.paidUserToken;
+  } else if (userSession.isDemoUser && userSession.demoUserToken) {
+    headers['X-Demo-Token'] = userSession.demoUserToken;
+  }
 
   try {
     const response = await fetch('/api/gemini/image/generate', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: headers,
       body: JSON.stringify({ prompt, modelSettings, modelName }),
     });
 

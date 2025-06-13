@@ -1,5 +1,6 @@
 
-import { OpenAITtsSettings, OpenAiTtsVoice } from '../types.ts';
+
+import { OpenAITtsSettings, OpenAiTtsVoice, UserSessionState } from '../types.ts';
 import { OPENAI_TTS_MAX_INPUT_LENGTH } from '../constants.ts'; // Import the constant
 
 // OpenAITtsParams will no longer include apiKey
@@ -8,6 +9,7 @@ export interface ProxiedOpenAITtsParams {
   textInput: string;
   voice: OpenAiTtsVoice;
   speed: number; // 0.25 to 4.0
+  userSession: UserSessionState; // Added userSession
   responseFormat?: 'mp3' | 'opus' | 'aac' | 'flac'; // Default is mp3
 }
 
@@ -22,15 +24,21 @@ async function fetchAudioChunk(
     textInputChunk,
     voice,
     speed,
+    userSession, // Destructure userSession here
     responseFormat = 'mp3',
   } = params;
+
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+  if (userSession.isPaidUser && userSession.paidUserToken) {
+    headers['X-Paid-User-Token'] = userSession.paidUserToken;
+  } else if (userSession.isDemoUser && userSession.demoUserToken) {
+    headers['X-Demo-Token'] = userSession.demoUserToken;
+  }
 
   try {
     const response = await fetch('/api/openai/tts/generate', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: headers, // Use the constructed headers
       body: JSON.stringify({
         modelIdentifier,
         textInput: textInputChunk,
