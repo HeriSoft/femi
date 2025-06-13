@@ -13,15 +13,15 @@ import {
     getActualModelIdentifier,
     ApiChatMessage,
     UserGlobalProfile,
-    Part // Added Part for Gemini image submission
+    Part 
 } from '../types.ts';
-import { XMarkIcon, AcademicCapIcon, SpeakerWaveIcon, StopCircleIcon, CheckCircleIcon, XCircleIcon, MicrophoneIcon, ArrowPathIcon, GlobeAltIcon, PencilIcon, CameraIcon, TrashIcon } from './Icons.tsx'; // Added PencilIcon, CameraIcon, TrashIcon
+import { XMarkIcon, AcademicCapIcon, SpeakerWaveIcon, StopCircleIcon, CheckCircleIcon, XCircleIcon, MicrophoneIcon, ArrowPathIcon, GlobeAltIcon, PencilIcon, CameraIcon, TrashIcon } from './Icons.tsx';
 import { LANGUAGE_OPTIONS, BADGES_CATALOG, DEFAULT_USER_LANGUAGE_PROFILE, getNextMilestone } from '../constants.ts';
 import { useNotification } from '../contexts/NotificationContext.tsx';
 import { sendOpenAIMessageStream } from '../services/openaiService.ts'; 
-import { sendGeminiMessageStream } from '../services/geminiService.ts'; // Added for Gemini image eval
+import { sendGeminiMessageStream } from '../services/geminiService.ts';
 import { generateOpenAITTS, ProxiedOpenAITtsParams } from '../services/openaiTTSService.ts';
-import HandwritingCanvas from './HandwritingCanvas.tsx'; // Import new component
+import HandwritingCanvas from './HandwritingCanvas.tsx';
 import type { Content } from '@google/genai';
 
 
@@ -50,6 +50,7 @@ const LanguageLearningModal: React.FC<LanguageLearningModalProps> = ({
   isOpen,
   onClose,
   userProfile,
+  userSession, // Added userSession
   onUpdateProfile,
   onAddExp,
 }) => {
@@ -58,9 +59,9 @@ const LanguageLearningModal: React.FC<LanguageLearningModalProps> = ({
   const [activityState, setActivityState] = useState<LearningActivityState>(INITIAL_ACTIVITY_STATE);
   const { addNotification } = useNotification();
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
-  const recognitionRef = useRef<SpeechRecognition | null>(null); // For speaking practice
-  const [isRecording, setIsRecording] = useState(false); // For speaking practice
-  const [transcribedText, setTranscribedText] = useState<string | null>(null); // For speaking practice
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [transcribedText, setTranscribedText] = useState<string | null>(null);
   
   const [previousQuizQuestions, setPreviousQuizQuestions] = useState<string[]>([]);
   const [previousListeningScripts, setPreviousListeningScripts] = useState<string[]>([]);
@@ -70,7 +71,6 @@ const LanguageLearningModal: React.FC<LanguageLearningModalProps> = ({
 
   const handwritingCanvasRef = useRef<HTMLCanvasElement>(null);
   const handwritingImageUploadRef = useRef<HTMLInputElement>(null);
-  // Debug image state removed: const [debugImageUrl, setDebugImageUrl] = useState<string | null>(null); 
 
 
   useEffect(() => {
@@ -91,7 +91,6 @@ const LanguageLearningModal: React.FC<LanguageLearningModalProps> = ({
         setPreviousSpeakingPhrases([]);
         setPreviousScrambledSentences([]);
         setPreviousHandwritingTargets([]);
-        // Debug image state clear removed: setDebugImageUrl(null); 
         if (audioPlayerRef.current) {
             audioPlayerRef.current.pause();
             audioPlayerRef.current.src = '';
@@ -101,7 +100,7 @@ const LanguageLearningModal: React.FC<LanguageLearningModalProps> = ({
 
   const translateTranscribedText = async (textToTranslate: string, sourceLang: LanguageOption, targetLang: LanguageOption) => {
     if (!textToTranslate.trim() || sourceLang === targetLang) {
-        setActivityState(prev => ({...prev, translatedUserSpeech: textToTranslate, isLoadingTranslation: false})); // No translation needed or possible
+        setActivityState(prev => ({...prev, translatedUserSpeech: textToTranslate, isLoadingTranslation: false}));
         return;
     }
     setActivityState(prev => ({...prev, isLoadingTranslation: true, translatedUserSpeech: undefined }));
@@ -112,12 +111,17 @@ Only return the translated text as a plain string, without any additional explan
 Original text: "${textToTranslate}"`;
 
     try {
-        const modelIdentifier = getActualModelIdentifier(Model.GPT4O_MINI); // Use GPT4O_MINI for this simple translation
+        const modelIdentifier = getActualModelIdentifier(Model.GPT4O_MINI);
         const history: ApiChatMessage[] = [
             { role: 'system', content: 'You are an AI assistant that provides direct translations as plain text strings.' },
             { role: 'user', content: translationPrompt }
         ];
-        const stream = sendOpenAIMessageStream({ modelIdentifier, history, modelSettings: { temperature: 0.2, topK: 1, topP: 0.9, systemInstruction: "Translate text directly." }});
+        const stream = sendOpenAIMessageStream({ 
+            modelIdentifier, 
+            history, 
+            modelSettings: { temperature: 0.2, topK: 1, topP: 0.9, systemInstruction: "Translate text directly." },
+            userSession // Pass userSession
+        });
         
         let translatedText = "";
         for await (const chunk of stream) {
@@ -161,12 +165,10 @@ Original text: "${textToTranslate}"`;
       setActivityState(prev => ({ ...prev, userAnswer: transcript, isAnswerSubmitted: false, isAnswerCorrect: null, translatedUserSpeech: undefined, isLoadingTranslation: false }));
       setIsRecording(false);
 
-      // Trigger translation
       if (userProfile?.favoriteLanguage && selectedLanguage && transcript) {
         if (userProfile.favoriteLanguage !== selectedLanguage) {
             translateTranscribedText(transcript, selectedLanguage, userProfile.favoriteLanguage);
         } else {
-            // If target and favorite language are the same, just show original transcript as "translation"
             setActivityState(prev => ({...prev, translatedUserSpeech: transcript, isLoadingTranslation: false}));
         }
       }
@@ -215,7 +217,6 @@ Original text: "${textToTranslate}"`;
     setPreviousSpeakingPhrases([]);
     setPreviousScrambledSentences([]);
     setPreviousHandwritingTargets([]);
-    // Debug image state clear removed: setDebugImageUrl(null); 
     if (userProfile && !userProfile.languageProfiles[langCode]) {
       const updatedProfile: UserGlobalProfile = {
         ...userProfile,
@@ -244,11 +245,9 @@ Original text: "${textToTranslate}"`;
     for await (const chunk of stream) {
         if (chunk.error) throw new Error(chunk.error);
         if (chunk.textDelta) fullResponse += chunk.textDelta;
-        if (chunk.imagePart) { // Handle potential image part in response, though not expected for these JSONs
+        if (chunk.imagePart) {
           console.warn(`[${activityName}] Received unexpected image part from AI.`);
         }
-        // For non-OpenAI/Deepseek streams, 'isFinished' might not be present. The stream just ends.
-        // For Gemini via proxy, the proxy should handle closing the stream/response.
     }
     let jsonStr = fullResponse.trim();
     const fenceRegex = /^```(\w*)?\s*\n?(.*?)\n?\s*```$/s;
@@ -284,7 +283,6 @@ ${previousContentContext}
 Return the response as a single, valid JSON object with keys: "script", "question", "options", "correctAnswerIndex".`;
 
     try {
-      // Using Gemini Flash for content generation as it's generally good and cost-effective
       const modelIdentifier = getActualModelIdentifier(Model.GEMINI); 
       const history: Content[] = [{ role: 'user', parts: [{ text: prompt }] }];
       const stream = sendGeminiMessageStream({ 
@@ -292,6 +290,7 @@ Return the response as a single, valid JSON object with keys: "script", "questio
           historyContents: history, 
           modelSettings: { temperature: 0.6, topK: 50, topP: 0.95, systemInstruction: "You are an AI assistant specialized in creating language learning exercises as JSON. You MUST AVOID REPEATING content if told to do so in the prompt. Respond with application/json." },
           enableGoogleSearch: false,
+          userSession // Pass userSession
       });
       const parsedContent = await parseAIJsonResponse(stream, "listening exercise");
       
@@ -302,7 +301,14 @@ Return the response as a single, valid JSON object with keys: "script", "questio
         id: `listen-${Date.now()}`, activityType: 'listening', language: selectedLanguage,
         script: parsedContent.script, question: parsedContent.question, options: parsedContent.options, correctAnswerIndex: parsedContent.correctAnswerIndex,
       };
-      const ttsResult = await generateOpenAITTS({ modelIdentifier: 'tts-1', textInput: learningContent.script!, voice: 'nova', speed: 1.0 });
+      const ttsParams: ProxiedOpenAITtsParams = { 
+        modelIdentifier: 'tts-1', 
+        textInput: learningContent.script!, 
+        voice: 'nova', 
+        speed: 1.0,
+        userSession // Pass userSession for TTS
+      };
+      const ttsResult = await generateOpenAITTS(ttsParams);
       if (ttsResult.error || !ttsResult.audioBlob) throw new Error(ttsResult.error || "Failed to generate audio for the script.");
       const audioUrl = URL.createObjectURL(ttsResult.audioBlob);
       setActivityState(prev => ({ ...prev, isLoadingContent: false, content: learningContent, audioUrl, error: null }));
@@ -335,7 +341,8 @@ Return the response as a single, valid JSON object with a "phraseToSpeak" key.`;
             modelName: modelIdentifier,
             historyContents: history, 
             modelSettings: { temperature: 0.6, topK: 50, topP: 0.95, systemInstruction: "You are an AI assistant specialized in creating language learning exercises as JSON. Respond with application/json." },
-            enableGoogleSearch: false 
+            enableGoogleSearch: false,
+            userSession // Pass userSession
         });
         const parsedContent = await parseAIJsonResponse(stream, "speaking exercise");
         if (!parsedContent.phraseToSpeak) throw new Error("AI response is missing 'phraseToSpeak'.");
@@ -369,7 +376,8 @@ Example for one word: {"word": "こんにちは", "meaning": "Hello / Good after
             modelName: modelIdentifier,
             historyContents: history, 
             modelSettings: { temperature: 0.6, topK: 50, topP: 0.95, systemInstruction: "You are an AI assistant specialized in creating language learning vocabulary sets as JSON. Respond with application/json." },
-            enableGoogleSearch: false
+            enableGoogleSearch: false,
+            userSession // Pass userSession
         });
         const parsedContent = await parseAIJsonResponse(stream, "vocabulary set");
         if (!parsedContent.vocabularySet || !Array.isArray(parsedContent.vocabularySet) || parsedContent.vocabularySet.length === 0) {
@@ -418,7 +426,8 @@ Example (if ${langName} is English and previous questions were about colors):
             modelName: modelIdentifier,
             historyContents: history, 
             modelSettings: { temperature: 0.7, topK: 50, topP: 0.95, systemInstruction: "You are an AI that creates diverse quiz questions in JSON. You MUST AVOID REPEATING questions or their core concepts if told to do so in the prompt. Respond with application/json." },
-            enableGoogleSearch: false
+            enableGoogleSearch: false,
+            userSession // Pass userSession
         });
         const parsedContent = await parseAIJsonResponse(stream, "quiz question");
 
@@ -470,7 +479,8 @@ Another Japanese example: {"originalSentence": "私の名前は田中です。",
             modelName: modelIdentifier,
             historyContents: history, 
             modelSettings: { temperature: 0.65, topK: 50, topP: 0.95, systemInstruction: "You are an AI assistant specialized in creating language learning sentences as JSON. Ensure sentences are grammatically correct and natural for beginners. You MUST AVOID REPEATING content if told to do so in the prompt. For Japanese, Korean, and Chinese, ensure sentenceUnits are meaningful segments. Respond with application/json." },
-            enableGoogleSearch: false
+            enableGoogleSearch: false,
+            userSession // Pass userSession
         });
         const parsedContent = await parseAIJsonResponse(stream, "sentence scramble exercise");
 
@@ -521,8 +531,7 @@ Another Japanese example: {"originalSentence": "私の名前は田中です。",
   const fetchHandwritingTarget = async () => {
     if (!selectedLanguage) return;
     setActiveActivityType('handwriting');
-    setActivityState({ ...INITIAL_ACTIVITY_STATE, isLoadingContent: true, handwritingInputMethod: 'draw' }); // Default to draw
-    // Debug image state clear removed: setDebugImageUrl(null); 
+    setActivityState({ ...INITIAL_ACTIVITY_STATE, isLoadingContent: true, handwritingInputMethod: 'draw' });
     const langName = LANGUAGE_OPTIONS.find(l => l.code === selectedLanguage)?.name || 'the selected language';
 
     let previousContentContext = "The new character or word MUST be different. ";
@@ -542,6 +551,7 @@ Return the response as a single, valid JSON object with a "targetText" key. Exam
             historyContents: history,
             modelSettings: { temperature: 0.6, topK: 50, topP: 0.95, systemInstruction: "You are an AI assistant creating handwriting targets as JSON. Respond with application/json." },
             enableGoogleSearch: false,
+            userSession // Pass userSession
         });
         const parsedContent = await parseAIJsonResponse(stream, "handwriting target");
         if (!parsedContent.targetText || typeof parsedContent.targetText !== 'string' || parsedContent.targetText.trim() === '') {
@@ -632,13 +642,14 @@ Is the transcribed speech a good match to the original phrase, considering it's 
 Focus on key words being present and understandable. Minor pronunciation differences are acceptable.
 Respond with a single, valid JSON object: {"is_match": boolean, "feedback": "brief feedback string"}.`;
     try {
-        const modelIdentifier = getActualModelIdentifier(Model.GEMINI); // Using Gemini for evaluation
+        const modelIdentifier = getActualModelIdentifier(Model.GEMINI);
         const history: Content[] = [{role: 'user', parts: [{text: evaluationPrompt}]}];
         const stream = sendGeminiMessageStream({ 
             modelName: modelIdentifier,
             historyContents: history, 
             modelSettings: { temperature: 0.3, topK: 50, topP: 0.95, systemInstruction: "You are an AI language learning evaluator. Respond with application/json." },
-            enableGoogleSearch: false
+            enableGoogleSearch: false,
+            userSession // Pass userSession
         });
         const evalResult = await parseAIJsonResponse(stream, "speaking evaluation");
         setActivityState(prev => ({ ...prev, isLoadingContent: false, isAnswerSubmitted: true, isAnswerCorrect: evalResult.is_match, error: evalResult.feedback }));
@@ -724,37 +735,31 @@ Respond with a single, valid JSON object: {"is_match": boolean, "feedback": "bri
   const handleHandwritingImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-        if (file.size > 2 * 1024 * 1024) { // 2MB limit
+        if (file.size > 2 * 1024 * 1024) {
             addNotification("Image file is too large. Max 2MB.", "error");
             return;
         }
         const reader = new FileReader();
         reader.onloadend = () => {
             setActivityState(prev => ({ ...prev, userHandwritingImage: reader.result as string, isAnswerSubmitted: false, accuracyScore: undefined, aiFeedback: undefined }));
-            // Debug image set removed: setDebugImageUrl(reader.result as string); 
         };
         reader.readAsDataURL(file);
     }
-    if (handwritingImageUploadRef.current) handwritingImageUploadRef.current.value = ""; // Reset file input
+    if (handwritingImageUploadRef.current) handwritingImageUploadRef.current.value = "";
   };
 
   const handleSubmitHandwriting = async () => {
     if (!selectedLanguage || !activityState.content?.targetText) return;
-    // Debug image clear removed: setDebugImageUrl(null); 
     
     let imageDataUrl = activityState.userHandwritingImage;
     let finalMimeType = 'image/png'; 
 
     if (activityState.handwritingInputMethod === 'draw' && handwritingCanvasRef.current) {
         imageDataUrl = handwritingCanvasRef.current.toDataURL('image/png');
-        // Debug console log removed: console.log("[Handwriting DEBUG] FULL Canvas Data URL (Draw Method):", imageDataUrl);
-        // Debug image set removed: setDebugImageUrl(imageDataUrl); 
         finalMimeType = 'image/png';
     } else if (activityState.handwritingInputMethod === 'upload' && imageDataUrl) {
         const detectedMimeType = imageDataUrl.substring(imageDataUrl.indexOf(':') + 1, imageDataUrl.indexOf(';'));
         if (detectedMimeType) finalMimeType = detectedMimeType;
-        // Debug image set removed: setDebugImageUrl(imageDataUrl); 
-        // Debug console log removed: console.log("[Handwriting DEBUG] Uploaded Image Data URL (first 100 chars):", imageDataUrl.substring(0, 100));
     }
     
     if (!imageDataUrl) {
@@ -767,12 +772,10 @@ Respond with a single, valid JSON object: {"is_match": boolean, "feedback": "bri
     if (!base64ImageData) {
         addNotification("Invalid image data (empty after splitting prefix).", "error");
         setActivityState(prev => ({ ...prev, isLoadingContent: false, error: "Invalid image data." }));
-        // Debug image clear removed: setDebugImageUrl(null); 
         return;
     }
 
     if (activityState.handwritingInputMethod === 'draw' && base64ImageData.length < 200) { 
-        // Debug console log removed: console.warn("[Handwriting DEBUG] Base64 image data from canvas seems very short:", base64ImageData.length, "bytes. The canvas might be blank or contain minimal drawing.");
     }
 
     setActivityState(prev => ({ ...prev, isLoadingContent: true, error: null, accuracyScore: undefined, aiFeedback: undefined }));
@@ -801,6 +804,7 @@ Another example for no handwriting: {"accuracyScore": 0, "feedback": "No handwri
             historyContents: history,
             modelSettings: { temperature: 0.4, topK: 32, topP: 0.9, systemInstruction: "You are an AI handwriting evaluator. Respond with application/json as per user's schema." },
             enableGoogleSearch: false,
+            userSession // Pass userSession
         });
         const evalResult = await parseAIJsonResponse(stream, "handwriting evaluation");
 
@@ -811,7 +815,7 @@ Another example for no handwriting: {"accuracyScore": 0, "feedback": "No handwri
         const accuracy = Math.max(0, Math.min(100, evalResult.accuracyScore));
         setActivityState(prev => ({ ...prev, isLoadingContent: false, isAnswerSubmitted: true, accuracyScore: accuracy, aiFeedback: evalResult.feedback }));
         
-        const expPoints = Math.round(accuracy * 0.20); // Max 20 EXP
+        const expPoints = Math.round(accuracy * 0.20);
         if (accuracy > 0) { 
             onAddExp(selectedLanguage, expPoints);
             addNotification(`Evaluation: ${accuracy}% accuracy. ${evalResult.feedback} +${expPoints} EXP!`, 'success');
@@ -822,14 +826,12 @@ Another example for no handwriting: {"accuracyScore": 0, "feedback": "No handwri
     } catch (error: any) {
         addNotification(error.message || "Failed to evaluate handwriting.", 'error');
         setActivityState(prev => ({ ...prev, isLoadingContent: false, error: error.message || "Evaluation failed." }));
-        // Debug image clear removed: setDebugImageUrl(null); 
     }
   };
 
 
   const handleActivitySelect = (type: LanguageLearningActivityType) => {
     setActivityState(INITIAL_ACTIVITY_STATE); 
-    // Debug image clear removed: setDebugImageUrl(null);
     switch (type) {
         case 'listening': fetchListeningExercise(); break;
         case 'speaking': fetchSpeakingExercise(); break;
@@ -844,7 +846,6 @@ Another example for no handwriting: {"accuracyScore": 0, "feedback": "No handwri
   const resetActivity = () => {
     setActiveActivityType(null);
     setActivityState(INITIAL_ACTIVITY_STATE);
-    // Debug image clear removed: setDebugImageUrl(null);
     if (audioPlayerRef.current) {
         audioPlayerRef.current.pause();
         audioPlayerRef.current.src = '';
@@ -972,11 +973,9 @@ Another example for no handwriting: {"accuracyScore": 0, "feedback": "No handwri
               {activityState.isLoadingContent && <p className="text-neutral-600 dark:text-neutral-300 animate-pulse">Loading exercise...</p>}
               {activityState.error && !activityState.isLoadingContent && activeActivityType !== 'speaking' && activeActivityType !== 'handwriting' && !activityState.isLoadingTranslation && <p className="text-red-500 dark:text-red-400">Error: {activityState.error}</p>}
               
-              {/* Debug Image Display for Handwriting - REMOVED */}
 
               {!activityState.isLoadingContent && !activityState.error && activityState.content && activeActivityType !== 'sentence-scramble' && activeActivityType !== 'handwriting' && (
                 <div className="space-y-4">
-                  {/* Listening, Speaking, Vocabulary, Quiz UIs (unchanged) */}
                   {activeActivityType === 'listening' && activityState.content.script && (
                     <>
                       <p className="text-sm text-neutral-500 dark:text-neutral-400">{activityState.content.instruction || "Listen to the audio and answer the question below."}</p>
@@ -1178,15 +1177,12 @@ Another example for no handwriting: {"accuracyScore": 0, "feedback": "No handwri
                                 if (canvas) {
                                     const ctx = canvas.getContext('2d');
                                     if (ctx) {
-                                        // Clear the drawing
-                                        ctx.clearRect(0,0, canvas.width / window.devicePixelRatio, canvas.height / window.devicePixelRatio); // Use logical dimensions for clearing
-                                        // Re-fill with white background
+                                        ctx.clearRect(0,0, canvas.width / window.devicePixelRatio, canvas.height / window.devicePixelRatio); 
                                         ctx.fillStyle = '#FFFFFF';
                                         ctx.fillRect(0,0, canvas.width / window.devicePixelRatio, canvas.height / window.devicePixelRatio);
                                     }
                                 }
                                 setActivityState(prev => ({...prev, isAnswerSubmitted: false, accuracyScore: undefined, aiFeedback: undefined, userHandwritingImage: undefined })); 
-                                // Debug image clear removed: setDebugImageUrl(null);
                             }}
                                     disabled={activityState.isAnswerSubmitted || activityState.isLoadingContent}
                                     className="px-3 py-1 bg-yellow-500 hover:bg-yellow-600 text-white text-xs rounded-md disabled:opacity-50 flex items-center">
@@ -1207,7 +1203,6 @@ Another example for no handwriting: {"accuracyScore": 0, "feedback": "No handwri
                                     <img src={activityState.userHandwritingImage} alt="Handwriting preview" className="w-full h-full object-contain rounded"/>
                                     <button onClick={() => {
                                         setActivityState(prev => ({...prev, userHandwritingImage: undefined, isAnswerSubmitted: false, accuracyScore: undefined, aiFeedback: undefined}));
-                                        // Debug image clear removed: setDebugImageUrl(null);
                                     }}
                                             disabled={activityState.isLoadingContent}
                                             className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50">

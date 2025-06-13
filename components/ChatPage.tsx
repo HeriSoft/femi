@@ -14,8 +14,8 @@ import { sendGeminiMessageStream, generateImageWithImagen } from '../services/ge
 import { sendOpenAIMessageStream } from '../services/openaiService.ts';
 import { sendDeepseekMessageStream } from '../services/deepseekService.ts';
 import { sendMockMessageStream } from '../services/mockApiService.ts';
-import { generateOpenAITTS } from "../services/openaiTTSService"; // Changed this line
-import { editImageWithFluxKontexProxy, generateImageWithFluxUltraProxy, checkFalQueueStatusProxy, FalServiceEditParams, FalServiceGenerateParams } from '../services/falService.ts'; // Updated Fal.ai service imports
+import { generateOpenAITTS, ProxiedOpenAITtsParams } from "../services/openaiTTSService"; // Changed this line
+import { editImageWithFluxKontexProxy, generateImageWithFluxUltraProxy, checkFalQueueStatusProxy } from '../services/falService.ts'; // Updated Fal.ai service imports
 // Added MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon, ChevronDownIcon
 import { PaperAirplaneIcon, CogIcon, XMarkIcon, PromptIcon, Bars3Icon, ChatBubbleLeftRightIcon, ClockIcon as HistoryIcon, MicrophoneIcon, StopCircleIcon, SpeakerWaveIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon, ChevronDownIcon, ArrowDownTrayIcon, PencilIcon as EditIcon, PhotoIcon, ArrowUpTrayIcon, DocumentTextIcon } from './Icons.tsx'; // Added EditIcon, PhotoIcon, ArrowUpTrayIcon, DocumentTextIcon
 import { ThemeContext } from '../App.tsx'; // Import ThemeContext
@@ -692,6 +692,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
               modelSettings: { temperature: 0.3, topK: 1, topP: 1, systemInstruction: "You are a direct text translator." } as ModelSettings,
               enableGoogleSearch: false,
               modelName: geminiModelId,
+              userSession: userSession, // Pass userSession
           });
 
           let segmentTranslation = "";
@@ -721,7 +722,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             setLiveTranslationDisplay(liveTranslationAccumulatorRef.current);
           }
       }
-  }, [addNotification]);
+  }, [addNotification, userSession]); // Added userSession dependency
 
   useEffect(() => {
     const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1391,11 +1392,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     setLiveTranslationAudioUrl(null);
 
     const openAiTtsModelSettings = allSettings[Model.OPENAI_TTS] as OpenAITtsSettings | undefined;
-    const ttsParams = {
+    const ttsParams: ProxiedOpenAITtsParams = { // Explicitly type ttsParams
         modelIdentifier: openAiTtsModelSettings?.modelIdentifier || 'tts-1',
         textInput: liveTranslationDisplay.replace(/\[.*?\]:\s*/g, '').trim(),
         voice: 'nova' as OpenAiTtsVoice,
         speed: openAiTtsModelSettings?.speed || 1.0,
+        userSession: userSession, // Added userSession
     };
 
     try {
@@ -1418,7 +1420,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         addNotification(`TTS Error: ${error.message}`, "error");
         setIsSpeakingLiveTranslation(false);
     }
-  }, [liveTranslationDisplay, addNotification, allSettings, isListening, currentPlayingMessageId, isSpeakingLiveTranslation, userSession.isDemoUser, userSession.isPaidUser]);
+  }, [liveTranslationDisplay, addNotification, allSettings, isListening, currentPlayingMessageId, isSpeakingLiveTranslation, userSession]); // Added userSession
 
 
   useEffect(() => {
@@ -1627,13 +1629,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
     // User Type Checks and Header Setup
     let requestHeaders: HeadersInit = { 'Content-Type': 'application/json' };
-    if (userSession.isPaidUser && userSession.paidUsername) { 
-        requestHeaders['X-Paid-User-Token'] = userSession.paidUsername;
+    if (userSession.isPaidUser && userSession.paidUserToken) {
+        requestHeaders['X-Paid-User-Token'] = userSession.paidUserToken;
     } else if (userSession.isDemoUser && userSession.demoUserToken) {
-        if (isFluxKontexModelSelected || isImagenModelSelected || isTextToSpeechModelSelected || isFluxUltraModelSelected) {
-             requestHeaders['X-Demo-Token'] = userSession.demoUserToken;
-        }
+        requestHeaders['X-Demo-Token'] = userSession.demoUserToken;
     }
+
 
     // Check Limits
     if (!userSession.isPaidUser && userSession.isDemoUser) { 
@@ -1694,26 +1695,23 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       let apiResponseData: any;
 
       if (currentModelStatus?.isTextToSpeech && !currentModelStatus.isMock) {
-          const ttsBody = {
+          const ttsParams: ProxiedOpenAITtsParams = {
             modelIdentifier: currentModelSpecificSettings.modelIdentifier || 'tts-1',
             textInput: userDisplayedText,
             voice: currentModelSpecificSettings.voice || 'alloy',
-            speed: currentModelSpecificSettings.speed || 1.0
+            speed: currentModelSpecificSettings.speed || 1.0,
+            userSession: userSession,
           };
-          const ttsFetchResponse = await fetch('/api/openai/tts/generate', {
-              method: 'POST', headers: requestHeaders, body: JSON.stringify(ttsBody)
-          });
+          const ttsResult = await generateOpenAITTS(ttsParams);
 
-          if (!ttsFetchResponse.ok) {
-              apiResponseData = await safeResponseJson(ttsFetchResponse);
-              throw new Error(apiResponseData.error || `OpenAI TTS Proxy Error: ${ttsFetchResponse.statusText}`);
+          if (ttsResult.error || !ttsResult.audioBlob) {
+              throw new Error(ttsResult.error || `OpenAI TTS Proxy Error`);
           }
-          const audioBlob = await ttsFetchResponse.blob();
-
+          
           setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? {
-              ...msg, text: `Audio generated for: "${userDisplayedText}"`, audioUrl: URL.createObjectURL(audioBlob), isRegenerating: false, timestamp: msg.timestamp || Date.now()
+              ...msg, text: `Audio generated for: "${userDisplayedText}"`, audioUrl: URL.createObjectURL(ttsResult.audioBlob), isRegenerating: false, timestamp: msg.timestamp || Date.now()
           } : msg));
-          if (audioPlayerRef.current) handlePlayAudio(URL.createObjectURL(audioBlob), aiMessageId);
+          if (audioPlayerRef.current) handlePlayAudio(URL.createObjectURL(ttsResult.audioBlob), aiMessageId);
 
           if (userSession.isDemoUser && !userSession.isPaidUser && userSession.demoLimits) {
               onUpdateDemoLimits({ openaiTtsMonthlyCharsLeft: (userSession.demoLimits?.openaiTtsMonthlyCharsLeft || 0) - userDisplayedText.length });
@@ -1755,12 +1753,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
               delete fluxKontextApiSettings.aspect_ratio;
           }
 
-          const fluxParams: FalServiceEditParams = {
+          const fluxParams: EditImageWithFluxKontexParams = {
               modelIdentifier: actualModelIdentifier, 
               prompt: textForApi,
               settings: fluxKontextApiSettings as FluxKontexSettings, 
               imageData: fluxImageData,
-              requestHeaders: requestHeaders, 
+              requestHeaders: requestHeaders, // Pass the headers constructed in internalSendMessage
+              userSession: userSession, // Pass userSession for the service function's potential direct use
           };
           const fluxResult = await editImageWithFluxKontexProxy(fluxParams);
           
@@ -1786,13 +1785,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           } else { throw new Error(fluxResult.error || "Flux Kontext submission failed (no request ID)."); }
       } else if (currentModelStatus?.isFluxUltraImageGeneration && !currentModelStatus.isMock) {
             const fluxUltraApiSettings: FluxUltraSettings = { ...currentModelSpecificSettings };
-            // Any specific settings adjustments for Flux Ultra can go here if needed
 
-            const fluxUltraParams: FalServiceGenerateParams = {
+            const fluxUltraParams: GenerateImageWithFluxUltraParams = {
                 modelIdentifier: actualModelIdentifier,
                 prompt: textForApi,
                 settings: fluxUltraApiSettings,
-                requestHeaders: requestHeaders,
+                requestHeaders: requestHeaders, // Pass the headers constructed in internalSendMessage
+                userSession: userSession, // Pass userSession for the service function's potential direct use
             };
             const fluxUltraResult = await generateImageWithFluxUltraProxy(fluxUltraParams);
             if (fluxUltraResult.error) throw new Error(fluxUltraResult.error);
@@ -1859,7 +1858,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         }
 
         const stream = sendGeminiMessageStream({
-          historyContents: geminiHistory, modelSettings: currentModelSpecificSettings as ModelSettings, enableGoogleSearch: isAiAgentMode || isWebSearchEnabled, modelName: actualModelIdentifier,
+          historyContents: geminiHistory, modelSettings: currentModelSpecificSettings as ModelSettings, enableGoogleSearch: isAiAgentMode || isWebSearchEnabled, modelName: actualModelIdentifier, userSession: userSession,
         });
         let currentText = ''; let currentGroundingSources: GroundingSource[] | undefined = undefined;
         for await (const chunk of stream) {
@@ -1875,7 +1874,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
         const history: ApiChatMessage[] = messagesToOpenAIHistory(messages, aiMessageId, newUserMessage.id, currentModelSpecificSettings.systemInstruction, textForApi, activeImageFileForOpenAI, activeImagePreviewForOpenAI, currentUploadedTextFileName, currentUploadedTextContent, isRegen, isRegenerationOfAiMsgId);
 
-        const stream = sendOpenAIMessageStream({ modelIdentifier: actualModelIdentifier, history, modelSettings: currentModelSpecificSettings as ModelSettings });
+        const stream = sendOpenAIMessageStream({ modelIdentifier: actualModelIdentifier, history, modelSettings: currentModelSpecificSettings as ModelSettings, userSession: userSession });
         let currentText = '';
         for await (const chunk of stream) {
           if (chunk.error) throw new Error(chunk.error);
@@ -1900,7 +1899,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         }
         history.push({ role: 'user', content: currentTurnTextForDeepseek || " " });
 
-        const stream = sendDeepseekMessageStream({ modelIdentifier: actualModelIdentifier, history, modelSettings: currentModelSpecificSettings as ModelSettings });
+        const stream = sendDeepseekMessageStream({ modelIdentifier: actualModelIdentifier, history, modelSettings: currentModelSpecificSettings as ModelSettings, userSession: userSession });
         let currentText = '';
         for await (const chunk of stream) {
           if (chunk.error) throw new Error(chunk.error);
