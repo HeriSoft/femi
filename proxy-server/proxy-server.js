@@ -1,4 +1,6 @@
 
+
+
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -97,9 +99,9 @@ const DEMO_USER_MONTHLY_LIMITS = {
 const PAID_USER_MAX_LIMITS_CONFIG = {
   IMAGEN3_MAX_IMAGES_PER_DAY: 50,
   OPENAI_TTS_MAX_CHARS_TOTAL: 20000,
-  FLUX_KONTEX_MAX_MONTHLY_MAX_USES: 40,
-  FLUX_KONTEX_PRO_MONTHLY_MAX_USES: 50,
-  FLUX_ULTRA_MONTHLY_MAX_IMAGES: 100, // Renamed from FLUX_DEV
+  FLUX_KONTEX_MAX_MONTHLY_MAX_USES: 25, // Updated from 40
+  FLUX_KONTEX_PRO_MONTHLY_MAX_USES: 35, // Updated from 50
+  FLUX_ULTRA_MONTHLY_MAX_IMAGES: 30, // Updated from 100
 };
 
 // REMOVED: const paidUserFluxMonthlyUsageStore = {}; // This will be replaced by DB tracking
