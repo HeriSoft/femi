@@ -320,10 +320,13 @@ app.post('/api/gemini/chat/stream', async (req, res) => {
         console.log(`[Gemini Chat Stream Proxy] Access denied due to database error during authentication (IP: ${getClientIp(req)}).`);
         return res.status(503).json({ error: "Service temporarily unavailable due to a database issue during authentication. Please try again later." });
     }
-    if (!req.isPaidUser && !req.isDemoUser) {
-        console.log(`[Gemini Chat Stream Proxy] Access denied for non-validated user (IP: ${getClientIp(req)}).`);
-        return res.status(403).json({ error: "Access Denied. Please log in or ensure your account is active for chat." });
-    }
+    // Removed restrictive check:
+    // if (!req.isPaidUser && !req.isDemoUser) {
+    //     console.log(`[Gemini Chat Stream Proxy] Access denied for non-validated user (IP: ${getClientIp(req)}).`);
+    //     return res.status(403).json({ error: "Access Denied. Please log in or ensure your account is active for chat." });
+    // }
+    // Admin users (who are not isPaidUser or isDemoUser) will now pass this point.
+    // Paid/Demo users are still identified by req.isPaidUser and req.isDemoUser for any specific limit checks if needed later.
 
     if (!ai) return res.status(500).json({ error: "Google GenAI SDK not initialized." });
     const { modelName, historyContents, modelSettings, enableGoogleSearch } = req.body;
@@ -396,9 +399,9 @@ app.post('/api/gemini/image/generate', async (req, res) => {
       if (numImagesToGenerate > remainingUses) {
         return res.status(429).json({ error: `Monthly Imagen3 limit for DEMO user reached. You have ${remainingUses} image(s) left (requested ${numImagesToGenerate}).`, limitReached: true, usesLeft: remainingUses });
       }
-    } else {
-      console.log(`[Imagen Proxy] Access denied for non-validated user (IP: ${getClientIp(req)}) generating ${numImagesToGenerate} image(s).`);
-      return res.status(403).json({ error: "Access Denied. Please log in or ensure your account is active." });
+    } else { // Assumed Admin if not Paid or Demo and passed previous checks
+      console.log(`[Imagen Proxy] Admin or un-tokened user (IP: ${getClientIp(req)}) generating ${numImagesToGenerate} image(s). No specific limits applied.`);
+      // No specific denial here for admin, assuming they have access if they passed the (now removed) generic denial.
     }
 
     const config = {
@@ -437,10 +440,11 @@ app.post('/api/openai/chat/stream', async (req, res) => {
     if (req.authDbError) {
         return res.status(503).json({ error: "Service temporarily unavailable due to a database issue during authentication. Please try again later." });
     }
-    if (!req.isPaidUser && !req.isDemoUser) {
-        console.log(`[OpenAI Chat Stream Proxy] Access denied for non-validated user (IP: ${getClientIp(req)}).`);
-        return res.status(403).json({ error: "Access Denied. Please log in or ensure your account is active for chat." });
-    }
+    // Removed restrictive check
+    // if (!req.isPaidUser && !req.isDemoUser) {
+    //     console.log(`[OpenAI Chat Stream Proxy] Access denied for non-validated user (IP: ${getClientIp(req)}).`);
+    //     return res.status(403).json({ error: "Access Denied. Please log in or ensure your account is active for chat." });
+    // }
     
     try {
         if (!OPENAI_API_KEY) return res.status(500).json({ error: "OpenAI API Key not configured." });
@@ -495,9 +499,11 @@ app.post('/api/openai/tts/generate', async (req, res) => {
       if (currentChars > remainingChars) {
         return res.status(429).json({ error: `Monthly TTS character limit for DEMO user reached. Remaining: ${remainingChars}, requested: ${currentChars}`, limitReached: true });
       }
-    } else {
-      console.log(`[OpenAI TTS Proxy] Access denied for non-validated user (IP: ${getClientIp(req)}) generating audio for ${currentChars} chars.`);
-      return res.status(403).json({ error: "Access Denied. Please log in or ensure your account is active." });
+    } else { // Assumed Admin
+      console.log(`[OpenAI TTS Proxy] Admin or un-tokened user (IP: ${getClientIp(req)}) generating audio for ${currentChars} chars.`);
+      if (currentChars > PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL) { // Apply a general cap even for admin
+        return res.status(413).json({ error: `Input too long for TTS. Max: ${PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL}`, limitReached: true });
+      }
     }
     
     const openaiResponse = await fetch(OPENAI_TTS_URL, {
@@ -535,10 +541,11 @@ app.post('/api/deepseek/chat/stream', async (req, res) => {
     if (req.authDbError) {
         return res.status(503).json({ error: "Service temporarily unavailable due to a database issue during authentication. Please try again later." });
     }
-    if (!req.isPaidUser && !req.isDemoUser) {
-        console.log(`[Deepseek Chat Stream Proxy] Access denied for non-validated user (IP: ${getClientIp(req)}).`);
-        return res.status(403).json({ error: "Access Denied. Please log in or ensure your account is active for chat." });
-    }
+    // Removed restrictive check
+    // if (!req.isPaidUser && !req.isDemoUser) {
+    //     console.log(`[Deepseek Chat Stream Proxy] Access denied for non-validated user (IP: ${getClientIp(req)}).`);
+    //     return res.status(403).json({ error: "Access Denied. Please log in or ensure your account is active for chat." });
+    // }
 
     try {
         if (!DEEPSEEK_API_KEY) return res.status(500).json({ error: "Deepseek API Key not configured." });
@@ -602,9 +609,9 @@ app.post('/api/fal/image/edit/flux-kontext', async (req, res) => {
         if (usedCount >= limitToCheck) {
             return res.status(429).json({ error: `Monthly ${isFluxMax ? 'Flux Max' : 'Flux Pro'} limit for DEMO user reached.`, limitReached: true });
         }
-    } else {
-      console.log(`[Fal Flux Kontext Proxy] Access denied for non-validated user (IP: ${getClientIp(req)})`);
-      return res.status(403).json({ error: "Access Denied. Please log in or ensure your account is active." });
+    } else { // Assumed Admin
+      console.log(`[Fal Flux Kontext Proxy] Admin or un-tokened user (IP: ${getClientIp(req)}) using Flux Kontext.`);
+      // No specific denial for admin here for Flux. Fal.ai itself might have its own master limits.
     }
 
     const effectiveSettings = {
@@ -691,9 +698,8 @@ app.post('/api/fal/image/generate/flux-ultra', async (req, res) => {
       }
     } else if (req.isDemoUser) { 
         return res.status(403).json({ error: `Flux1.1 [Ultra] is for Paid Users only. DEMO users cannot use this model.`, limitReached: true });
-    } else {
-      console.log(`[Fal Flux Ultra Proxy] Access denied for non-validated user (IP: ${getClientIp(req)})`);
-      return res.status(403).json({ error: "Access Denied. This feature is for paid users." });
+    } else { // Assumed Admin
+      console.log(`[Fal Flux Ultra Proxy] Admin or un-tokened user (IP: ${getClientIp(req)}) using Flux Ultra.`);
     }
 
     const falInput = { prompt, ...PROXY_DEFAULT_FLUX_ULTRA_SETTINGS, ...settings, num_images: numImagesToGenerate }; 
