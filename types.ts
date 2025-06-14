@@ -477,8 +477,8 @@ export interface DemoUserLimits {
   imagen3MonthlyMaxImages: number;
   openaiTtsMonthlyCharsLeft: number;
   openaiTtsMonthlyMaxChars: number;
-  fluxUltraMonthlyImagesLeft: number; // Added for demo if ever needed, usually 0
-  fluxUltraMonthlyMaxImages: number;  // Added for demo if ever needed, usually 0
+  fluxUltraMonthlyImagesLeft: number; 
+  fluxUltraMonthlyMaxImages: number;  
 }
 
 export interface PaidUserLimits {
@@ -487,11 +487,11 @@ export interface PaidUserLimits {
   openaiTtsCharsLeft: number; 
   openaiTtsMaxChars: number;
   fluxKontextMaxMonthlyUsesLeft: number;
-  fluxKontextMaxMonthlyMaxUses: number;
+  fluxKontextMaxMonthlyMaxUses: number; // Updated from 40 to 25
   fluxKontextProMonthlyUsesLeft: number;
-  fluxKontextProMonthlyMaxUses: number;
+  fluxKontextProMonthlyMaxUses: number; // Updated from 50 to 35
   fluxUltraMonthlyImagesLeft: number; 
-  fluxUltraMonthlyMaxImages: number;  
+  fluxUltraMonthlyMaxImages: number;  // Updated from 100 to 30
 }
 
 export interface UserSessionState {

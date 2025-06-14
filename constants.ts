@@ -169,11 +169,11 @@ export const PAID_USER_LIMITS_CONFIG: PaidUserLimits = {
   openaiTtsCharsLeft: 0, 
   openaiTtsMaxChars: 20000, 
   fluxKontextMaxMonthlyUsesLeft: 0, 
-  fluxKontextMaxMonthlyMaxUses: 40, 
+  fluxKontextMaxMonthlyMaxUses: 25, // Updated from 40
   fluxKontextProMonthlyUsesLeft: 0, 
-  fluxKontextProMonthlyMaxUses: 50,  
+  fluxKontextProMonthlyMaxUses: 35,  // Updated from 50
   fluxUltraMonthlyImagesLeft: 0,
-  fluxUltraMonthlyMaxImages: 100,
+  fluxUltraMonthlyMaxImages: 30, // Updated from 100
 };
 
 export const OPENAI_TTS_MAX_INPUT_LENGTH = PAID_USER_LIMITS_CONFIG.openaiTtsMaxChars;
