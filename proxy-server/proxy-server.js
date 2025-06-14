@@ -126,14 +126,18 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
 
     req.isPaidUser = false;
     req.isDemoUser = false;
-    req.authDbError = false; // Initialize new flag
+    req.authDbError = false;
+    req.authenticationAttempted = false;
+    req.authenticationFailed = false;
+
 
     if (paidUserToken) {
+        req.authenticationAttempted = true;
         try {
             if (!pool) {
                 console.error("[Paid Auth Middleware Error] Database pool not available.");
                 req.authDbError = true;
-                return next(); // Critical error, stop further processing in this try-catch
+                return next();
             }
             const [users] = await pool.execute('SELECT id, username, user_type FROM users WHERE username = ?', [paidUserToken]);
             if (users.length > 0) {
@@ -158,19 +162,27 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
                         req.paidUser.fluxProMonthlyUsed = paidUserFluxMonthlyUsageStore[user.username][yearMonth].fluxProUsed;
                         req.paidUser.fluxUltraMonthlyUsed = paidUserFluxMonthlyUsageStore[user.username][yearMonth].fluxUltraUsed;
                         req.isPaidUser = true;
+                    } else {
+                        req.authenticationFailed = true; // Subscription invalid
                     }
+                } else {
+                    req.authenticationFailed = true; // User type not PAID
                 }
+            } else {
+                req.authenticationFailed = true; // User not found
             }
         } catch (dbError) {
             console.error("[Paid Auth DB Error]", dbError);
             req.authDbError = true;
+            req.authenticationFailed = true; // DB error implies auth failure for this attempt
         }
     } else if (demoUserToken) {
+        req.authenticationAttempted = true;
         try {
             if (!pool) {
                 console.error("[Demo Auth Middleware Error] Database pool not available.");
                 req.authDbError = true;
-                return next(); // Critical error
+                return next();
             }
             const [users] = await pool.execute(
                 'SELECT id, username, user_type, demo_flux_max_monthly_used, demo_flux_pro_monthly_used, demo_imagen_monthly_used, demo_tts_monthly_chars_used, demo_flux_ultra_monthly_used, demo_usage_last_reset_month FROM users WHERE username = ? AND user_type = "DEMO"',
@@ -188,10 +200,13 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
                     usageLastResetMonth: user.demo_usage_last_reset_month
                 };
                 req.isDemoUser = true;
+            } else {
+                 req.authenticationFailed = true; // Demo user not found or not DEMO type
             }
         } catch (dbError) {
             console.error("[Demo Auth DB Error]", dbError);
             req.authDbError = true;
+            req.authenticationFailed = true; // DB error implies auth failure for this attempt
         }
     }
     next();
@@ -320,13 +335,11 @@ app.post('/api/gemini/chat/stream', async (req, res) => {
         console.log(`[Gemini Chat Stream Proxy] Access denied due to database error during authentication (IP: ${getClientIp(req)}).`);
         return res.status(503).json({ error: "Service temporarily unavailable due to a database issue during authentication. Please try again later." });
     }
-    // Removed restrictive check:
-    // if (!req.isPaidUser && !req.isDemoUser) {
-    //     console.log(`[Gemini Chat Stream Proxy] Access denied for non-validated user (IP: ${getClientIp(req)}).`);
-    //     return res.status(403).json({ error: "Access Denied. Please log in or ensure your account is active for chat." });
-    // }
-    // Admin users (who are not isPaidUser or isDemoUser) will now pass this point.
-    // Paid/Demo users are still identified by req.isPaidUser and req.isDemoUser for any specific limit checks if needed later.
+    if (req.authenticationAttempted && req.authenticationFailed) {
+        console.log(`[Gemini Chat Stream Proxy] Access denied for user with invalid/expired token (IP: ${getClientIp(req)}).`);
+        return res.status(403).json({ error: "Access Denied. Your session token is invalid, expired, or your account access has been restricted." });
+    }
+    // If we reach here, user is either Admin (no token), or valid Paid/Demo user.
 
     if (!ai) return res.status(500).json({ error: "Google GenAI SDK not initialized." });
     const { modelName, historyContents, modelSettings, enableGoogleSearch } = req.body;
@@ -383,6 +396,10 @@ app.post('/api/gemini/image/generate', async (req, res) => {
     if (req.authDbError) {
         return res.status(503).json({ error: "Service temporarily unavailable due to a database issue during authentication." });
     }
+    if (req.authenticationAttempted && req.authenticationFailed) {
+        return res.status(403).json({ error: "Access Denied. Your session token is invalid, expired, or your account access has been restricted." });
+    }
+
     if (!ai) return res.status(500).json({ error: "Google GenAI SDK not initialized." });
     const { modelName, prompt, modelSettings } = req.body;
     if (!modelName || !prompt || !modelSettings) return res.status(400).json({ error: "Missing fields for Imagen." });
@@ -399,9 +416,8 @@ app.post('/api/gemini/image/generate', async (req, res) => {
       if (numImagesToGenerate > remainingUses) {
         return res.status(429).json({ error: `Monthly Imagen3 limit for DEMO user reached. You have ${remainingUses} image(s) left (requested ${numImagesToGenerate}).`, limitReached: true, usesLeft: remainingUses });
       }
-    } else { // Assumed Admin if not Paid or Demo and passed previous checks
+    } else { 
       console.log(`[Imagen Proxy] Admin or un-tokened user (IP: ${getClientIp(req)}) generating ${numImagesToGenerate} image(s). No specific limits applied.`);
-      // No specific denial here for admin, assuming they have access if they passed the (now removed) generic denial.
     }
 
     const config = {
@@ -440,11 +456,9 @@ app.post('/api/openai/chat/stream', async (req, res) => {
     if (req.authDbError) {
         return res.status(503).json({ error: "Service temporarily unavailable due to a database issue during authentication. Please try again later." });
     }
-    // Removed restrictive check
-    // if (!req.isPaidUser && !req.isDemoUser) {
-    //     console.log(`[OpenAI Chat Stream Proxy] Access denied for non-validated user (IP: ${getClientIp(req)}).`);
-    //     return res.status(403).json({ error: "Access Denied. Please log in or ensure your account is active for chat." });
-    // }
+    if (req.authenticationAttempted && req.authenticationFailed) {
+        return res.status(403).json({ error: "Access Denied. Your session token is invalid, expired, or your account access has been restricted." });
+    }
     
     try {
         if (!OPENAI_API_KEY) return res.status(500).json({ error: "OpenAI API Key not configured." });
@@ -480,6 +494,9 @@ app.post('/api/openai/tts/generate', async (req, res) => {
     if (req.authDbError) {
         return res.status(503).json({ error: "Service temporarily unavailable due to a database issue during authentication." });
     }
+    if (req.authenticationAttempted && req.authenticationFailed) {
+        return res.status(403).json({ error: "Access Denied. Your session token is invalid, expired, or your account access has been restricted." });
+    }
     if (!OPENAI_API_KEY) return res.status(500).json({ error: "OpenAI API Key not configured." });
     const { modelIdentifier, textInput, voice, speed, responseFormat = 'mp3' } = req.body;
     if (!modelIdentifier || !textInput || !voice || speed === undefined) return res.status(400).json({ error: "Missing fields for OpenAI TTS." });
@@ -499,9 +516,9 @@ app.post('/api/openai/tts/generate', async (req, res) => {
       if (currentChars > remainingChars) {
         return res.status(429).json({ error: `Monthly TTS character limit for DEMO user reached. Remaining: ${remainingChars}, requested: ${currentChars}`, limitReached: true });
       }
-    } else { // Assumed Admin
+    } else { 
       console.log(`[OpenAI TTS Proxy] Admin or un-tokened user (IP: ${getClientIp(req)}) generating audio for ${currentChars} chars.`);
-      if (currentChars > PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL) { // Apply a general cap even for admin
+      if (currentChars > PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL) { 
         return res.status(413).json({ error: `Input too long for TTS. Max: ${PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL}`, limitReached: true });
       }
     }
@@ -541,11 +558,9 @@ app.post('/api/deepseek/chat/stream', async (req, res) => {
     if (req.authDbError) {
         return res.status(503).json({ error: "Service temporarily unavailable due to a database issue during authentication. Please try again later." });
     }
-    // Removed restrictive check
-    // if (!req.isPaidUser && !req.isDemoUser) {
-    //     console.log(`[Deepseek Chat Stream Proxy] Access denied for non-validated user (IP: ${getClientIp(req)}).`);
-    //     return res.status(403).json({ error: "Access Denied. Please log in or ensure your account is active for chat." });
-    // }
+    if (req.authenticationAttempted && req.authenticationFailed) {
+        return res.status(403).json({ error: "Access Denied. Your session token is invalid, expired, or your account access has been restricted." });
+    }
 
     try {
         if (!DEEPSEEK_API_KEY) return res.status(500).json({ error: "Deepseek API Key not configured." });
@@ -584,6 +599,9 @@ app.post('/api/fal/image/edit/flux-kontext', async (req, res) => {
     if (req.authDbError) {
         return res.status(503).json({ error: "Service temporarily unavailable due to a database issue during authentication." });
     }
+     if (req.authenticationAttempted && req.authenticationFailed) {
+        return res.status(403).json({ error: "Access Denied. Your session token is invalid, expired, or your account access has been restricted." });
+    }
     if (!FAL_KEY) return res.status(500).json({ error: "Fal.ai API Key not configured." });
     const { modelIdentifier, prompt, image_base_64, image_mime_type, images_data, ...clientSettings } = req.body;
     if (!modelIdentifier || !prompt) return res.status(400).json({ error: "Missing modelIdentifier or prompt for Flux." });
@@ -609,9 +627,8 @@ app.post('/api/fal/image/edit/flux-kontext', async (req, res) => {
         if (usedCount >= limitToCheck) {
             return res.status(429).json({ error: `Monthly ${isFluxMax ? 'Flux Max' : 'Flux Pro'} limit for DEMO user reached.`, limitReached: true });
         }
-    } else { // Assumed Admin
+    } else { 
       console.log(`[Fal Flux Kontext Proxy] Admin or un-tokened user (IP: ${getClientIp(req)}) using Flux Kontext.`);
-      // No specific denial for admin here for Flux. Fal.ai itself might have its own master limits.
     }
 
     const effectiveSettings = {
@@ -679,6 +696,9 @@ app.post('/api/fal/image/generate/flux-ultra', async (req, res) => {
     if (req.authDbError) {
         return res.status(503).json({ error: "Service temporarily unavailable due to a database issue during authentication." });
     }
+     if (req.authenticationAttempted && req.authenticationFailed) {
+        return res.status(403).json({ error: "Access Denied. Your session token is invalid, expired, or your account access has been restricted." });
+    }
     if (!FAL_KEY) return res.status(500).json({ error: "Fal.ai API Key not configured." });
     const { modelIdentifier, prompt, ...settings } = req.body; 
     
@@ -698,7 +718,7 @@ app.post('/api/fal/image/generate/flux-ultra', async (req, res) => {
       }
     } else if (req.isDemoUser) { 
         return res.status(403).json({ error: `Flux1.1 [Ultra] is for Paid Users only. DEMO users cannot use this model.`, limitReached: true });
-    } else { // Assumed Admin
+    } else { 
       console.log(`[Fal Flux Ultra Proxy] Admin or un-tokened user (IP: ${getClientIp(req)}) using Flux Ultra.`);
     }
 
@@ -727,8 +747,13 @@ app.post('/api/fal/image/generate/flux-ultra', async (req, res) => {
 
 app.post('/api/fal/image/edit/status', async (req, res) => {
   try {
-    if (req.authDbError && req.method === 'POST') { // Only apply for POST if needed, status might be less sensitive
+    // For POST status checks, authentication might still be desired if the status endpoint could be abused.
+    // For now, keeping it consistent with other Fal endpoints.
+    if (req.authDbError && req.method === 'POST') { 
         return res.status(503).json({ error: "Service temporarily unavailable due to a database issue during authentication." });
+    }
+    if (req.authenticationAttempted && req.authenticationFailed && req.method === 'POST') {
+       return res.status(403).json({ error: "Access Denied for status check due to invalid token." });
     }
     if (!FAL_KEY) return res.status(500).json({ error: "Fal.ai API Key not configured." });
     const { requestId, modelIdentifier } = req.body;
@@ -784,7 +809,6 @@ app.post('/api/fal/image/edit/status', async (req, res) => {
     res.status(500).json({ status: 'PROXY_REQUEST_ERROR', error: `Fal Status Check Error: ${error.message || "Internal server error"}` });
   }
 });
-
 
 console.log("Debug: Type of app before listen:", typeof app);
 console.log("Debug: Type of app.listen before listen:", typeof app.listen);
