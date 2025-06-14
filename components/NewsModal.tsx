@@ -1,4 +1,6 @@
 
+
+
 import React from 'react';
 import { XMarkIcon, MegaphoneIcon } from './Icons.tsx'; // Assuming MegaphoneIcon is in Icons.tsx
 
@@ -23,14 +25,7 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
       title: "Flux Kontext Max (Advanced image editing) features:",
       points: [
         "Upload up to 4 images for editing requests.",
-        "50 images/month for paid users.", 
-        "Not available for DEMO users."
-      ]
-    },
-    {
-      title: "Flux Ultra Pro:",
-      points: [
-        "80 images/month for paid users.", 
+        "Paid users: 25 images/month.", // Updated
         "Not available for DEMO users."
       ]
     },
@@ -38,8 +33,15 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
       title: "Flux Kontext Pro (image editing) features:",
       points: [
         "Upload up to 1 image for editing requests.",
-        "100 images/month for paid users.", 
+        "Paid users: 35 images/month.", // Updated
         "DEMO users: Limited monthly uses (e.g., 1 image/month via 'guest_demo')."
+      ]
+    },
+    {
+      title: "Flux1.1 [Ultra] Image Generation:", // New/Updated section
+      points: [
+        "Paid users: 30 images/month.", // New limit
+        "DEMO users: This feature is for Paid Users only."
       ]
     },
     {
@@ -80,7 +82,7 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
       >
         <div className="flex justify-between items-center mb-4 pb-3 border-b border-secondary dark:border-neutral-darkest">
           <h2 id="news-modal-title" className="text-xl sm:text-2xl font-semibold text-primary dark:text-primary-light flex items-center">
-            <MegaphoneIcon className="w-7 h-7 mr-2" /> New Updates (Version 1.3 - DEMO System Change)
+            <MegaphoneIcon className="w-7 h-7 mr-2" /> New Updates (Version 1.4 - Paid User Limits Adjusted)
           </h2>
           <button
             onClick={onClose}
