@@ -306,12 +306,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             currentModelTypedSettings = getSpecificDefaultSettings(selectedModel); 
     }
     
-    let mutableSettings = { ...currentModelTypedSettings }; // Spread is now on a more specific type
+    let mutableSettings = { ...currentModelTypedSettings }; 
 
     const aboutMeText = userProfile?.aboutMe?.trim();
     const activePersona = activePersonaId ? personas.find(p => p.id === activePersonaId) : null;
 
-    // Check if the specific settings object (now narrowed) has 'systemInstruction'
     if ('systemInstruction' in mutableSettings &&
         (selectedModel === Model.GEMINI ||
          selectedModel === Model.GEMINI_ADVANCED ||
@@ -322,8 +321,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
          selectedModel === Model.AI_AGENT
         )
        ) {
-        let finalSystemInstruction = mutableSettings.systemInstruction;
-
+        let finalSystemInstruction = mutableSettings.systemInstruction; // mutableSettings is already narrowed here implicitly by the `in` check
+                                                                      // and the selectedModel checks, effectively making it one of ModelSettings | AiAgentSettings.
         if (activePersona) {
             finalSystemInstruction = activePersona.instruction;
             if (aboutMeText) {
@@ -332,8 +331,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         } else if (aboutMeText) {
             finalSystemInstruction = `Background information about the user you are interacting with: "${aboutMeText}".\n\nYour task: "${mutableSettings.systemInstruction}"`;
         }
-        // mutableSettings is already narrowed, e.g. ModelSettings | AiAgentSettings if the condition passes.
-        // TypeScript should allow this assignment directly.
         mutableSettings.systemInstruction = finalSystemInstruction;
     }
     return mutableSettings;
@@ -953,131 +950,26 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     }
   };
 
-
   const handleModelSettingsChange = useCallback((newSettings: Partial<AnyModelSettings>) => {
-    setAllSettings(prev => {
-        const modelKey = selectedModel; 
-
-        const getTypedPrevSettings = <M extends Model>(mKey: M): ModelSpecificSettingsMap[M] => {
-            // Cast here assumes prev[mKey] matches ModelSpecificSettingsMap[M] or is undefined (then defaults)
-            return (prev[mKey] || getSpecificDefaultSettings(mKey)) as ModelSpecificSettingsMap[M];
+    setAllSettings(prevAllSettings => {
+        const modelKey = selectedModel;
+        // Ensure currentSettingsForModel gets the correct specific type for the modelKey
+        const currentSettingsForModel = (prevAllSettings[modelKey] || getSpecificDefaultSettings(modelKey)) as ModelSpecificSettingsMap[typeof modelKey];
+        
+        // Assert newSettings is a partial of the specific model's settings type
+        // This is generally safe if SettingsPanel only sends relevant fields for the selected model
+        const updatedModelSpecificSettings = {
+            ...currentSettingsForModel,
+            ...(newSettings as Partial<typeof currentSettingsForModel>)
         };
         
-        let updatedModelSpecificSettings: AnyModelSettings;
-
-        switch (modelKey) {
-            case Model.GEMINI: {
-                const current = getTypedPrevSettings(Model.GEMINI);
-                updatedModelSpecificSettings = { ...current, ...(newSettings as Partial<ModelSettings>) };
-                break;
-            }
-            case Model.GEMINI_ADVANCED: {
-                const current = getTypedPrevSettings(Model.GEMINI_ADVANCED);
-                updatedModelSpecificSettings = { ...current, ...(newSettings as Partial<ModelSettings>) };
-                break;
-            }
-            case Model.GPT4O: {
-                const current = getTypedPrevSettings(Model.GPT4O);
-                updatedModelSpecificSettings = { ...current, ...(newSettings as Partial<ModelSettings>) };
-                break;
-            }
-            case Model.GPT4O_MINI: {
-                const current = getTypedPrevSettings(Model.GPT4O_MINI);
-                updatedModelSpecificSettings = { ...current, ...(newSettings as Partial<ModelSettings>) };
-                break;
-            }
-            case Model.DEEPSEEK: {
-                const current = getTypedPrevSettings(Model.DEEPSEEK);
-                updatedModelSpecificSettings = { ...current, ...(newSettings as Partial<ModelSettings>) };
-                break;
-            }
-            case Model.CLAUDE: {
-                const current = getTypedPrevSettings(Model.CLAUDE);
-                updatedModelSpecificSettings = { ...current, ...(newSettings as Partial<ModelSettings>) };
-                break;
-            }
-            case Model.IMAGEN3: {
-                const current = getTypedPrevSettings(Model.IMAGEN3);
-                const updated = { ...current, ...(newSettings as Partial<ImagenSettings>) };
-                if (typeof updated.numberOfImages === 'number') {
-                    updated.numberOfImages = Math.max(1, Math.min(4, updated.numberOfImages));
-                }
-                updatedModelSpecificSettings = updated;
-                break;
-            }
-            case Model.OPENAI_TTS: {
-                const current = getTypedPrevSettings(Model.OPENAI_TTS);
-                const updated = { ...current, ...(newSettings as Partial<OpenAITtsSettings>) };
-                if (typeof updated.speed === 'number') {
-                    updated.speed = Math.max(0.25, Math.min(4.0, updated.speed));
-                }
-                updatedModelSpecificSettings = updated;
-                break;
-            }
-            case Model.REAL_TIME_TRANSLATION: {
-                const current = getTypedPrevSettings(Model.REAL_TIME_TRANSLATION);
-                updatedModelSpecificSettings = { ...current, ...(newSettings as Partial<RealTimeTranslationSettings>) };
-                break;
-            }
-            case Model.AI_AGENT: {
-                const current = getTypedPrevSettings(Model.AI_AGENT);
-                updatedModelSpecificSettings = { ...current, ...(newSettings as Partial<AiAgentSettings>) };
-                break;
-            }
-            case Model.PRIVATE: {
-                const current = getTypedPrevSettings(Model.PRIVATE);
-                updatedModelSpecificSettings = { ...current, ...(newSettings as Partial<PrivateModeSettings>) };
-                break;
-            }
-            case Model.FLUX_KONTEX: {
-                const current = getTypedPrevSettings(Model.FLUX_KONTEX);
-                const updated = { ...current, ...(newSettings as Partial<FluxKontexSettings>) };
-                if (updated.guidance_scale !== undefined && typeof updated.guidance_scale === 'number') {
-                    updated.guidance_scale = Math.max(0, Math.min(20, updated.guidance_scale));
-                }
-                updatedModelSpecificSettings = updated;
-                break;
-            }
-            case Model.FLUX_KONTEX_MAX_MULTI: { 
-                const current = getTypedPrevSettings(Model.FLUX_KONTEX_MAX_MULTI);
-                const updated = { ...current, ...(newSettings as Partial<FluxKontexSettings>) };
-                if (updated.guidance_scale !== undefined && typeof updated.guidance_scale === 'number') {
-                    updated.guidance_scale = Math.max(0, Math.min(20, updated.guidance_scale));
-                }
-                updatedModelSpecificSettings = updated;
-                break;
-            }
-            case Model.FLUX_ULTRA: {
-                const current = getTypedPrevSettings(Model.FLUX_ULTRA);
-                const updated = { ...current, ...(newSettings as Partial<FluxUltraSettings>) };
-                 if (updated.guidance_scale !== undefined && typeof updated.guidance_scale === 'number') {
-                    updated.guidance_scale = Math.max(0, Math.min(20, updated.guidance_scale));
-                }
-                updatedModelSpecificSettings = updated;
-                break;
-            }
-            case Model.KLING_VIDEO: {
-                const current = getTypedPrevSettings(Model.KLING_VIDEO);
-                const updated = { ...current, ...(newSettings as Partial<KlingAiSettings>) };
-                 if (updated.cfg_scale !== undefined && typeof updated.cfg_scale === 'number') {
-                    updated.cfg_scale = Math.max(0, Math.min(2, updated.cfg_scale));
-                }
-                updatedModelSpecificSettings = updated;
-                break;
-            }
-            default:
-                const _exhaustiveCheck: never = modelKey;
-                console.error(`[ChatPage] handleModelSettingsChange: Unhandled model ${modelKey}. Settings may not update correctly.`);
-                const current = prev[modelKey] || getSpecificDefaultSettings(modelKey);
-                updatedModelSpecificSettings = { ...current, ...newSettings }; // Less safe fallback
-        }
-        
         return {
-            ...prev,
+            ...prevAllSettings,
             [modelKey]: updatedModelSpecificSettings
         };
     });
-  }, [selectedModel, /* Removed activePersonaId, personas as they are handled in modelSettings useMemo */]);
+  }, [selectedModel]);
+
 
   const handleModelSelection = (newModel: Model) => {
     const isAdmin = !userSession.isDemoUser && !userSession.isPaidUser;
@@ -1399,7 +1291,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       timestamp: sessionTimestamp,
       model: selectedModel,
       messages: [...messages],
-      modelSettingsSnapshot: { ...modelSettings }, 
+      modelSettingsSnapshot: modelSettings, // No spread here
       isPinned: savedSessions.find(s => s.id === activeSessionId)?.isPinned || false,
       activePersonaIdSnapshot: activePersonaId,
     };
