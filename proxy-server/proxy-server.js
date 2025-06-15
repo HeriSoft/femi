@@ -1,6 +1,4 @@
 
-
-
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -88,20 +86,20 @@ else console.log("LOGIN_CODE_AUTH_ADMIN is SET for admin.");
 
 // --- NAMED DEMO USER CONSTANTS (from DB) ---
 const DEMO_USER_MONTHLY_LIMITS = {
-  FLUX_KONTEX_MAX_MONTHLY: 0, // Flux Kontext Max is paid only, but keeping structure
+  FLUX_KONTEX_MAX_MONTHLY: 0, 
   FLUX_KONTEX_PRO_MONTHLY: 1,
-  IMAGEN3_MONTHLY_IMAGES: 20,
+  IMAGEN3_MONTHLY_IMAGES: 5, 
   OPENAI_TTS_MONTHLY_CHARS: 10000,
-  FLUX_ULTRA_MONTHLY_IMAGES: 0, // Flux Ultra is paid only, so DEMO gets 0.
+  FLUX_ULTRA_MONTHLY_IMAGES: 0, 
 };
 
 // --- PAID USER LIMITS ---
 const PAID_USER_MAX_LIMITS_CONFIG = {
-  IMAGEN3_MAX_IMAGES_PER_DAY: 50,
+  IMAGEN3_MAX_IMAGES_PER_DAY: 1, // Updated from 20
   OPENAI_TTS_MAX_CHARS_TOTAL: 20000,
-  FLUX_KONTEX_MAX_MONTHLY_MAX_USES: 25, // Updated from 40
-  FLUX_KONTEX_PRO_MONTHLY_MAX_USES: 35, // Updated from 50
-  FLUX_ULTRA_MONTHLY_MAX_IMAGES: 30, // Updated from 100
+  FLUX_KONTEX_MAX_MONTHLY_MAX_USES: 25, 
+  FLUX_KONTEX_PRO_MONTHLY_MAX_USES: 35, 
+  FLUX_ULTRA_MONTHLY_MAX_IMAGES: 30, 
 };
 
 // REMOVED: const paidUserFluxMonthlyUsageStore = {}; // This will be replaced by DB tracking
@@ -321,7 +319,7 @@ app.post('/api/auth/verify-code', async (req, res) => {
                 demo_flux_pro_monthly_used: fluxProUsed = 0,
                 demo_imagen_monthly_used: imagenUsed = 0,
                 demo_tts_monthly_chars_used: ttsCharsUsed = 0,
-                demo_flux_ultra_monthly_used: fluxUltraUsed = 0, // Corrected from demo_flux_dev_monthly_used
+                demo_flux_ultra_monthly_used: fluxUltraUsed = 0, 
                 demo_usage_last_reset_month: lastResetMonth
             } = user;
 
@@ -450,9 +448,10 @@ app.post('/api/gemini/image/generate', async (req, res) => {
     const numImagesToGenerate = Math.max(1, Math.min(4, modelSettings?.numberOfImages || 1));
 
     if (req.isPaidUser) {
-      // For PAID users, Imagen limits are currently informational (daily max).
-      // Persistent per-request decrementing for PAID Imagen is not yet implemented in this proxy.
       console.log(`[Imagen Proxy] Paid user ${req.paidUser.username} generating ${numImagesToGenerate} image(s).`);
+      // For PAID users, Imagen limits are INFORMATIONAL based on PAID_USER_MAX_LIMITS_CONFIG.IMAGEN3_MAX_IMAGES_PER_DAY for now.
+      // No specific DB update per request for paid Imagen generation is implemented in this simplified proxy.
+      // If a stricter daily count were needed, DB logic would be added here.
     } else if (req.isDemoUser) {
       if (!req.demoUser || !pool) { 
           return res.status(500).json({ error: "Internal server error: Demo user data or DB not found."});
@@ -482,7 +481,6 @@ app.post('/api/gemini/image/generate', async (req, res) => {
         console.log(`[Demo Usage Update - Imagen] SUCCESS: User ${req.demoUser.username} used ${numGenerated} images. New monthly total (before req obj update): ${req.demoUser.imagenMonthlyUsed + numGenerated}/${DEMO_USER_MONTHLY_LIMITS.IMAGEN3_MONTHLY_IMAGES}`);
       } catch (dbUpdateError) {
         console.error(`[Demo Usage Update - Imagen] FAILED DB update for user ${req.demoUser.username}:`, dbUpdateError);
-        // Decide if you want to still return the image or an error to the user
       }
     }
     res.json(response);
@@ -554,8 +552,6 @@ app.post('/api/openai/tts/generate', async (req, res) => {
     const currentChars = textInput ? textInput.length : 0;
 
     if (req.isPaidUser) {
-      // For PAID users, TTS limits are currently informational (total max).
-      // Persistent per-request decrementing for PAID TTS is not yet implemented in this proxy.
       if (currentChars > PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL) { 
           return res.status(413).json({ error: `Input too long for Paid user TTS. Max: ${PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL}`, limitReached: true });
       }
@@ -655,7 +651,7 @@ app.post('/api/fal/image/edit/flux-kontext', async (req, res) => {
     if (req.authDbError) {
         return res.status(503).json({ error: "Service temporarily unavailable due to a database issue during authentication." });
     }
-     if (req.authenticationAttempted && req.authenticationFailed) {
+    if (req.authenticationAttempted && req.authenticationFailed) {
         return res.status(403).json({ error: "Access Denied. Your session token is invalid, expired, or your account access has been restricted." });
     }
     if (!FAL_KEY) return res.status(500).json({ error: "Fal.ai API Key not configured." });
@@ -663,36 +659,43 @@ app.post('/api/fal/image/edit/flux-kontext', async (req, res) => {
     if (!modelIdentifier || !prompt) return res.status(400).json({ error: "Missing modelIdentifier or prompt for Flux." });
 
     const isFluxMax = modelIdentifier === 'fal-ai/flux-pro/kontext/max/multi';
-    const isFluxPro = modelIdentifier === 'fal-ai/flux-pro/kontext'; 
     const num_images_requested = clientSettings.num_images || PROXY_DEFAULT_FLUX_KONTEX_SETTINGS.num_images || 1;
 
-
-    if (req.isPaidUser && req.paidUser) {
-        if (!pool) return res.status(500).json({ error: "DB not available for PAID user Flux limit check." });
-        const limitField = isFluxMax ? 'paid_flux_max_monthly_used' : 'paid_flux_pro_monthly_used';
-        const maxLimit = isFluxMax ? PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_MAX_MONTHLY_MAX_USES : PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_PRO_MONTHLY_MAX_USES;
-        const currentUsed = req.paidUser[isFluxMax ? 'fluxMaxMonthlyUsed' : 'fluxProMonthlyUsed'] || 0;
-        
-        if (currentUsed + num_images_requested > maxLimit) {
-            return res.status(429).json({ error: `Monthly Flux ${isFluxMax ? 'Max' : 'Pro'} limit reached. Used: ${currentUsed}/${maxLimit}, Requested: ${num_images_requested}`, limitReached: true });
+    // Authorization checks specific to Flux Kontext models
+    if (isFluxMax) {
+        if (!req.isPaidUser) {
+            console.log(`[Fal Flux MAX Proxy] Access DENIED. Not a paid user. User: ${req.paidUser?.username || req.demoUser?.username || 'None (Unauthenticated)'}, IP: ${getClientIp(req)}`);
+            return res.status(403).json({ error: "Flux Kontext Max is exclusively for Paid Users." });
         }
-    } else if (req.isDemoUser && req.demoUser) {
-        if (!pool) return res.status(500).json({ error: "DB not available for DEMO limit check." });
-        const limitToCheck = isFluxMax ? DEMO_USER_MONTHLY_LIMITS.FLUX_KONTEX_MAX_MONTHLY : DEMO_USER_MONTHLY_LIMITS.FLUX_KONTEX_PRO_MONTHLY;
-        const usedCount = isFluxMax ? req.demoUser.fluxMaxMonthlyUsed : req.demoUser.fluxProMonthlyUsed;
-        if (usedCount + num_images_requested > limitToCheck) {
-            return res.status(429).json({ error: `Monthly ${isFluxMax ? 'Flux Max' : 'Flux Pro'} limit for DEMO user reached. Used: ${usedCount}/${limitToCheck}, Requested: ${num_images_requested}`, limitReached: true });
+        // Paid user for Flux Max
+        if (!pool) return res.status(500).json({ error: "DB not available for PAID user Flux MAX limit check." });
+        const currentUsed = req.paidUser.fluxMaxMonthlyUsed || 0;
+        if (currentUsed + num_images_requested > PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_MAX_MONTHLY_MAX_USES) {
+            return res.status(429).json({ error: `Monthly Flux Max limit reached. Used: ${currentUsed}/${PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_MAX_MONTHLY_MAX_USES}, Requested: ${num_images_requested}`, limitReached: true });
         }
-    } else { 
-      console.log(`[Fal Flux Kontext Proxy] Admin or un-tokened user (IP: ${getClientIp(req)}) using Flux Kontext.`);
+    } else { // Flux Pro (fal-ai/flux-pro/kontext)
+        if (req.isPaidUser && req.paidUser) {
+            // Paid user for Flux Pro
+            if (!pool) return res.status(500).json({ error: "DB not available for PAID user Flux Pro limit check." });
+            const currentUsed = req.paidUser.fluxProMonthlyUsed || 0;
+            if (currentUsed + num_images_requested > PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_PRO_MONTHLY_MAX_USES) {
+                return res.status(429).json({ error: `Monthly Flux Pro limit reached for paid user. Used: ${currentUsed}/${PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_PRO_MONTHLY_MAX_USES}, Requested: ${num_images_requested}`, limitReached: true });
+            }
+        } else if (req.isDemoUser && req.demoUser) {
+            // Demo user for Flux Pro
+            if (!pool) return res.status(500).json({ error: "DB not available for DEMO limit check." });
+            const usedCount = req.demoUser.fluxProMonthlyUsed || 0;
+            if (usedCount + num_images_requested > DEMO_USER_MONTHLY_LIMITS.FLUX_KONTEX_PRO_MONTHLY) {
+                return res.status(429).json({ error: `Monthly Flux Pro limit for DEMO user reached. Used: ${usedCount}/${DEMO_USER_MONTHLY_LIMITS.FLUX_KONTEX_PRO_MONTHLY}, Requested: ${num_images_requested}`, limitReached: true });
+            }
+        } else {
+            // Admin or un-tokened user for Flux Pro
+            console.log(`[Fal Flux Pro Proxy] Admin or un-tokened user (IP: ${getClientIp(req)}) using Flux Pro. Access allowed for testing.`);
+        }
     }
 
-    const effectiveSettings = {
-        ...PROXY_DEFAULT_FLUX_KONTEX_SETTINGS, 
-        ...clientSettings,
-        num_images: num_images_requested // Ensure num_images is from validated source
-    };
-    
+    // Prepare Fal.ai payload
+    const effectiveSettings = { ...PROXY_DEFAULT_FLUX_KONTEX_SETTINGS, ...clientSettings, num_images: num_images_requested };
     let falInputPayload = { prompt };
 
     if (isFluxMax) {
@@ -715,19 +718,13 @@ app.post('/api/fal/image/edit/flux-kontext', async (req, res) => {
 
     if (effectiveSettings.seed !== undefined && effectiveSettings.seed !== null) falInputPayload.seed = effectiveSettings.seed;
     if (effectiveSettings.guidance_scale !== undefined) falInputPayload.guidance_scale = effectiveSettings.guidance_scale;
-    falInputPayload.num_images = effectiveSettings.num_images; // Always use this
-    if (effectiveSettings.aspect_ratio && effectiveSettings.aspect_ratio !== 'default') { 
-        falInputPayload.aspect_ratio = effectiveSettings.aspect_ratio;
-    }
+    falInputPayload.num_images = effectiveSettings.num_images;
+    if (effectiveSettings.aspect_ratio && effectiveSettings.aspect_ratio !== 'default') falInputPayload.aspect_ratio = effectiveSettings.aspect_ratio;
     if (effectiveSettings.output_format) falInputPayload.output_format = effectiveSettings.output_format;
-    
-    if (clientSettings.num_inference_steps !== undefined && modelIdentifier === 'fal-ai/flux-pro/kontext') { 
-        falInputPayload.num_inference_steps = clientSettings.num_inference_steps;
-    }
-    if (clientSettings.safety_tolerance !== undefined) { 
-        falInputPayload.safety_tolerance = clientSettings.safety_tolerance;
-    }
+    if (clientSettings.num_inference_steps !== undefined && !isFluxMax) falInputPayload.num_inference_steps = clientSettings.num_inference_steps;
+    if (clientSettings.safety_tolerance !== undefined) falInputPayload.safety_tolerance = clientSettings.safety_tolerance;
 
+    // Submit to Fal.ai
     const queueResult = await fal.queue.submit(modelIdentifier, { input: falInputPayload });
     if (!queueResult?.request_id) return res.status(500).json({ error: "Fal.ai submission failed (no request ID)." });
 
@@ -740,13 +737,12 @@ app.post('/api/fal/image/edit/flux-kontext', async (req, res) => {
         } catch (dbUpdateError) {
             console.error(`[Paid Usage Update - Flux ${isFluxMax ? 'Max' : 'Pro'}] FAILED DB update for user ${req.paidUser.username}:`, dbUpdateError);
         }
-    } else if (req.isDemoUser && req.demoUser) {
-        const fieldToUpdate = isFluxMax ? 'demo_flux_max_monthly_used' : 'demo_flux_pro_monthly_used';
+    } else if (req.isDemoUser && req.demoUser && !isFluxMax) { // Demo users only for Flux Pro
         try {
-            await pool.execute(`UPDATE users SET ${fieldToUpdate} = ${fieldToUpdate} + ? WHERE id = ?`, [num_images_requested, req.demoUser.id]);
-            console.log(`[Demo Usage Update - Flux ${isFluxMax ? 'Max' : 'Pro'}] SUCCESS: User ${req.demoUser.username} used ${num_images_requested}.`);
+            await pool.execute(`UPDATE users SET demo_flux_pro_monthly_used = demo_flux_pro_monthly_used + ? WHERE id = ?`, [num_images_requested, req.demoUser.id]);
+            console.log(`[Demo Usage Update - Flux Pro] SUCCESS: User ${req.demoUser.username} used ${num_images_requested}.`);
         } catch (dbUpdateError) {
-             console.error(`[Demo Usage Update - Flux ${isFluxMax ? 'Max' : 'Pro'}] FAILED DB update for user ${req.demoUser.username}:`, dbUpdateError);
+             console.error(`[Demo Usage Update - Flux Pro] FAILED DB update for user ${req.demoUser.username}:`, dbUpdateError);
         }
     }
     res.json({ requestId: queueResult.request_id, message: "Image editing request submitted." });
@@ -761,7 +757,7 @@ app.post('/api/fal/image/generate/flux-ultra', async (req, res) => {
     if (req.authDbError) {
         return res.status(503).json({ error: "Service temporarily unavailable due to a database issue during authentication." });
     }
-     if (req.authenticationAttempted && req.authenticationFailed) {
+    if (req.authenticationAttempted && req.authenticationFailed) {
         return res.status(403).json({ error: "Access Denied. Your session token is invalid, expired, or your account access has been restricted." });
     }
     if (!FAL_KEY) return res.status(500).json({ error: "Fal.ai API Key not configured." });
@@ -774,28 +770,29 @@ app.post('/api/fal/image/generate/flux-ultra', async (req, res) => {
 
     const numImagesToGenerate = Math.max(1, Math.min(4, clientSettings?.num_images || PROXY_DEFAULT_FLUX_ULTRA_SETTINGS.num_images || 1));
 
-    if (req.isPaidUser && req.paidUser) {
-      if (!pool) return res.status(500).json({ error: "DB not available for PAID user Flux Ultra limit check." });
-      const currentUsed = req.paidUser.fluxUltraMonthlyUsed || 0;
-      if (currentUsed + numImagesToGenerate > PAID_USER_MAX_LIMITS_CONFIG.FLUX_ULTRA_MONTHLY_MAX_IMAGES) {
+    // Authorization checks for Flux Ultra (Strictly Paid Users)
+    if (!req.isPaidUser) {
+        console.log(`[Fal Flux Ultra Proxy] Access DENIED. Not a paid user. User: ${req.paidUser?.username || req.demoUser?.username || 'None (Unauthenticated)'}, IP: ${getClientIp(req)}`);
+        return res.status(403).json({ error: "Flux1.1 [Ultra] is exclusively for Paid Users." });
+    }
+    
+    // Paid user limit check for Flux Ultra
+    if (!pool) return res.status(500).json({ error: "DB not available for PAID user Flux Ultra limit check." });
+    const currentUsed = req.paidUser.fluxUltraMonthlyUsed || 0;
+    if (currentUsed + numImagesToGenerate > PAID_USER_MAX_LIMITS_CONFIG.FLUX_ULTRA_MONTHLY_MAX_IMAGES) {
         return res.status(429).json({ error: `Monthly Flux1.1 [Ultra] image limit reached for paid user. Used: ${currentUsed}/${PAID_USER_MAX_LIMITS_CONFIG.FLUX_ULTRA_MONTHLY_MAX_IMAGES}, Requested: ${numImagesToGenerate}`, limitReached: true });
-      }
-    } else if (req.isDemoUser) { 
-        return res.status(403).json({ error: `Flux1.1 [Ultra] is for Paid Users only. DEMO users cannot use this model.`, limitReached: true });
-    } else { 
-      console.log(`[Fal Flux Ultra Proxy] Admin or un-tokened user (IP: ${getClientIp(req)}) using Flux Ultra.`);
     }
-
+    
+    // Prepare Fal.ai payload
     const falInput = { prompt, ...PROXY_DEFAULT_FLUX_ULTRA_SETTINGS, ...clientSettings, num_images: numImagesToGenerate }; 
+    if (falInput.aspect_ratio === 'default') delete falInput.aspect_ratio;
     
-    if (falInput.aspect_ratio === 'default') {
-        delete falInput.aspect_ratio;
-    }
-    
+    // Submit to Fal.ai
     const queueResult = await fal.queue.submit(modelIdentifier, { input: falInput });
     if (!queueResult?.request_id) return res.status(500).json({ error: "Fal.ai Flux1.1 [Ultra] submission failed (no request ID)." });
 
-    if (req.isPaidUser && req.paidUser) {
+    // Update usage in DB for paid user
+    if (req.isPaidUser && req.paidUser) { // This check is redundant here given the auth check above, but good for clarity
       try {
         await pool.execute('UPDATE users SET paid_flux_ultra_monthly_used = paid_flux_ultra_monthly_used + ? WHERE id = ?', [numImagesToGenerate, req.paidUser.id]);
         console.log(`[Paid Usage Update - Flux Ultra] SUCCESS: User ${req.paidUser.username} generated ${numImagesToGenerate} images.`);
