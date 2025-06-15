@@ -144,7 +144,7 @@ export const MAX_SAVED_CHAT_SESSIONS = 10;
 export const DEMO_USER_DEFAULT_MONTHLY_LIMITS = { 
   FLUX_KONTEX_MAX_MONTHLY: 0, 
   FLUX_KONTEX_PRO_MONTHLY: 1, 
-  IMAGEN3_MONTHLY_IMAGES: 20,
+  IMAGEN3_MONTHLY_IMAGES: 5, 
   OPENAI_TTS_MONTHLY_CHARS: 10000,
   FLUX_ULTRA_MONTHLY_IMAGES: 0,
 };
@@ -165,15 +165,15 @@ export const INITIAL_DEMO_USER_LIMITS: DemoUserLimits = {
 
 export const PAID_USER_LIMITS_CONFIG: PaidUserLimits = {
   imagen3ImagesLeft: 0, 
-  imagen3MaxImages: 50, 
+  imagen3MaxImages: 1, // Updated from 20 (This represents daily for proxy, but client type is just "max")
   openaiTtsCharsLeft: 0, 
   openaiTtsMaxChars: 20000, 
   fluxKontextMaxMonthlyUsesLeft: 0, 
-  fluxKontextMaxMonthlyMaxUses: 25, // Updated from 40
+  fluxKontextMaxMonthlyMaxUses: 25, 
   fluxKontextProMonthlyUsesLeft: 0, 
-  fluxKontextProMonthlyMaxUses: 35,  // Updated from 50
+  fluxKontextProMonthlyMaxUses: 35,  
   fluxUltraMonthlyImagesLeft: 0,
-  fluxUltraMonthlyMaxImages: 30, // Updated from 100
+  fluxUltraMonthlyMaxImages: 30, 
 };
 
 export const OPENAI_TTS_MAX_INPUT_LENGTH = PAID_USER_LIMITS_CONFIG.openaiTtsMaxChars;
