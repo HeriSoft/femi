@@ -318,10 +318,10 @@ const App = (): JSX.Element => {
   
   const updateDemoLimits = useCallback((updatedLimits: Partial<DemoUserLimits | PaidUserLimits>) => {
     setUserSession(prev => {
-        if (prev.isDemoUser && prev.demoLimits && ('fluxKontextMaxMonthlyUsesLeft' in updatedLimits || 'imagen3MonthlyImagesLeft' in updatedLimits)) { // Type guard for DemoUserLimits
+        if (prev.isDemoUser && prev.demoLimits && ('fluxKontextMaxMonthlyUsesLeft' in updatedLimits || 'imagen3MonthlyImagesLeft' in updatedLimits || 'klingVideoMonthlyUsed' in updatedLimits)) {
             const newDemoLimits = { ...prev.demoLimits, ...(updatedLimits as Partial<DemoUserLimits>) };
             return { ...prev, demoLimits: newDemoLimits };
-        } else if (prev.isPaidUser && prev.paidLimits && ('imagen3ImagesLeft' in updatedLimits || 'fluxUltraMonthlyImagesLeft' in updatedLimits)) { // Type guard for PaidUserLimits
+        } else if (prev.isPaidUser && prev.paidLimits && ('imagen3ImagesLeft' in updatedLimits || 'fluxUltraMonthlyImagesLeft' in updatedLimits || 'klingVideoMonthlyUsed' in updatedLimits)) { 
             const newPaidLimits = { ...prev.paidLimits, ...(updatedLimits as Partial<PaidUserLimits>) };
             return { ...prev, paidLimits: newPaidLimits };
         }

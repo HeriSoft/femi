@@ -1,6 +1,5 @@
 
 
-
 import { Chat } from '@google/genai'; // Updated import
 import React from 'react'; // Added for React.DetailedHTMLProps
 
@@ -19,6 +18,7 @@ export enum Model {
   FLUX_KONTEX = 'Flux Kontext Image Edit (fal-ai/flux-pro/kontext)', 
   FLUX_KONTEX_MAX_MULTI = 'Flux Kontext Max Multi-Image (fal-ai/flux-pro/kontext/max/multi)',
   FLUX_ULTRA = 'Flux1.1 [Ultra] (fal-ai/flux-pro/v1.1-ultra)', // Renamed from FLUX_DEV_IMAGE_GEN
+  KLING_VIDEO = 'Kling AI Video Gen (fal-ai/kling-video/v2.1/standard/image-to-video)', // New Kling AI Video Model - Updated path
 }
 
 export interface ChatMessage {
@@ -27,11 +27,11 @@ export interface ChatMessage {
   sender: 'user' | 'ai';
   timestamp: number; // Added to store the time of message creation
   model?: Model;
-  imagePreview?: string; // For user messages with a single image (upload) - (e.g. Gemini, GPT-4)
+  imagePreview?: string; // For user messages with a single image (upload) - (e.g. Gemini, GPT-4, Kling)
   imagePreviews?: string[]; // For AI generated/edited images OR for multi-image user uploads (Flux Max)
   imageMimeType?: 'image/jpeg' | 'image/png'; // For AI generated images (single)
   imageMimeTypes?: string[]; // For multi-image user uploads (Flux Max), corresponds to imagePreviews
-  originalPrompt?: string; // For AI generated/edited images, to store the original user prompt
+  originalPrompt?: string; // For AI generated/edited images/videos, to store the original user prompt
   fileName?: string; // For user messages with files
   fileContent?: string; // For storing text file content
   groundingSources?: GroundingSource[];
@@ -48,9 +48,13 @@ export interface ChatMessage {
   videoFileName?: string; // Persisted: name of the video
   videoMimeType?: string; // Persisted: mime type of the video
   isNote?: boolean; // For private mode text-only entries
-  // Field for Flux Kontex polling
-  fluxRequestId?: string; // Stores the request ID for polling Flux Kontex results
-  fluxModelId?: string; // Stores the Fal model ID used for this request (e.g. standard or max/multi or flux/dev)
+  // Field for Fal.ai polling (Flux Kontex, Flux Ultra, Kling)
+  fluxRequestId?: string; // Stores the request ID for polling Fal.ai results (generic name for Fal)
+  klingVideoRequestId?: string; // Stores the request ID for Kling video generation polling
+  fluxModelId?: string; // Stores the Fal model ID used for this request
+  isVideoQuery?: boolean; // To flag user messages that are video generation prompts (e.g., Kling)
+  videoUrl?: string; // For AI messages with generated video URL
+  // videoMimeType for ChatMessage is already defined above for private mode, can be reused for Kling.
 }
 
 export interface GroundingSource {
@@ -122,10 +126,53 @@ export interface FluxUltraSettings { // Renamed from FluxDevSettings
   output_format?: 'jpeg' | 'png'; // Added output_format for consistency, proxy might use this
 }
 
+// Kling AI Video Generation Settings
+export type KlingAiDuration = "5" | "10";
+export type KlingAiAspectRatio = "16:9" | "9:16" | "1:1";
+
+export interface KlingAiSettings {
+  // prompt and image_url are main inputs, not part of these configurable settings for the UI panel
+  duration: KlingAiDuration;
+  aspect_ratio: KlingAiAspectRatio;
+  negative_prompt?: string; // Default: "blur, distort, and low quality"
+  cfg_scale?: number; // Default: 0.5
+}
+
+export type ModelSpecificSettingsMap = {
+  [Model.GEMINI]: ModelSettings;
+  [Model.GEMINI_ADVANCED]: ModelSettings;
+  [Model.GPT4O]: ModelSettings;
+  [Model.GPT4O_MINI]: ModelSettings;
+  [Model.DEEPSEEK]: ModelSettings;
+  [Model.CLAUDE]: ModelSettings;
+  [Model.IMAGEN3]: ImagenSettings;
+  [Model.OPENAI_TTS]: OpenAITtsSettings;
+  [Model.REAL_TIME_TRANSLATION]: RealTimeTranslationSettings;
+  [Model.AI_AGENT]: AiAgentSettings;
+  [Model.PRIVATE]: PrivateModeSettings;
+  [Model.FLUX_KONTEX]: FluxKontexSettings;
+  [Model.FLUX_KONTEX_MAX_MULTI]: FluxKontexSettings;
+  [Model.FLUX_ULTRA]: FluxUltraSettings;
+  [Model.KLING_VIDEO]: KlingAiSettings;
+};
+
+// Explicit union of all possible model-specific settings objects
+export type AnyModelSettings = 
+  | ModelSettings
+  | ImagenSettings
+  | OpenAITtsSettings
+  | RealTimeTranslationSettings
+  | AiAgentSettings
+  | PrivateModeSettings
+  | FluxKontexSettings
+  | FluxUltraSettings
+  | KlingAiSettings;
+
 
 export type AllModelSettings = {
-  [key in Model]?: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings> & Partial<FluxKontexSettings> & Partial<FluxUltraSettings>;
+  [K in Model]?: ModelSpecificSettingsMap[K];
 };
+
 
 export interface ThemeContextType {
   theme: 'light' | 'dark';
@@ -164,6 +211,7 @@ export interface ApiKeyStatus {
   isImageEditing?: boolean; // Flag for image editing models like Flux Kontex (single image)
   isMultiImageEditing?: boolean; // Flag for multi-image editing models like Flux Kontext Max
   isFluxUltraImageGeneration?: boolean; // Renamed from isFluxDevImageGeneration
+  isKlingVideoGeneration?: boolean; // Flag for Kling AI video generation
 }
 
 export interface Persona {
@@ -175,8 +223,8 @@ export interface Persona {
 export interface SettingsPanelProps {
   selectedModel: Model;
   onModelChange: (model: Model) => void;
-  modelSettings: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings> & Partial<FluxKontexSettings> & Partial<FluxUltraSettings>;
-  onModelSettingsChange: (settings: Partial<ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & PrivateModeSettings & FluxKontexSettings & FluxUltraSettings>) => void;
+  modelSettings: AnyModelSettings; // Changed from ModelSpecificSettingsMap[Model]
+  onModelSettingsChange: (settings: Partial<AnyModelSettings>) => void; // Changed from Partial<ModelSpecificSettingsMap[Model]>
   isWebSearchEnabled: boolean;
   onWebSearchToggle: (enabled: boolean) => void;
   disabled: boolean;
@@ -188,6 +236,7 @@ export interface SettingsPanelProps {
   onPersonaDelete: (personaId: string) => void;
   userSession: UserSessionState;
 }
+
 
 export interface HistoryPanelProps {
   savedSessions: ChatSession[];
@@ -210,7 +259,8 @@ export interface ChatSession {
   timestamp: number;
   model: Model;
   messages: ChatMessage[];
-  modelSettingsSnapshot: ModelSettings & Partial<ImagenSettings> & Partial<OpenAITtsSettings> & Partial<RealTimeTranslationSettings> & Partial<AiAgentSettings> & Partial<PrivateModeSettings> & Partial<FluxKontexSettings> & Partial<FluxUltraSettings>;
+  // Store a snapshot of the specific settings for the model used in this session
+  modelSettingsSnapshot: AnyModelSettings; // Changed from ModelSpecificSettingsMap[Model]
   isPinned: boolean;
   activePersonaIdSnapshot: string | null; // Save active persona with the session
 }
@@ -478,7 +528,9 @@ export interface DemoUserLimits {
   openaiTtsMonthlyCharsLeft: number;
   openaiTtsMonthlyMaxChars: number;
   fluxUltraMonthlyImagesLeft: number; 
-  fluxUltraMonthlyMaxImages: number;  
+  fluxUltraMonthlyMaxImages: number;
+  klingVideoMonthlyUsed?: number; // Used videos this month
+  klingVideoMonthlyMaxUses?: number; // Max videos allowed this month (likely 0 for demo)
 }
 
 export interface PaidUserLimits {
@@ -492,6 +544,8 @@ export interface PaidUserLimits {
   fluxKontextProMonthlyMaxUses: number; // Updated from 50 to 35
   fluxUltraMonthlyImagesLeft: number; 
   fluxUltraMonthlyMaxImages: number;  // Updated from 100 to 30
+  klingVideoMonthlyUsed?: number; // Videos used this month by paid user
+  klingVideoMonthlyMaxGenerations?: number; // Max videos allowed this month for paid user
 }
 
 export interface UserSessionState {
@@ -565,6 +619,16 @@ export interface GenerateImageWithFluxUltraParams {
   requestHeaders?: HeadersInit; // Added for ChatPage to pass auth headers
 }
 
+// For Kling AI Video Generation Proxy Service
+export interface GenerateVideoWithKlingParams {
+  modelIdentifier: string; // e.g., 'fal-ai/kling-video/v2.1/standard/image-to-video'
+  prompt: string;
+  settings: KlingAiSettings;
+  imageData: SingleImageData; // Kling takes one image_url (base64)
+  userSession: UserSessionState;
+  requestHeaders?: HeadersInit;
+}
+
 
 export interface HandwritingCanvasProps {
   width: number;
@@ -613,3 +677,20 @@ export const getActualModelIdentifier = (model: Model): string => {
   const match = model.match(/\(([^)]+)\)$/);
   return match ? match[1] : model;
 };
+
+// Fal.ai Proxy Service Response Types
+export interface FalSubmitProxyResponse {
+  requestId?: string;
+  message?: string;
+  error?: string;
+}
+
+export interface FalStatusProxyResponse {
+  status?: 'COMPLETED' | 'IN_PROGRESS' | 'IN_QUEUE' | 'ERROR' | 'COMPLETED_NO_IMAGE' | 'NOT_FOUND' | 'PROXY_REQUEST_ERROR' | 'NETWORK_ERROR' | string;
+  imageUrl?: string; 
+  imageUrls?: string[];
+  videoUrl?: string; 
+  error?: string;
+  message?: string; 
+  rawResult?: any; 
+}

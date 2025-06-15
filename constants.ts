@@ -1,7 +1,5 @@
 
-
-
-import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank, AiAgentSettings, CreditPackage, PrivateModeSettings, FluxKontexSettings, FluxKontexAspectRatio, DemoUserLimits, PaidUserLimits, FluxUltraSettings, FluxUltraAspectRatio } from './types.ts';
+import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank, AiAgentSettings, CreditPackage, PrivateModeSettings, FluxKontexSettings, FluxKontexAspectRatio, DemoUserLimits, PaidUserLimits, FluxUltraSettings, FluxUltraAspectRatio, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, ModelSpecificSettingsMap } from './types.ts';
 
 export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
   temperature: 0.7,
@@ -50,11 +48,9 @@ Present your findings and the plan in a clear, structured format (e.g., using ma
 Your goal is to act as an autonomous assistant that takes a complex request, potentially including embedded file context for text/images or filename context for other types, and returns a complete, actionable result. Be thorough and proactive.`,
 };
 
-export const DEFAULT_PRIVATE_MODE_SETTINGS: PrivateModeSettings & Pick<ModelSettings, 'temperature' | 'topK' | 'topP' | 'systemInstruction'> = {
+export const DEFAULT_PRIVATE_MODE_SETTINGS: PrivateModeSettings = {
   systemInstruction: 'Local data storage mode. No AI interaction.',
-  temperature: 0, // Not applicable
-  topK: 0, // Not applicable
-  topP: 0, // Not applicable
+  // temperature, topK, topP are not part of PrivateModeSettings directly
 };
 
 export const DEFAULT_FLUX_KONTEX_SETTINGS: FluxKontexSettings = {
@@ -77,6 +73,13 @@ export const DEFAULT_FLUX_ULTRA_SETTINGS: FluxUltraSettings = {
   output_format: 'jpeg', // Fal.ai default
 };
 
+export const DEFAULT_KLING_AI_SETTINGS: KlingAiSettings = {
+  duration: "5" as KlingAiDuration,
+  aspect_ratio: "16:9" as KlingAiAspectRatio,
+  negative_prompt: "blur, distort, and low quality",
+  cfg_scale: 0.5,
+};
+
 
 const GENERIC_FILE_HANDLING_INSTRUCTION = `
 FILE HANDLING:
@@ -88,46 +91,22 @@ FILE HANDLING:
 - If the user uploads a plain text file (like .txt, .md) or an image, its content *may* be directly included in their message for you to process. Use this embedded content if available.
 `;
 
-export const ALL_MODEL_DEFAULT_SETTINGS: AllModelSettings = {
+export const ALL_MODEL_DEFAULT_SETTINGS: ModelSpecificSettingsMap = {
   [Model.GEMINI]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: `You are a helpful and creative AI assistant powered by Gemini Flash.${GENERIC_FILE_HANDLING_INSTRUCTION}` },
   [Model.GEMINI_ADVANCED]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: `You are Gemini Advanced, a powerful multimodal AI by Google.${GENERIC_FILE_HANDLING_INSTRUCTION}` },
   [Model.GPT4O]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: `You are ChatGPT (gpt-4.1), a powerful AI by OpenAI.${GENERIC_FILE_HANDLING_INSTRUCTION}` }, 
   [Model.GPT4O_MINI]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: `You are ChatGPT (gpt-4.1-mini), an efficient AI by OpenAI.${GENERIC_FILE_HANDLING_INSTRUCTION}` }, 
   [Model.DEEPSEEK]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: `You are Deepseek Coder, an AI specialized in coding and chat, powered by the deepseek-chat model.${GENERIC_FILE_HANDLING_INSTRUCTION}` },
   [Model.CLAUDE]: { ...DEFAULT_MODEL_SETTINGS, systemInstruction: `You are Claude, a helpful AI assistant by Anthropic. ${GENERIC_FILE_HANDLING_INSTRUCTION}` },
-  [Model.IMAGEN3]: { 
-    ...DEFAULT_MODEL_SETTINGS, 
-    ...DEFAULT_IMAGEN_SETTINGS, 
-    systemInstruction: 'Image generation prompt.', 
-  },
-  [Model.OPENAI_TTS]: {
-    ...DEFAULT_MODEL_SETTINGS, 
-    ...DEFAULT_OPENAI_TTS_SETTINGS,
-    systemInstruction: 'Text to speech synthesis.', 
-  },
-  [Model.REAL_TIME_TRANSLATION]: {
-    ...DEFAULT_MODEL_SETTINGS, 
-    ...DEFAULT_REAL_TIME_TRANSLATION_SETTINGS,
-    systemInstruction: 'Translate the given text accurately.', 
-  },
-  [Model.AI_AGENT]: { ...DEFAULT_AI_AGENT_SETTINGS },
-  [Model.PRIVATE]: { ...DEFAULT_PRIVATE_MODE_SETTINGS },
-  [Model.FLUX_KONTEX]: {
-    ...DEFAULT_MODEL_SETTINGS, 
-    ...DEFAULT_FLUX_KONTEX_SETTINGS, 
-    systemInstruction: 'Image editing context.', 
-  },
-  [Model.FLUX_KONTEX_MAX_MULTI]: {
-    ...DEFAULT_MODEL_SETTINGS,
-    ...DEFAULT_FLUX_KONTEX_SETTINGS, 
-    num_images: 2, 
-    systemInstruction: 'Advanced multi-image editing context using Fal.ai Flux Pro Kontext Max Multi.',
-  },
-  [Model.FLUX_ULTRA]: {
-    ...DEFAULT_MODEL_SETTINGS,
-    ...DEFAULT_FLUX_ULTRA_SETTINGS,
-    systemInstruction: 'Flux1.1 [Ultra] image generation prompt context.',
-  },
+  [Model.IMAGEN3]: { ...DEFAULT_IMAGEN_SETTINGS },
+  [Model.OPENAI_TTS]: { ...DEFAULT_OPENAI_TTS_SETTINGS },
+  [Model.REAL_TIME_TRANSLATION]: { ...DEFAULT_REAL_TIME_TRANSLATION_SETTINGS },
+  [Model.AI_AGENT]: { ...DEFAULT_AI_AGENT_SETTINGS }, // AiAgentSettings extends ModelSettings
+  [Model.PRIVATE]: { ...DEFAULT_PRIVATE_MODE_SETTINGS }, // PrivateModeSettings extends Pick<ModelSettings, 'systemInstruction'>
+  [Model.FLUX_KONTEX]: { ...DEFAULT_FLUX_KONTEX_SETTINGS },
+  [Model.FLUX_KONTEX_MAX_MULTI]: { ...DEFAULT_FLUX_KONTEX_SETTINGS, num_images: 2 },
+  [Model.FLUX_ULTRA]: { ...DEFAULT_FLUX_ULTRA_SETTINGS },
+  [Model.KLING_VIDEO]: { ...DEFAULT_KLING_AI_SETTINGS },
 };
  
 export const LOCAL_STORAGE_SETTINGS_KEY = 'femiAiChatSettings';
@@ -147,6 +126,7 @@ export const DEMO_USER_DEFAULT_MONTHLY_LIMITS = {
   IMAGEN3_MONTHLY_IMAGES: 5, 
   OPENAI_TTS_MONTHLY_CHARS: 10000,
   FLUX_ULTRA_MONTHLY_IMAGES: 0,
+  KLING_VIDEO_MONTHLY_MAX_USES: 0, // Demo users cannot use Kling
 };
 
 export const INITIAL_DEMO_USER_LIMITS: DemoUserLimits = { 
@@ -160,6 +140,8 @@ export const INITIAL_DEMO_USER_LIMITS: DemoUserLimits = {
   openaiTtsMonthlyMaxChars: DEMO_USER_DEFAULT_MONTHLY_LIMITS.OPENAI_TTS_MONTHLY_CHARS,
   fluxUltraMonthlyImagesLeft: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_ULTRA_MONTHLY_IMAGES,
   fluxUltraMonthlyMaxImages: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_ULTRA_MONTHLY_IMAGES,
+  klingVideoMonthlyUsed: 0,
+  klingVideoMonthlyMaxUses: DEMO_USER_DEFAULT_MONTHLY_LIMITS.KLING_VIDEO_MONTHLY_MAX_USES,
 };
 
 
@@ -173,7 +155,9 @@ export const PAID_USER_LIMITS_CONFIG: PaidUserLimits = {
   fluxKontextProMonthlyUsesLeft: 0, 
   fluxKontextProMonthlyMaxUses: 35,  
   fluxUltraMonthlyImagesLeft: 0,
-  fluxUltraMonthlyMaxImages: 30, 
+  fluxUltraMonthlyMaxImages: 30,
+  klingVideoMonthlyUsed: 0, // This would be the current usage this month for a user
+  klingVideoMonthlyMaxGenerations: 1, // Paid users get 1 Kling video generation per month
 };
 
 export const OPENAI_TTS_MAX_INPUT_LENGTH = PAID_USER_LIMITS_CONFIG.openaiTtsMaxChars;
@@ -329,4 +313,16 @@ export const FLUX_ULTRA_ASPECT_RATIOS: { value: FluxUltraAspectRatio; label: str
   { value: '3:4', label: '3:4 (Portrait)' },
   { value: '9:16', label: '9:16 (Tall Screen)' },
   { value: '9:21', label: '9:21 (Ultra Tall)' },
+];
+
+// Kling AI Constants
+export const KLING_AI_DURATIONS: { value: KlingAiDuration; label: string }[] = [
+    { value: "5", label: "5 Seconds" },
+    { value: "10", label: "10 Seconds" },
+];
+
+export const KLING_AI_ASPECT_RATIOS: { value: KlingAiAspectRatio; label: string }[] = [
+    { value: "16:9", label: "16:9 (Widescreen)" },
+    { value: "9:16", label: "9:16 (Portrait)" },
+    { value: "1:1", label: "1:1 (Square)" },
 ];
