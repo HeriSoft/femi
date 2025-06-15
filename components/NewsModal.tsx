@@ -1,6 +1,3 @@
-
-
-
 import React from 'react';
 import { XMarkIcon, MegaphoneIcon } from './Icons.tsx'; // Assuming MegaphoneIcon is in Icons.tsx
 
@@ -17,7 +14,7 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
       title: "DEMO User Access Update:",
       points: [
         "To try DEMO features, log in with a specific DEMO username (e.g., 'guest_demo').",
-        "Anonymous IP-based DEMO access is no longer available.",
+        "Bugs fixed.",
         "DEMO users have monthly limits for features."
       ]
     },
@@ -25,7 +22,7 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
       title: "Flux Kontext Max (Advanced image editing) features:",
       points: [
         "Upload up to 4 images for editing requests.",
-        "Paid users: 25 images/month.", // Updated
+        "Paid users: 25 images/month.", 
         "Not available for DEMO users."
       ]
     },
@@ -33,14 +30,14 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
       title: "Flux Kontext Pro (image editing) features:",
       points: [
         "Upload up to 1 image for editing requests.",
-        "Paid users: 35 images/month.", // Updated
+        "Paid users: 35 images/month.", 
         "DEMO users: Limited monthly uses (e.g., 1 image/month via 'guest_demo')."
       ]
     },
     {
-      title: "Flux1.1 [Ultra] Image Generation:", // New/Updated section
+      title: "Flux1.1 [Ultra] Image Generation:", 
       points: [
-        "Paid users: 30 images/month.", // New limit
+        "Paid users: 30 images/month.", 
         "DEMO users: This feature is for Paid Users only."
       ]
     },
@@ -54,8 +51,8 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
      {
       title: "Imagen3 Image Generation:",
       points: [
-        "DEMO users: Limited monthly images (e.g., 20 images/month via 'guest_demo').",
-        "Paid users: 50 images/day."
+        "DEMO users: Limited monthly images (e.g., 5 images/month via 'guest_demo').",
+        "Paid users: 1 image/day." // Updated
       ]
     },
     {
