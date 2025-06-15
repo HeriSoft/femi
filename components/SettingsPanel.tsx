@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
-import { Model, ModelSettings, SettingsPanelProps, ApiKeyStatus, getActualModelIdentifier, ImagenSettings, Persona, OpenAITtsSettings, OpenAiTtsVoice, RealTimeTranslationSettings, AiAgentSettings, FluxKontexSettings, FluxKontexAspectRatio, FluxUltraSettings, FluxUltraAspectRatio } from '../types.ts';
-import { ArrowUpTrayIcon, PhotoIcon, XMarkIcon, MagnifyingGlassIcon, KeyIcon, InformationCircleIcon, UserCircleIcon, PlusCircleIcon, TrashIcon, PencilSquareIcon, SpeakerWaveIcon, LanguageIcon, PencilIcon as EditIcon, ArrowPathIcon } from './Icons.tsx';
-import { TRANSLATION_TARGET_LANGUAGES, DEFAULT_FLUX_KONTEX_SETTINGS, DEFAULT_FLUX_ULTRA_SETTINGS, FLUX_ULTRA_ASPECT_RATIOS } from '../constants.ts';
+import { Model, ModelSettings, SettingsPanelProps, ApiKeyStatus, getActualModelIdentifier, ImagenSettings, Persona, OpenAITtsSettings, OpenAiTtsVoice, RealTimeTranslationSettings, AiAgentSettings, FluxKontexSettings, FluxKontexAspectRatio, FluxUltraSettings, FluxUltraAspectRatio, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, PrivateModeSettings, AnyModelSettings } from '../types.ts'; // Added AnyModelSettings
+import { ArrowUpTrayIcon, PhotoIcon, XMarkIcon, MagnifyingGlassIcon, KeyIcon, InformationCircleIcon, UserCircleIcon, PlusCircleIcon, TrashIcon, PencilSquareIcon, SpeakerWaveIcon, LanguageIcon, PencilIcon as EditIcon, ArrowPathIcon, FilmIcon } from './Icons.tsx';
+import { TRANSLATION_TARGET_LANGUAGES, DEFAULT_FLUX_KONTEX_SETTINGS, DEFAULT_FLUX_ULTRA_SETTINGS, FLUX_ULTRA_ASPECT_RATIOS, DEFAULT_KLING_AI_SETTINGS, KLING_AI_DURATIONS, KLING_AI_ASPECT_RATIOS, ALL_MODEL_DEFAULT_SETTINGS } from '../constants.ts'; // Imported ALL_MODEL_DEFAULT_SETTINGS
 
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({
@@ -34,9 +34,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const isPrivateModel = selectedModel === Model.PRIVATE || currentApiKeyStatus?.isPrivateMode;
   const isFluxKontexModel = selectedModel === Model.FLUX_KONTEX || selectedModel === Model.FLUX_KONTEX_MAX_MULTI;
   const isFluxUltraImageGenModel = selectedModel === Model.FLUX_ULTRA || currentApiKeyStatus?.isFluxUltraImageGeneration;
+  const isKlingVideoModel = selectedModel === Model.KLING_VIDEO || currentApiKeyStatus?.isKlingVideoGeneration;
 
-  const showPersonaSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isPrivateModel && !isFluxKontexModel && !isFluxUltraImageGenModel && selectedModel !== Model.CLAUDE;
-  const showChatModelSettingsSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isFluxKontexModel && !isFluxUltraImageGenModel && !isPrivateModel && selectedModel !== Model.CLAUDE;
+  const showPersonaSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isPrivateModel && !isFluxKontexModel && !isFluxUltraImageGenModel && !isKlingVideoModel && selectedModel !== Model.CLAUDE;
+  const showChatModelSettingsSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isFluxKontexModel && !isFluxUltraImageGenModel && !isPrivateModel && !isKlingVideoModel && selectedModel !== Model.CLAUDE;
   
 
   const handlePersonaEdit = (persona: Persona) => {
@@ -74,7 +75,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   };
 
   const currentActivePersona = activePersonaId ? personas.find(p => p.id === activePersonaId) : null;
-  const effectiveSystemInstruction = currentActivePersona ? currentActivePersona.instruction : modelSettings.systemInstruction;
+  
+  let effectiveSystemInstruction = "";
+  if (showChatModelSettingsSection && 'systemInstruction' in modelSettings) {
+    effectiveSystemInstruction = currentActivePersona ? currentActivePersona.instruction : (modelSettings as ModelSettings).systemInstruction;
+  }
 
 
   const models: Model[] = Object.values(Model) as Model[];
@@ -87,13 +92,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                          !currentApiKeyStatus?.isAiAgent &&
                                          !currentApiKeyStatus?.isImageEditing &&
                                          !currentApiKeyStatus?.isMultiImageEditing &&
-                                         !currentApiKeyStatus?.isFluxUltraImageGeneration;
+                                         !currentApiKeyStatus?.isFluxUltraImageGeneration &&
+                                         !isKlingVideoModel;
 
 
   const actualModelId = getActualModelIdentifier(selectedModel);
   
-  const typedModelSettings = modelSettings as ModelSettings & ImagenSettings & OpenAITtsSettings & RealTimeTranslationSettings & AiAgentSettings & FluxKontexSettings & FluxUltraSettings;
-
   const imagenAspectRatios: { value: string; label: string }[] = [
     { value: '1:1', label: '1:1 (Square)' },
     { value: '16:9', label: '16:9 (Landscape)' },
@@ -135,6 +139,31 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   
   const isAdminUser = !userSession.isDemoUser && !userSession.isPaidUser;
 
+  // Helper to determine the API type string for display
+  let apiKeyTypeString = "";
+  if (currentApiKeyStatus) {
+    if (currentApiKeyStatus.isMock) {
+        apiKeyTypeString = "Mock";
+    } else if (currentApiKeyStatus.isTextToSpeech) {
+        apiKeyTypeString = "TTS API";
+    } else if (currentApiKeyStatus.isRealTimeTranslation) {
+        apiKeyTypeString = "Translation API";
+    } else if (currentApiKeyStatus.isAiAgent) {
+        apiKeyTypeString = "AI Agent API";
+    } else if (currentApiKeyStatus.isImageEditing || currentApiKeyStatus.isMultiImageEditing) {
+        apiKeyTypeString = "Image Editing API";
+    } else if (currentApiKeyStatus.isFluxUltraImageGeneration) {
+        apiKeyTypeString = "Image Gen API (Flux Ultra)";
+    } else if (currentApiKeyStatus.isKlingVideoGeneration) {
+        apiKeyTypeString = "Video Gen API (Kling)";
+    } else if (currentApiKeyStatus.isPrivateMode) {
+        apiKeyTypeString = "Local Mode";
+    } else {
+        apiKeyTypeString = "Live API Key";
+    }
+  }
+
+
   return (
     <div className="space-y-6 p-1">
       <div>
@@ -151,7 +180,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           {models.map((model) => {
             const isFluxMax = model === Model.FLUX_KONTEX_MAX_MULTI;
             const isFluxUltra = model === Model.FLUX_ULTRA;
-            const isRestricted = (isFluxMax || isFluxUltra) && !userSession.isPaidUser && !isAdminUser; 
+            const isKling = model === Model.KLING_VIDEO;
+            const isRestricted = (isFluxMax || isFluxUltra || isKling) && !userSession.isPaidUser && !isAdminUser; 
             return (
               <option key={model} value={model} disabled={isRestricted}
                 className={isRestricted ? "text-gray-400 dark:text-gray-600" : ""}>
@@ -175,7 +205,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                       : 'bg-red-100 dark:bg-red-900 border-red-500 dark:border-red-400 text-red-700 dark:text-red-300'
               } border`}>
                   <p className="font-medium">
-                      {currentApiKeyStatus.modelName} ({currentApiKeyStatus.isMock ? "Mock" : (currentApiKeyStatus.isTextToSpeech ? "TTS API" : (currentApiKeyStatus.isRealTimeTranslation ? "Translation API" : (currentApiKeyStatus.isAiAgent ? "AI Agent API" : (currentApiKeyStatus.isImageEditing || currentApiKeyStatus.isMultiImageEditing ? "Image Editing API" : (currentApiKeyStatus.isFluxUltraImageGeneration ? "Image Gen API (Flux Ultra)" : (currentApiKeyStatus.isPrivateMode ? "Local Mode" : "Live API Key"))))))})
+                      {currentApiKeyStatus.modelName} ({apiKeyTypeString})
                   </p>
                   <p>Env Variable: <code>process.env.{currentApiKeyStatus.envVarName}</code></p>
                   {currentApiKeyStatus.isSet ? (
@@ -297,7 +327,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               id="system-instruction"
               rows={3}
               value={effectiveSystemInstruction}
-              onChange={(e) => onModelSettingsChange({ systemInstruction: e.target.value })}
+              onChange={(e) => onModelSettingsChange({ systemInstruction: e.target.value } as Partial<ModelSettings>)}
               disabled={disabled || !!currentActivePersona} 
               className={`w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none ${!!currentActivePersona ? 'opacity-70 cursor-not-allowed' : ''}`}
             />
@@ -305,7 +335,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           </div>
           <div>
             <label htmlFor="temperature" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              Temperature: {typedModelSettings.temperature.toFixed(2)}
+              Temperature: {(modelSettings as ModelSettings).temperature.toFixed(2)}
             </label>
             <input
               type="range"
@@ -313,16 +343,16 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               min="0"
               max={currentApiKeyStatus?.isGeminiPlatform ? "1" : "2"} 
               step="0.01"
-              value={typedModelSettings.temperature}
-              onChange={(e) => onModelSettingsChange({ temperature: parseFloat(e.target.value) })}
+              value={(modelSettings as ModelSettings).temperature}
+              onChange={(e) => onModelSettingsChange({ temperature: parseFloat(e.target.value) } as Partial<ModelSettings>)}
               disabled={disabled}
               className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
             />
           </div>
-          { (currentApiKeyStatus?.isGeminiPlatform && !currentApiKeyStatus.isImageGeneration && !currentApiKeyStatus.isImageEditing && !currentApiKeyStatus.isPrivateMode && !currentApiKeyStatus.isMultiImageEditing && !currentApiKeyStatus.isFluxUltraImageGeneration) && ( 
+          { (currentApiKeyStatus?.isGeminiPlatform && !currentApiKeyStatus.isImageGeneration && !currentApiKeyStatus.isImageEditing && !currentApiKeyStatus.isPrivateMode && !currentApiKeyStatus.isMultiImageEditing && !currentApiKeyStatus.isFluxUltraImageGeneration && !isKlingVideoModel) && ( 
           <div>
             <label htmlFor="top-k" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              Top K: {typedModelSettings.topK}
+              Top K: {(modelSettings as ModelSettings).topK}
             </label>
             <input
               type="range"
@@ -330,8 +360,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               min="1"
               max="100" 
               step="1"
-              value={typedModelSettings.topK}
-              onChange={(e) => onModelSettingsChange({ topK: parseInt(e.target.value, 10) })}
+              value={(modelSettings as ModelSettings).topK}
+              onChange={(e) => onModelSettingsChange({ topK: parseInt(e.target.value, 10) } as Partial<ModelSettings>)}
               disabled={disabled}
               className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
             />
@@ -339,7 +369,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           )}
           <div> 
             <label htmlFor="top-p" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              Top P: {typedModelSettings.topP.toFixed(2)}
+              Top P: {(modelSettings as ModelSettings).topP.toFixed(2)}
             </label>
             <input
               type="range"
@@ -347,8 +377,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               min="0"
               max="1"
               step="0.01"
-              value={typedModelSettings.topP}
-              onChange={(e) => onModelSettingsChange({ topP: parseFloat(e.target.value) })}
+              value={(modelSettings as ModelSettings).topP}
+              onChange={(e) => onModelSettingsChange({ topP: parseFloat(e.target.value) } as Partial<ModelSettings>)}
               disabled={disabled}
               className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
             />
@@ -373,14 +403,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             <textarea
               id="ai-agent-system-instruction"
               rows={5}
-              value={typedModelSettings.systemInstruction}
+              value={(modelSettings as AiAgentSettings).systemInstruction}
               readOnly
               className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light/70 dark:bg-neutral-dark/70 opacity-70 cursor-not-allowed text-xs"
             />
           </div>
            <div>
             <label htmlFor="ai-agent-temperature" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              Temperature: {typedModelSettings.temperature.toFixed(2)}
+              Temperature: {(modelSettings as AiAgentSettings).temperature.toFixed(2)}
             </label>
             <input
               type="range"
@@ -388,15 +418,15 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               min="0"
               max="1" 
               step="0.01"
-              value={typedModelSettings.temperature}
-              onChange={(e) => onModelSettingsChange({ temperature: parseFloat(e.target.value) })}
+              value={(modelSettings as AiAgentSettings).temperature}
+              onChange={(e) => onModelSettingsChange({ temperature: parseFloat(e.target.value) } as Partial<AiAgentSettings>)}
               disabled={disabled}
               className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
             />
           </div>
           <div>
             <label htmlFor="ai-agent-top-k" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              Top K: {typedModelSettings.topK}
+              Top K: {(modelSettings as AiAgentSettings).topK}
             </label>
             <input
               type="range"
@@ -404,15 +434,15 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               min="1"
               max="100" 
               step="1"
-              value={typedModelSettings.topK}
-              onChange={(e) => onModelSettingsChange({ topK: parseInt(e.target.value, 10) })}
+              value={(modelSettings as AiAgentSettings).topK}
+              onChange={(e) => onModelSettingsChange({ topK: parseInt(e.target.value, 10) } as Partial<AiAgentSettings>)}
               disabled={disabled}
               className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
             />
           </div>
           <div> 
             <label htmlFor="ai-agent-top-p" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              Top P: {typedModelSettings.topP.toFixed(2)}
+              Top P: {(modelSettings as AiAgentSettings).topP.toFixed(2)}
             </label>
             <input
               type="range"
@@ -420,8 +450,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               min="0"
               max="1"
               step="0.01"
-              value={typedModelSettings.topP}
-              onChange={(e) => onModelSettingsChange({ topP: parseFloat(e.target.value) })}
+              value={(modelSettings as AiAgentSettings).topP}
+              onChange={(e) => onModelSettingsChange({ topP: parseFloat(e.target.value) } as Partial<AiAgentSettings>)}
               disabled={disabled}
               className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
             />
@@ -446,7 +476,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <textarea
                 id="private-mode-system-instruction"
                 rows={2}
-                value={typedModelSettings.systemInstruction}
+                value={(modelSettings as PrivateModeSettings).systemInstruction}
                 readOnly
                 className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light/70 dark:bg-neutral-dark/70 opacity-70 cursor-not-allowed text-xs"
                 />
@@ -462,7 +492,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             </h3>
             <div>
                 <label htmlFor="number-of-images" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-                Number of Images: {typedModelSettings.numberOfImages || 1}
+                Number of Images: {(modelSettings as ImagenSettings).numberOfImages || 1}
                 </label>
                 <input
                 type="range"
@@ -470,8 +500,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 min="1"
                 max="4"
                 step="1"
-                value={typedModelSettings.numberOfImages || 1}
-                onChange={(e) => onModelSettingsChange({ numberOfImages: parseInt(e.target.value, 10) })}
+                value={(modelSettings as ImagenSettings).numberOfImages || 1}
+                onChange={(e) => onModelSettingsChange({ numberOfImages: parseInt(e.target.value, 10) } as Partial<ImagenSettings>)}
                 disabled={disabled}
                 className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
                 />
@@ -480,8 +510,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <label htmlFor="aspect-ratio" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Aspect Ratio</label>
                 <select 
                     id="aspect-ratio"
-                    value={typedModelSettings.aspectRatio || '1:1'}
-                    onChange={(e) => onModelSettingsChange({ aspectRatio: e.target.value })}
+                    value={(modelSettings as ImagenSettings).aspectRatio || '1:1'}
+                    onChange={(e) => onModelSettingsChange({ aspectRatio: e.target.value } as Partial<ImagenSettings>)}
                     disabled={disabled}
                     className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
                 >
@@ -494,8 +524,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <label htmlFor="output-mime-type" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Output Format</label>
                 <select 
                     id="output-mime-type"
-                    value={typedModelSettings.outputMimeType || 'image/jpeg'}
-                    onChange={(e) => onModelSettingsChange({ outputMimeType: e.target.value as 'image/jpeg' | 'image/png' })}
+                    value={(modelSettings as ImagenSettings).outputMimeType || 'image/jpeg'}
+                    onChange={(e) => onModelSettingsChange({ outputMimeType: e.target.value as 'image/jpeg' | 'image/png' } as Partial<ImagenSettings>)}
                     disabled={disabled}
                     className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
                 >
@@ -520,8 +550,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <label htmlFor="flux-ultra-aspect-ratio" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Aspect Ratio</label>
                 <select 
                     id="flux-ultra-aspect-ratio"
-                    value={typedModelSettings.aspect_ratio || DEFAULT_FLUX_ULTRA_SETTINGS.aspect_ratio}
-                    onChange={(e) => onModelSettingsChange({ aspect_ratio: e.target.value as FluxUltraAspectRatio })}
+                    value={(modelSettings as FluxUltraSettings).aspect_ratio || DEFAULT_FLUX_ULTRA_SETTINGS.aspect_ratio}
+                    onChange={(e) => onModelSettingsChange({ aspect_ratio: e.target.value as FluxUltraAspectRatio } as Partial<FluxUltraSettings>)}
                     disabled={disabled}
                     className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
                 >
@@ -532,34 +562,34 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             </div>
             <div>
                 <label htmlFor="flux-ultra-num-inference-steps" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-                Inference Steps: {typedModelSettings.num_inference_steps ?? DEFAULT_FLUX_ULTRA_SETTINGS.num_inference_steps}
+                Inference Steps: {(modelSettings as FluxUltraSettings).num_inference_steps ?? DEFAULT_FLUX_ULTRA_SETTINGS.num_inference_steps}
                 </label>
                 <input
                 type="range" id="flux-ultra-num-inference-steps" min="10" max="50" step="1"
-                value={typedModelSettings.num_inference_steps ?? DEFAULT_FLUX_ULTRA_SETTINGS.num_inference_steps}
-                onChange={(e) => onModelSettingsChange({ num_inference_steps: parseInt(e.target.value, 10) })}
+                value={(modelSettings as FluxUltraSettings).num_inference_steps ?? DEFAULT_FLUX_ULTRA_SETTINGS.num_inference_steps}
+                onChange={(e) => onModelSettingsChange({ num_inference_steps: parseInt(e.target.value, 10) } as Partial<FluxUltraSettings>)}
                 disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
                 />
             </div>
              <div>
                 <label htmlFor="flux-ultra-guidance-scale" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-                Guidance Scale: {(typedModelSettings.guidance_scale ?? DEFAULT_FLUX_ULTRA_SETTINGS.guidance_scale!).toFixed(1)}
+                Guidance Scale: {((modelSettings as FluxUltraSettings).guidance_scale ?? DEFAULT_FLUX_ULTRA_SETTINGS.guidance_scale!).toFixed(1)}
                 </label>
                 <input
                 type="range" id="flux-ultra-guidance-scale" min="0" max="10" step="0.1"
-                value={typedModelSettings.guidance_scale ?? DEFAULT_FLUX_ULTRA_SETTINGS.guidance_scale}
-                onChange={(e) => onModelSettingsChange({ guidance_scale: parseFloat(e.target.value) })}
+                value={(modelSettings as FluxUltraSettings).guidance_scale ?? DEFAULT_FLUX_ULTRA_SETTINGS.guidance_scale}
+                onChange={(e) => onModelSettingsChange({ guidance_scale: parseFloat(e.target.value) } as Partial<FluxUltraSettings>)}
                 disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
                 />
             </div>
             <div>
                 <label htmlFor="flux-ultra-num-images" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-                Number of Images: {typedModelSettings.num_images ?? DEFAULT_FLUX_ULTRA_SETTINGS.num_images}
+                Number of Images: {(modelSettings as FluxUltraSettings).num_images ?? DEFAULT_FLUX_ULTRA_SETTINGS.num_images}
                 </label>
                 <input
                 type="range" id="flux-ultra-num-images" min="1" max="4" step="1"
-                value={typedModelSettings.num_images ?? DEFAULT_FLUX_ULTRA_SETTINGS.num_images}
-                onChange={(e) => onModelSettingsChange({ num_images: parseInt(e.target.value, 10) })}
+                value={(modelSettings as FluxUltraSettings).num_images ?? DEFAULT_FLUX_ULTRA_SETTINGS.num_images}
+                onChange={(e) => onModelSettingsChange({ num_images: parseInt(e.target.value, 10) } as Partial<FluxUltraSettings>)}
                 disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
                 />
             </div>
@@ -567,8 +597,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <div className="flex-grow">
                     <label htmlFor="flux-ultra-seed" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Seed (empty for random)</label>
                     <input type="number" id="flux-ultra-seed"
-                        value={typedModelSettings.seed === null || typedModelSettings.seed === undefined ? '' : typedModelSettings.seed}
-                        onChange={(e) => onModelSettingsChange({ seed: e.target.value === '' ? null : parseInt(e.target.value, 10) })}
+                        value={(modelSettings as FluxUltraSettings).seed === null || (modelSettings as FluxUltraSettings).seed === undefined ? '' : (modelSettings as FluxUltraSettings).seed}
+                        onChange={(e) => onModelSettingsChange({ seed: e.target.value === '' ? null : parseInt(e.target.value, 10) } as Partial<FluxUltraSettings>)}
                         placeholder="Random" disabled={disabled}
                         className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none" />
                 </div>
@@ -580,16 +610,82 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             <div className="flex items-center justify-between mt-2">
                 <label htmlFor="flux-ultra-enable-safety-checker" className="text-sm font-medium text-neutral-darker dark:text-secondary-light">Enable Safety Checker</label>
                 <button
-                  onClick={() => onModelSettingsChange({ enable_safety_checker: !(typedModelSettings.enable_safety_checker ?? DEFAULT_FLUX_ULTRA_SETTINGS.enable_safety_checker) })}
+                  onClick={() => onModelSettingsChange({ enable_safety_checker: !((modelSettings as FluxUltraSettings).enable_safety_checker ?? DEFAULT_FLUX_ULTRA_SETTINGS.enable_safety_checker) } as Partial<FluxUltraSettings>)}
                   disabled={disabled}
-                  className={`${(typedModelSettings.enable_safety_checker ?? DEFAULT_FLUX_ULTRA_SETTINGS.enable_safety_checker) ? 'bg-primary dark:bg-primary-light' : 'bg-secondary dark:bg-neutral-darkest'} relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:ring-offset-2 dark:focus:ring-offset-neutral-dark`}
-                  role="switch" aria-checked={typedModelSettings.enable_safety_checker ?? DEFAULT_FLUX_ULTRA_SETTINGS.enable_safety_checker}>
-                  <span className={`${(typedModelSettings.enable_safety_checker ?? DEFAULT_FLUX_ULTRA_SETTINGS.enable_safety_checker) ? 'translate-x-6' : 'translate-x-1'} inline-block w-4 h-4 transform bg-white rounded-full transition-transform`} />
+                  className={`${((modelSettings as FluxUltraSettings).enable_safety_checker ?? DEFAULT_FLUX_ULTRA_SETTINGS.enable_safety_checker) ? 'bg-primary dark:bg-primary-light' : 'bg-secondary dark:bg-neutral-darkest'} relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:ring-offset-2 dark:focus:ring-offset-neutral-dark`}
+                  role="switch" aria-checked={(modelSettings as FluxUltraSettings).enable_safety_checker ?? DEFAULT_FLUX_ULTRA_SETTINGS.enable_safety_checker}>
+                  <span className={`${((modelSettings as FluxUltraSettings).enable_safety_checker ?? DEFAULT_FLUX_ULTRA_SETTINGS.enable_safety_checker) ? 'translate-x-6' : 'translate-x-1'} inline-block w-4 h-4 transform bg-white rounded-full transition-transform`} />
                 </button>
             </div>
              <div className="mt-2 p-3 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-sm text-blue-700 dark:text-blue-300">
                 <InformationCircleIcon className="w-5 h-5 inline mr-1.5 align-text-bottom" />
                 Enter a prompt in the chat input to generate images.
+            </div>
+        </div>
+      )}
+
+      {isKlingVideoModel && (
+        <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
+          <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
+            <FilmIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" />
+            Kling AI Video Settings
+          </h3>
+          <div>
+            <label htmlFor="kling-duration" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Duration</label>
+            <select
+              id="kling-duration"
+              value={(modelSettings as KlingAiSettings).duration || DEFAULT_KLING_AI_SETTINGS.duration}
+              onChange={(e) => onModelSettingsChange({ duration: e.target.value as KlingAiDuration } as Partial<KlingAiSettings>)}
+              disabled={disabled}
+              className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
+            >
+              {KLING_AI_DURATIONS.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="kling-aspect-ratio" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Aspect Ratio</label>
+            <select
+              id="kling-aspect-ratio"
+              value={(modelSettings as KlingAiSettings).aspect_ratio || DEFAULT_KLING_AI_SETTINGS.aspect_ratio}
+              onChange={(e) => onModelSettingsChange({ aspect_ratio: e.target.value as KlingAiAspectRatio } as Partial<KlingAiSettings>)}
+              disabled={disabled}
+              className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
+            >
+              {KLING_AI_ASPECT_RATIOS.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="kling-negative-prompt" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Negative Prompt
+            </label>
+            <textarea
+              id="kling-negative-prompt"
+              rows={2}
+              value={(modelSettings as KlingAiSettings).negative_prompt || DEFAULT_KLING_AI_SETTINGS.negative_prompt}
+              onChange={(e) => onModelSettingsChange({ negative_prompt: e.target.value } as Partial<KlingAiSettings>)}
+              disabled={disabled}
+              placeholder={DEFAULT_KLING_AI_SETTINGS.negative_prompt}
+              className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none text-sm"
+            />
+          </div>
+          <div>
+            <label htmlFor="kling-cfg-scale" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              CFG Scale: {((modelSettings as KlingAiSettings).cfg_scale ?? DEFAULT_KLING_AI_SETTINGS.cfg_scale!).toFixed(1)}
+            </label>
+            <input
+              type="range" id="kling-cfg-scale" min="0" max="2" step="0.1" 
+              value={(modelSettings as KlingAiSettings).cfg_scale ?? DEFAULT_KLING_AI_SETTINGS.cfg_scale}
+              onChange={(e) => onModelSettingsChange({ cfg_scale: parseFloat(e.target.value) } as Partial<KlingAiSettings>)}
+              disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
+            />
+          </div>
+           <div className="mt-2 p-3 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-sm text-blue-700 dark:text-blue-300">
+                <InformationCircleIcon className="w-5 h-5 inline mr-1.5 align-text-bottom" />
+                Upload an image and enter a prompt in the chat input to generate a video.
             </div>
         </div>
       )}
@@ -605,8 +701,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <label htmlFor="tts-model-identifier" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">TTS Model</label>
                 <select 
                     id="tts-model-identifier"
-                    value={typedModelSettings.modelIdentifier || 'tts-1'}
-                    onChange={(e) => onModelSettingsChange({ modelIdentifier: e.target.value as 'tts-1' | 'tts-1-hd' })}
+                    value={(modelSettings as OpenAITtsSettings).modelIdentifier || 'tts-1'}
+                    onChange={(e) => onModelSettingsChange({ modelIdentifier: e.target.value as 'tts-1' | 'tts-1-hd' } as Partial<OpenAITtsSettings>)}
                     disabled={disabled}
                     className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
                 >
@@ -618,8 +714,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <label htmlFor="tts-voice" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Voice</label>
                 <select 
                     id="tts-voice"
-                    value={typedModelSettings.voice || 'alloy'}
-                    onChange={(e) => onModelSettingsChange({ voice: e.target.value as OpenAiTtsVoice })}
+                    value={(modelSettings as OpenAITtsSettings).voice || 'alloy'}
+                    onChange={(e) => onModelSettingsChange({ voice: e.target.value as OpenAiTtsVoice } as Partial<OpenAITtsSettings>)}
                     disabled={disabled}
                     className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
                 >
@@ -630,7 +726,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             </div>
             <div>
                 <label htmlFor="tts-speed" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-                Speed: {(typedModelSettings.speed || 1.0).toFixed(2)}x
+                Speed: {((modelSettings as OpenAITtsSettings).speed || 1.0).toFixed(2)}x
                 </label>
                 <input
                 type="range"
@@ -638,8 +734,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 min="0.25"
                 max="4.0"
                 step="0.05"
-                value={typedModelSettings.speed || 1.0}
-                onChange={(e) => onModelSettingsChange({ speed: parseFloat(e.target.value) })}
+                value={(modelSettings as OpenAITtsSettings).speed || 1.0}
+                onChange={(e) => onModelSettingsChange({ speed: parseFloat(e.target.value) } as Partial<OpenAITtsSettings>)}
                 disabled={disabled}
                 className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
                 />
@@ -661,8 +757,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <label htmlFor="target-language" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Target Language for Translation</label>
                 <select 
                     id="target-language"
-                    value={(typedModelSettings as RealTimeTranslationSettings).targetLanguage || 'en'}
-                    onChange={(e) => onModelSettingsChange({ targetLanguage: e.target.value })}
+                    value={(modelSettings as RealTimeTranslationSettings).targetLanguage || 'en'}
+                    onChange={(e) => onModelSettingsChange({ targetLanguage: e.target.value } as Partial<RealTimeTranslationSettings>)}
                     disabled={disabled}
                     className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
                 >
@@ -688,8 +784,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             <label htmlFor="flux-output-format" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Output Format</label>
             <select 
                 id="flux-output-format"
-                value={typedModelSettings.output_format || DEFAULT_FLUX_KONTEX_SETTINGS.output_format}
-                onChange={(e) => onModelSettingsChange({ output_format: e.target.value as 'jpeg' | 'png' })}
+                value={(modelSettings as FluxKontexSettings).output_format || DEFAULT_FLUX_KONTEX_SETTINGS.output_format}
+                onChange={(e) => onModelSettingsChange({ output_format: e.target.value as 'jpeg' | 'png' } as Partial<FluxKontexSettings>)}
                 disabled={disabled}
                 className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
             >
@@ -699,42 +795,42 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           </div>
           <div>
             <label htmlFor="flux-safety-tolerance" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              Safety Tolerance: {typedModelSettings.safety_tolerance ?? DEFAULT_FLUX_KONTEX_SETTINGS.safety_tolerance}
+              Safety Tolerance: {(modelSettings as FluxKontexSettings).safety_tolerance ?? DEFAULT_FLUX_KONTEX_SETTINGS.safety_tolerance}
             </label>
             <input
               type="range"
               id="flux-safety-tolerance"
               min="1" max="5" step="1"
-              value={typedModelSettings.safety_tolerance ?? DEFAULT_FLUX_KONTEX_SETTINGS.safety_tolerance}
-              onChange={(e) => onModelSettingsChange({ safety_tolerance: parseInt(e.target.value, 10) })}
+              value={(modelSettings as FluxKontexSettings).safety_tolerance ?? DEFAULT_FLUX_KONTEX_SETTINGS.safety_tolerance}
+              onChange={(e) => onModelSettingsChange({ safety_tolerance: parseInt(e.target.value, 10) } as Partial<FluxKontexSettings>)}
               disabled={disabled}
               className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
             />
           </div>
           <div>
             <label htmlFor="flux-guidance-scale" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              Guidance Scale: {typedModelSettings.guidance_scale?.toFixed(1) ?? DEFAULT_FLUX_KONTEX_SETTINGS.guidance_scale.toFixed(1)}
+              Guidance Scale: {((modelSettings as FluxKontexSettings).guidance_scale)?.toFixed(1) ?? DEFAULT_FLUX_KONTEX_SETTINGS.guidance_scale.toFixed(1)}
             </label>
             <input
               type="range"
               id="flux-guidance-scale"
               min="0" max="20" step="0.5"
-              value={typedModelSettings.guidance_scale ?? DEFAULT_FLUX_KONTEX_SETTINGS.guidance_scale}
-              onChange={(e) => onModelSettingsChange({ guidance_scale: parseFloat(e.target.value) })}
+              value={(modelSettings as FluxKontexSettings).guidance_scale ?? DEFAULT_FLUX_KONTEX_SETTINGS.guidance_scale}
+              onChange={(e) => onModelSettingsChange({ guidance_scale: parseFloat(e.target.value) } as Partial<FluxKontexSettings>)}
               disabled={disabled}
               className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
             />
           </div>
           <div>
             <label htmlFor="flux-num-inference-steps" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              Number of Inference Steps: {typedModelSettings.num_inference_steps ?? DEFAULT_FLUX_KONTEX_SETTINGS.num_inference_steps}
+              Number of Inference Steps: {(modelSettings as FluxKontexSettings).num_inference_steps ?? DEFAULT_FLUX_KONTEX_SETTINGS.num_inference_steps}
             </label>
             <input
               type="range"
               id="flux-num-inference-steps"
               min="10" max="100" step="1"
-              value={typedModelSettings.num_inference_steps ?? DEFAULT_FLUX_KONTEX_SETTINGS.num_inference_steps}
-              onChange={(e) => onModelSettingsChange({ num_inference_steps: parseInt(e.target.value, 10) })}
+              value={(modelSettings as FluxKontexSettings).num_inference_steps ?? DEFAULT_FLUX_KONTEX_SETTINGS.num_inference_steps}
+              onChange={(e) => onModelSettingsChange({ num_inference_steps: parseInt(e.target.value, 10) } as Partial<FluxKontexSettings>)}
               disabled={disabled || selectedModel === Model.FLUX_KONTEX_MAX_MULTI} // MAX_MULTI doesn't use num_inference_steps directly
               className={`w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light ${selectedModel === Model.FLUX_KONTEX_MAX_MULTI ? 'opacity-50' : ''}`}
             />
@@ -742,14 +838,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           </div>
            <div>
             <label htmlFor="flux-num-images" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              Number of Images (output): {typedModelSettings.num_images ?? DEFAULT_FLUX_KONTEX_SETTINGS.num_images}
+              Number of Images (output): {(modelSettings as FluxKontexSettings).num_images ?? DEFAULT_FLUX_KONTEX_SETTINGS.num_images}
             </label>
             <input
               type="range"
               id="flux-num-images"
               min="1" max="4" step="1"
-              value={typedModelSettings.num_images ?? DEFAULT_FLUX_KONTEX_SETTINGS.num_images}
-              onChange={(e) => onModelSettingsChange({ num_images: parseInt(e.target.value, 10) })}
+              value={(modelSettings as FluxKontexSettings).num_images ?? DEFAULT_FLUX_KONTEX_SETTINGS.num_images}
+              onChange={(e) => onModelSettingsChange({ num_images: parseInt(e.target.value, 10) } as Partial<FluxKontexSettings>)}
               disabled={disabled}
               className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
             />
@@ -762,8 +858,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <input
                 type="number"
                 id="flux-seed"
-                value={typedModelSettings.seed === null || typedModelSettings.seed === undefined ? '' : typedModelSettings.seed}
-                onChange={(e) => onModelSettingsChange({ seed: e.target.value === '' ? null : parseInt(e.target.value, 10) })}
+                value={(modelSettings as FluxKontexSettings).seed === null || (modelSettings as FluxKontexSettings).seed === undefined ? '' : (modelSettings as FluxKontexSettings).seed}
+                onChange={(e) => onModelSettingsChange({ seed: e.target.value === '' ? null : parseInt(e.target.value, 10) } as Partial<FluxKontexSettings>)}
                 placeholder="Random"
                 disabled={disabled}
                 className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
@@ -782,8 +878,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             <label htmlFor="flux-aspect-ratio" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Aspect Ratio</label>
             <select 
                 id="flux-aspect-ratio"
-                value={typedModelSettings.aspect_ratio || DEFAULT_FLUX_KONTEX_SETTINGS.aspect_ratio}
-                onChange={(e) => onModelSettingsChange({ aspect_ratio: e.target.value as FluxKontexAspectRatio })}
+                value={(modelSettings as FluxKontexSettings).aspect_ratio || DEFAULT_FLUX_KONTEX_SETTINGS.aspect_ratio}
+                onChange={(e) => onModelSettingsChange({ aspect_ratio: e.target.value as FluxKontexAspectRatio } as Partial<FluxKontexSettings>)}
                 disabled={disabled}
                 className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
             >
@@ -799,7 +895,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
         </div>
       )}
 
-      {isCurrentModelGeminiPlatformChat && (
+      {isCurrentModelGeminiPlatformChat && !isKlingVideoModel && (
         <div className="border-t border-secondary dark:border-neutral-darkest pt-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">

@@ -263,11 +263,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       if (message.isTaskGoal) specialBorderClass = 'border-l-4 border-blue-400';
       else if (message.model === Model.PRIVATE) specialBorderClass = 'border-l-4 border-slate-400';
     } else { // AI in light theme
-      bubbleBackgroundColor = message.isTaskPlan ? '#d1fae5' : '#ffffff'; // Lighter green for AI Agent plan, white for normal AI
+      bubbleBackgroundColor = message.isTaskPlan ? '#d1fae5' : (message.model === Model.KLING_VIDEO && message.videoUrl ? '#e0e7ff' : '#ffffff'); // Lighter green for AI Agent plan, white for normal AI, light blue for Kling Video
       bubbleTextColor = '#374151';    
       audioButtonClasses = 'bg-gray-200 hover:bg-gray-300 text-neutral-700'; 
       timestampColor = 'rgba(107, 114, 128, 0.9)'; 
       if (message.isTaskPlan) specialBorderClass = 'border-l-4 border-green-400';
+      else if (message.model === Model.KLING_VIDEO && message.videoUrl) specialBorderClass = 'border-l-4 border-indigo-400';
     }
   } else { // Dark theme
     if (isUser) {
@@ -278,11 +279,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       if (message.isTaskGoal) specialBorderClass = 'border-l-4 border-blue-500';
       else if (message.model === Model.PRIVATE) specialBorderClass = 'border-l-4 border-slate-500';
     } else { // AI in dark theme
-      bubbleBackgroundColor = message.isTaskPlan ? '#065f46' : '#182533'; // Darker green for AI Agent plan, standard dark gray/blue for normal AI
+      bubbleBackgroundColor = message.isTaskPlan ? '#065f46' : (message.model === Model.KLING_VIDEO && message.videoUrl ? '#312e81' : '#182533'); // Darker green for AI Agent plan, standard dark gray/blue for normal AI, dark indigo for Kling Video
       bubbleTextColor = '#FFFFFF';    
       audioButtonClasses = 'bg-white/20 hover:bg-white/30 text-white'; 
       timestampColor = 'rgba(156, 163, 175, 0.8)'; 
       if (message.isTaskPlan) specialBorderClass = 'border-l-4 border-green-500';
+      else if (message.model === Model.KLING_VIDEO && message.videoUrl) specialBorderClass = 'border-l-4 border-indigo-500';
     }
   }
   tailColor = bubbleBackgroundColor;
@@ -375,6 +377,19 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     addNotification("Flux Kontext edit details saved as JSON.", "success");
   };
 
+  const handleDownloadVideo = () => {
+    if (!message.videoUrl) return;
+    const link = document.createElement('a');
+    link.href = message.videoUrl;
+    const safePrompt = (message.originalPrompt || 'kling_video').replace(/[^a-z0-9_.-]/gi, '_').substring(0, 30);
+    const timestampForFile = message.id || Date.now();
+    link.download = `kling_video_${safePrompt}_${timestampForFile}.mp4`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    addNotification("Kling AI video download started.", "success");
+  };
+
 
   const ActionButton: React.FC<{
     onClick?: () => void;
@@ -416,11 +431,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           <div className={`w-full h-full rounded-full flex items-center justify-center ${
             isUser 
               ? (message.model === Model.PRIVATE ? 'bg-slate-200 dark:bg-slate-700' : 'bg-blue-100 dark:bg-blue-900')
-              : 'bg-gray-200 dark:bg-gray-700'
+              : (message.model === Model.KLING_VIDEO ? 'bg-indigo-200 dark:bg-indigo-700' : 'bg-gray-200 dark:bg-gray-700')
             } shadow-sm`}
             title={isUser ? 'User' : (message.model || 'AI Assistant')}
           >
-            {isUser ? <UserIcon className={`w-5 h-5 ${message.model === Model.PRIVATE ? 'text-slate-600 dark:text-slate-300' : 'text-blue-600 dark:text-blue-300'}`} /> : <RobotIcon className="w-5 h-5 text-gray-600 dark:text-gray-300" />}
+            {isUser ? <UserIcon className={`w-5 h-5 ${message.model === Model.PRIVATE ? 'text-slate-600 dark:text-slate-300' : 'text-blue-600 dark:text-blue-300'}`} /> 
+                     : (message.model === Model.KLING_VIDEO ? <FilmIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-300" /> : <RobotIcon className="w-5 h-5 text-gray-600 dark:text-gray-300" />)}
           </div>
         )}
       </div>
@@ -444,17 +460,17 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             </div>
           )}
 
-          {message.imagePreviews && !isUser && message.imagePreviews.length > 0 && (
+          {message.imagePreviews && !isUser && message.model !== Model.KLING_VIDEO && message.imagePreviews.length > 0 && (
              <div className={`mt-2 grid gap-2 ${message.imagePreviews.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} place-items-center`}>
               {message.imagePreviews.map((imgStr, index) => ( 
                 <div 
                   key={index} 
-                  className="inline-block align-middle" // Let the inner div size itself
+                  className="inline-block align-middle" 
                   onClick={() => onImageClick && onImageClick(imgStr, message.originalPrompt || '', message.imageMimeType || 'image/jpeg')}
                   role="button" tabIndex={0} aria-label={`View generated image ${index + 1}`}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onImageClick && onImageClick(imgStr, message.originalPrompt || '', message.imageMimeType || 'image/jpeg'); }}
                 >
-                  <div className="relative group/image inline-block rounded-md overflow-hidden"> {/* This div will shrink-wrap the image and contain the overlay */}
+                  <div className="relative group/image inline-block rounded-md overflow-hidden"> 
                     <img src={imgStr} alt={`Generated art ${index + 1}`} className="block max-w-full h-auto max-h-60 rounded-md object-contain cursor-pointer" />
                     <div className="absolute inset-0 bg-black bg-opacity-0 group-hover/image:bg-opacity-20 transition-opacity flex items-center justify-center">
                         <PhotoIcon className="w-8 h-8 text-white opacity-0 group-hover/image:opacity-80 transform scale-75 group-hover/image:scale-100 transition-all" />
@@ -462,6 +478,25 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+           {message.model === Model.KLING_VIDEO && message.videoUrl && !message.klingVideoRequestId && (
+            <div className="mt-2">
+              <video
+                src={message.videoUrl}
+                controls
+                className="w-full max-w-md rounded-md shadow-md"
+                aria-label="Generated video"
+              >
+                Your browser does not support the video tag.
+              </video>
+              <button
+                onClick={handleDownloadVideo}
+                className="mt-2 flex items-center px-3 py-1.5 text-xs bg-primary hover:bg-primary-dark dark:bg-primary-light dark:hover:bg-primary text-white dark:text-neutral-darker rounded-md transition-colors"
+                aria-label="Download video"
+              >
+                <ArrowDownTrayIcon className="w-4 h-4 mr-1.5" /> Download Video
+              </button>
             </div>
           )}
           
@@ -519,7 +554,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   {isTextCopied ? <CheckIcon className="w-3.5 h-3.5" /> : <ClipboardIcon className="w-3.5 h-3.5" />}
                 </ActionButton>
               )}
-              {!isUser && onRegenerate && message.promptedByMessageId && !message.isImageQuery && !message.audioUrl && !message.isTaskPlan && (
+              {!isUser && onRegenerate && message.promptedByMessageId && !message.isImageQuery && !message.audioUrl && !message.isTaskPlan && !message.videoUrl && (
                 <ActionButton onClick={() => onRegenerate(message.id, message.promptedByMessageId!)} disabled={isLoading} title="Regenerate Response" ariaLabel="Regenerate AI response">
                   <ArrowPathIcon className="w-3.5 h-3.5" />
                 </ActionButton>
@@ -552,4 +587,3 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     </div>
   );
 };
-
