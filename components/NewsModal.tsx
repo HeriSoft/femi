@@ -25,7 +25,7 @@ const featureComparisonData: FeatureComparisonItem[] = [
   { feature: "Flux1.1 [Ultra]", paidUser: "30 images/month", demoUser: <span className="text-red-500 dark:text-red-400">❌ Paid Only</span> },
   { category: "Image Editing", feature: "Flux Kontext Pro", paidUser: <span>35 uses/month <br/><small>(1 image input/use)</small></span>, demoUser: <span>1 use/month <br/><small>(1 image input/use)</small></span> },
   { feature: "Flux Kontext Max", paidUser: <span>25 uses/month <br/><small>(up to 4 image inputs/use)</small></span>, demoUser: <span className="text-red-500 dark:text-red-400">❌ Paid Only</span> },
-  { category: "Video Generation", feature: "Kling AI Video", paidUser: "1 generation/month", demoUser: <span className="text-red-500 dark:text-red-400">❌ Paid Only</span> },
+  { category: "Video Generation", feature: "Kling AI Video", paidUser: "4 generations/month", demoUser: <span className="text-red-500 dark:text-red-400">❌ Paid Only</span> },
   { category: "Text-to-Speech (TTS)", feature: "OpenAI TTS", paidUser: "20,000 chars/use (fair use)", demoUser: "10,000 chars/month" },
   { category: "Real-Time Translation", feature: "Gemini Translation", paidUser: "✅ Full Access (incl. voice output)", demoUser: "✅ Full Access (voice output disabled)" },
   { category: "Other Features", feature: "Web Search (Gemini)", paidUser: "✅ Full Access", demoUser: "✅ Full Access" },
