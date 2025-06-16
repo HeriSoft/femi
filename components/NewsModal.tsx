@@ -100,7 +100,7 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
           <div className="mt-6 pt-4 border-t border-secondary/50 dark:border-neutral-dark/50">
             <img src={promotionalImageUrl} alt="Promotional Offer" className="w-full rounded-md shadow-md mb-3" />
             <p className="font-semibold text-md text-accent dark:text-accent-light text-center mb-1">
-              Chỉ 200.000đ/tháng sử dụng không giới hạn!
+              Chỉ 250.000đ/tháng sử dụng không giới hạn!
             </p>
             <p className="text-neutral-600 dark:text-neutral-300 text-center mb-1">
               Sau khi chuyển khoản bạn cần:
