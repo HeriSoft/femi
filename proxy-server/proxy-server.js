@@ -189,7 +189,7 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
                             fluxMaxMonthlyUsed: fluxMaxUsed,
                             fluxProMonthlyUsed: fluxProUsed,
                             fluxUltraMonthlyUsed: fluxUltraUsed,
-                            klingVideoMonthlyUsed: klingVideoUsed,
+                            klingVideoMonthlyUsed: klingVideoUsed, // This is the value from DB before potential reset by this request.
                         };
                         req.isPaidUser = true; // Set only if not suspended AND active sub
                         req.authenticationFailed = false; // Explicitly set to false on success
@@ -924,11 +924,17 @@ app.post('/api/fal/video/generate/kling', async (req, res) => {
         if (!queueResult?.request_id) return res.status(500).json({ error: "Fal.ai Kling AI video submission failed (no request ID)." });
 
         if (req.isPaidUser && !isActualAdmin && req.paidUser) {
+            const currentUsedInMiddleware = req.paidUser.klingVideoMonthlyUsed; // Value before this request
+            console.log(`[Paid Usage Update - Kling Video] Attempting to increment count for user ${req.paidUser.username} (ID: ${req.paidUser.id}). Current DB value (from middleware snapshot) was: ${currentUsedInMiddleware}`);
             try {
-                await pool.execute('UPDATE users SET paid_kling_video_monthly_used = paid_kling_video_monthly_used + 1 WHERE id = ?', [req.paidUser.id]);
-                console.log(`[Paid Usage Update - Kling Video] SUCCESS: User ${req.paidUser.username} generated 1 video.`);
+                const [updateResult] = await pool.execute('UPDATE users SET paid_kling_video_monthly_used = paid_kling_video_monthly_used + 1 WHERE id = ?', [req.paidUser.id]);
+                if (updateResult.affectedRows > 0) {
+                    console.log(`[Paid Usage Update - Kling Video] SUCCESS: User ${req.paidUser.username} (ID: ${req.paidUser.id}) count incremented. Affected rows: ${updateResult.affectedRows}`);
+                } else {
+                    console.warn(`[Paid Usage Update - Kling Video] WARNING: User ${req.paidUser.username} (ID: ${req.paidUser.id}) count increment query ran but affected 0 rows. This might indicate the user ID was not found or other issues.`);
+                }
             } catch (dbUpdateError) {
-                console.error(`[Paid Usage Update - Kling Video] FAILED DB update for user ${req.paidUser.username}:`, dbUpdateError);
+                console.error(`[Paid Usage Update - Kling Video] FAILED DB update for user ${req.paidUser.username} (ID: ${req.paidUser.id}):`, dbUpdateError);
             }
         }
 
