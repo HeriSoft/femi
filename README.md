@@ -21,9 +21,8 @@
 *   AI agent sets a plan for an individual plan, work on request, advice ... etc
 *   Payment & Credit system
 *   Flux Kontext Pro/Max Multi Editing Images **( NEW HOT )**
-*   Flux 1.1 Ultra - Very Ultra HD+ Image Generate
-*   Online multiple chat with friends **( coming soon )**
-*   Log in with the code key to the MySQL system
+*   Flux 1.1 Ultra - Very Ultra 2K Images Generate **( NEW HOT )**
+*   Kling AI 2.1 - High-quality video generation **( NEW HOT )**
 
 ## 🛠️ Tech Stack
 
