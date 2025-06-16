@@ -1,6 +1,4 @@
 
-
-
 // Fix: Remove triple-slash directive for 'vite/client' as its types are not found and import.meta.env is manually typed.
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo, useContext } from 'react';
@@ -2539,8 +2537,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
            !isRealTimeTranslationMode &&
            !isImagenModelSelected && 
            !isAiAgentMode && 
-           !isClaudeModelSelected;
-  }, [imageUploadLimit, selectedModel, isTextToSpeechModelSelected, isRealTimeTranslationMode, isImagenModelSelected, isAiAgentMode, isClaudeModelSelected]);
+           !isClaudeModelSelected &&
+           !isKlingVideoModelSelected; // Exclude Kling from generic upload button
+  }, [imageUploadLimit, selectedModel, isTextToSpeechModelSelected, isRealTimeTranslationMode, isImagenModelSelected, isAiAgentMode, isClaudeModelSelected, isKlingVideoModelSelected]);
 
   const showFileUploadInChatBar = useMemo(() => {
     return !isImagenModelSelected &&
@@ -2567,7 +2566,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
     let placeholder = "Type your message";
     if (uploadedImages.length === 0 && imagePreviews.length === 0 && !uploadedTextFileName) {
-        const canUploadImage = showImageUploadInChatBar;
+        const canUploadImage = showImageUploadInChatBar || isKlingVideoModelSelected; // Include Kling for placeholder text
         const canUploadFile = showFileUploadInChatBar;
         if (canUploadImage && canUploadFile) {
             placeholder += " or upload image/file";
@@ -2789,8 +2788,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   };
 
   const showGenericAttachmentPreview = useMemo(() => {
-    if (isTextToSpeechModelSelected || isRealTimeTranslationMode || isImagenModelSelected || isClaudeModelSelected || isFluxUltraModelSelected || isKlingVideoModelSelected) {
-        return false;
+    if (isKlingVideoModelSelected && imagePreviews.length > 0) {
+        return true; // Show preview for Kling if image is uploaded
+    }
+    if (isTextToSpeechModelSelected || isRealTimeTranslationMode || isImagenModelSelected || isClaudeModelSelected || isFluxUltraModelSelected) {
+        return false; // Keep original exclusions for other models
     }
     if (imagePreviews.length > 0 || uploadedTextFileName) {
         return true;
@@ -2986,6 +2988,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
 
           <input type="file" id="image-upload-chatbar" className="hidden" onChange={handleChatBarImageUpload} accept={imageFileAcceptTypes} multiple={selectedModel === Model.FLUX_KONTEX_MAX_MULTI} />
+          <input type="file" id="image-upload-chatbar-kling" className="hidden" onChange={handleChatBarImageUpload} accept={imageFileAcceptTypes} multiple={false} />
           <input type="file" id="file-upload-chatbar" className="hidden" onChange={handleChatBarGeneralFileUpload} accept={generalFileAcceptTypes} />
 
           <div className="p-3 border-t border-secondary dark:border-neutral-darkest bg-neutral-light dark:bg-neutral-darker flex items-end flex-shrink-0">
@@ -3010,6 +3013,19 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                             disabled:opacity-50`}
                 aria-label="Upload image"
                 title="Upload Image"
+              >
+                <PhotoIcon className="w-5 h-5"/>
+              </button>
+            )}
+            {!isRealTimeTranslationMode && isKlingVideoModelSelected && (
+              <button
+                onClick={() => document.getElementById('image-upload-chatbar-kling')?.click()}
+                disabled={generalChatBarInteractionDisabled || uploadedImages.length >= imageUploadLimit }
+                className={`p-2.5 rounded-full transition-colors flex-shrink-0 mr-2
+                            bg-accent dark:bg-accent-light hover:bg-accent-dark text-white
+                            disabled:opacity-50`}
+                aria-label="Upload Image for Kling Video"
+                title="Upload Image for Kling Video"
               >
                 <PhotoIcon className="w-5 h-5"/>
               </button>
