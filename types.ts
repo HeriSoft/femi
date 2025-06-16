@@ -1,5 +1,6 @@
 
 
+
 import { Chat } from '@google/genai'; // Updated import
 import React from 'react'; // Added for React.DetailedHTMLProps
 
@@ -220,11 +221,11 @@ export interface Persona {
   instruction: string;
 }
 
-export interface SettingsPanelProps {
-  selectedModel: Model;
+export interface SettingsPanelProps<M extends Model = Model> {
+  selectedModel: M;
   onModelChange: (model: Model) => void;
-  modelSettings: AnyModelSettings; // Changed from ModelSpecificSettingsMap[Model]
-  onModelSettingsChange: (settings: Partial<AnyModelSettings>) => void; // Changed from Partial<ModelSpecificSettingsMap[Model]>
+  modelSettings: ModelSpecificSettingsMap[M];
+  onModelSettingsChange: (settings: Partial<ModelSpecificSettingsMap[M]>) => void;
   isWebSearchEnabled: boolean;
   onWebSearchToggle: (enabled: boolean) => void;
   disabled: boolean;
