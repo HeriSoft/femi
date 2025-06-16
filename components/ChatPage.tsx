@@ -1,5 +1,6 @@
 
 
+
 // Fix: Remove triple-slash directive for 'vite/client' as its types are not found and import.meta.env is manually typed.
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo, useContext } from 'react';
@@ -36,20 +37,23 @@ const getSpecificDefaultSettings = <M extends Model>(modelKey: M): ModelSpecific
 
 // Helper to deep merge settings, useful for loading from localStorage
 const mergeSettings = (target: AllModelSettings, source: Partial<AllModelSettings>): AllModelSettings => {
-  const output = { ...target }; 
-  for (const keyString in source) { 
+  const output = { ...target };
+  for (const keyString in source) {
     if (Object.prototype.hasOwnProperty.call(source, keyString)) {
-      if (Object.values(Model).includes(keyString as Model)) { 
-        const modelKey = keyString as Model;
-        const sourceModelSettingsPartial = source[modelKey]; 
+      const modelKey = keyString as Model;
+      if (Object.values(Model).includes(modelKey)) { // Ensure modelKey is a valid Model enum member
 
-        if (sourceModelSettingsPartial) {
-          const baseSettingsForModel: ModelSpecificSettingsMap[typeof modelKey] = output[modelKey] || getSpecificDefaultSettings(modelKey);
+        const sourceSettingsPartialForModel = source[modelKey]; // This is Partial<ModelSpecificSettingsMap[typeof modelKey]> | undefined
+        
+        if (sourceSettingsPartialForModel) {
+          const baseSettingsForModel: ModelSpecificSettingsMap[typeof modelKey] = 
+            target[modelKey] || getSpecificDefaultSettings(modelKey);
           
-          output[modelKey] = { 
-            ...baseSettingsForModel, 
-            ...sourceModelSettingsPartial 
-          } as ModelSpecificSettingsMap[typeof modelKey]; 
+          // Perform the merge with casts for spread operations, assuming modelKey correctly identifies the type
+          output[modelKey] = {
+            ...(baseSettingsForModel as any), 
+            ...(sourceSettingsPartialForModel as any),
+          } as ModelSpecificSettingsMap[typeof modelKey]; // Cast the result back to the specific settings type
         }
       }
     }
@@ -226,8 +230,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     try {
       const storedSettings = localStorage.getItem(LOCAL_STORAGE_SETTINGS_KEY);
       const completeDefaults: AllModelSettings = {};
-      Object.values(Model).forEach(modelKey => {
-          completeDefaults[modelKey] = { ...getSpecificDefaultSettings(modelKey as Model) };
+      (Object.values(Model) as Model[]).forEach(modelKey => { // Explicitly cast to Model[]
+          completeDefaults[modelKey] = { ...getSpecificDefaultSettings(modelKey) };
       });
 
       if (storedSettings) {
@@ -268,8 +272,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     } catch (error: any) {
       console.error("Error loading settings from localStorage:", error);
        const fallbackSettings: AllModelSettings = {};
-        Object.values(Model).forEach(modelKey => {
-            fallbackSettings[modelKey] = { ...getSpecificDefaultSettings(modelKey as Model) };
+        (Object.values(Model) as Model[]).forEach(modelKey => { // Explicitly cast to Model[]
+            fallbackSettings[modelKey] = { ...getSpecificDefaultSettings(modelKey) };
         });
         return fallbackSettings;
     }
@@ -321,8 +325,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
          selectedModel === Model.AI_AGENT
         )
        ) {
-        let finalSystemInstruction = mutableSettings.systemInstruction; // mutableSettings is already narrowed here implicitly by the `in` check
-                                                                      // and the selectedModel checks, effectively making it one of ModelSettings | AiAgentSettings.
+        let finalSystemInstruction = mutableSettings.systemInstruction; 
         if (activePersona) {
             finalSystemInstruction = activePersona.instruction;
             if (aboutMeText) {
@@ -649,7 +652,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     }
 
 
-    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isFluxKontexModelSelected || isClaudeModelSelected || isPrivateModeSelected || isFluxUltraModelSelected || isKlingVideoModelSelected) {
+    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || isFluxKontexModelSelected || isClaudeModelSelected || isFluxUltraModelSelected || isKlingVideoModelSelected) {
       if (uploadedTextFileContent || uploadedTextFileName) {
         setUploadedTextFileContent(null);
         setUploadedTextFileName(null);
@@ -1291,7 +1294,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       timestamp: sessionTimestamp,
       model: selectedModel,
       messages: [...messages],
-      modelSettingsSnapshot: modelSettings, // No spread here
+      modelSettingsSnapshot: modelSettings, 
       isPinned: savedSessions.find(s => s.id === activeSessionId)?.isPinned || false,
       activePersonaIdSnapshot: activePersonaId,
     };
