@@ -5,7 +5,7 @@
 
 **femi** is a web app to chat with AI models like Gemini, OpenAI GPT, and Deepseek, featuring image uploads, image generation, TTS, and secure API key handling via a backend proxy.
 
-## ✨ Core Features
+## ✨ Core Features - Version 1.5 (latest)
 
 *   Chat with Gemini, GPT-4.1, Deepseek, Imagen3 (Generate super-real images), OpenAI TTS.
 *   Image & text file uploads for chat.
