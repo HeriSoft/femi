@@ -218,11 +218,11 @@ export interface Persona {
   instruction: string;
 }
 
-export interface SettingsPanelProps<M extends Model = Model> {
-  selectedModel: M;
+export interface SettingsPanelProps {
+  selectedModel: Model;
   onModelChange: (model: Model) => void;
-  modelSettings: ModelSpecificSettingsMap[M]; // Changed from AnyModelSettings
-  onModelSettingsChange: (settings: Partial<ModelSpecificSettingsMap[M]>) => void;
+  modelSettings: AnyModelSettings; // Changed from ModelSpecificSettingsMap[M] to AnyModelSettings
+  onModelSettingsChange: (settings: Partial<AnyModelSettings>) => void; // Changed to Partial<AnyModelSettings>
   isWebSearchEnabled: boolean;
   onWebSearchToggle: (enabled: boolean) => void;
   disabled: boolean;
