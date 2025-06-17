@@ -365,9 +365,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   const isRealTimeTranslationMode = selectedModel === Model.REAL_TIME_TRANSLATION;
   const isAiAgentMode = selectedModel === Model.AI_AGENT;
   const isPrivateModeSelected = selectedModel === Model.PRIVATE;
-  const isFluxKontexModelSelected = selectedModel === Model.FLUX_KONTEX || selectedModel === Model.FLUX_KONTEX_MAX_MULTI;
-  const isFluxUltraModelSelected = selectedModel === Model.FLUX_ULTRA;
-  const isKlingVideoModelSelected = selectedModel === Model.KLING_VIDEO;
+  // const isFluxKontexModelSelected = selectedModel === Model.FLUX_KONTEX || selectedModel === Model.FLUX_KONTEX_MAX_MULTI; // Replaced by getIsFluxKontexModel(selectedModel)
+  // const isFluxUltraModelSelected = selectedModel === Model.FLUX_ULTRA; // Replaced by getIsFluxUltraModel(selectedModel)
+  // const isKlingVideoModelSelected = selectedModel === Model.KLING_VIDEO; // Replaced by getIsKlingVideoModel(selectedModel)
   const isClaudeModelSelected = selectedModel === Model.CLAUDE;
   const isAdminUser = !userSession.isDemoUser && !userSession.isPaidUser;
 
@@ -636,99 +636,136 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
   useEffect(() => {
     const currentModelStatus = apiKeyStatuses[selectedModel];
-    if ((!currentModelStatus?.isGeminiPlatform || currentModelStatus?.isImageGeneration || currentModelStatus?.isTextToSpeech || currentModelStatus?.isRealTimeTranslation || currentModelStatus?.isAiAgent || currentModelStatus?.isPrivateMode || currentModelStatus?.isImageEditing || currentModelStatus?.isMultiImageEditing || currentModelStatus?.isFluxUltraImageGeneration || currentModelStatus?.isKlingVideoGeneration) && isWebSearchEnabled) {
+
+    // Handle Web Search Toggle based on model compatibility
+    if (isWebSearchEnabled && (
+        !currentModelStatus?.isGeminiPlatform ||
+        currentModelStatus?.isImageGeneration ||
+        currentModelStatus?.isTextToSpeech ||
+        currentModelStatus?.isRealTimeTranslation ||
+        currentModelStatus?.isPrivateMode ||
+        currentModelStatus?.isImageEditing ||
+        currentModelStatus?.isMultiImageEditing ||
+        currentModelStatus?.isFluxUltraImageGeneration ||
+        getIsKlingVideoModel(selectedModel) // Added Kling here explicitly
+    )) {
         setIsWebSearchEnabled(false);
     }
 
-    const previousModel = prevSelectedModelRef.current;
-    const shouldClearImagesOnModelSwitch =
-      (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || isClaudeModelSelected || isFluxUltraModelSelected || isKlingVideoModelSelected) ||
-      (selectedModel !== previousModel && (
-        ((getIsFluxKontexModel(selectedModel) || getIsKlingVideoModel(selectedModel)) && !(getIsFluxKontexModel(previousModel) || getIsKlingVideoModel(previousModel))) ||
-        (!(getIsFluxKontexModel(selectedModel) || getIsKlingVideoModel(selectedModel)) && (getIsFluxKontexModel(previousModel) || getIsKlingVideoModel(previousModel))) ||
-        (selectedModel === Model.FLUX_KONTEX && previousModel === Model.FLUX_KONTEX_MAX_MULTI) ||
-        (selectedModel === Model.FLUX_KONTEX_MAX_MULTI && previousModel === Model.FLUX_KONTEX)
-      ));
+    // Handle Image/File Clearing and other side effects on model *change*
+    if (selectedModel !== prevSelectedModelRef.current) {
+        const newModel = selectedModel;
+        const oldModel = prevSelectedModelRef.current;
+        let shouldClearGeneralAttachments = false;
 
-    if (shouldClearImagesOnModelSwitch) {
-      if (uploadedImages.length > 0 || imagePreviews.length > 0) {
-        setUploadedImages([]);
-        setImagePreviews([]);
-      }
-    }
-
-
-    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || isFluxKontexModelSelected || isClaudeModelSelected || isFluxUltraModelSelected || isKlingVideoModelSelected) {
-      if (uploadedTextFileContent || uploadedTextFileName) {
-        setUploadedTextFileContent(null);
-        setUploadedTextFileName(null);
-      }
-    }
-
-    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || isFluxKontexModelSelected || isClaudeModelSelected || isFluxUltraModelSelected || isKlingVideoModelSelected) {
-      if (activePersonaId) {
-        setActivePersonaId(null);
-      }
-    }
-
-    // Microphone stopping logic based on model/mode changes
-    if (isListening && recognitionRef.current) {
-        const micIncompatibleForCurrentModel =
-            (isImagenModelSelected ||
-             isTextToSpeechModelSelected ||
-             isClaudeModelSelected ||
-             isFluxUltraModelSelected ||
-             isKlingVideoModelSelected) && !isRealTimeTranslationMode;
-
-        const stopForGptModal =
-            selectedModel === Model.GPT4O && isGpt41AccessModalOpen;
-
-        if (micIncompatibleForCurrentModel || stopForGptModal) {
-            recognitionRef.current.stop();
-            // Note: onend handler will set isListening(false)
+        if (
+            newModel === Model.IMAGEN3 ||
+            newModel === Model.OPENAI_TTS ||
+            newModel === Model.REAL_TIME_TRANSLATION ||
+            newModel === Model.PRIVATE ||
+            newModel === Model.CLAUDE || // Includes mock models that don't use general image uploads
+            getIsFluxKontexModel(newModel) ||
+            getIsFluxUltraModel(newModel) ||
+            getIsKlingVideoModel(newModel)
+        ) {
+            shouldClearGeneralAttachments = true;
+        } else if (oldModel) {
+             if (
+                getIsFluxKontexModel(oldModel) ||
+                getIsFluxUltraModel(oldModel) ||
+                getIsKlingVideoModel(oldModel) ||
+                oldModel === Model.IMAGEN3 || // If switching from Imagen
+                oldModel === Model.OPENAI_TTS // If switching from TTS
+                // Add other specific models if they had attachments that shouldn't carry over
+             ) {
+                 shouldClearGeneralAttachments = true;
+             }
         }
+        
+        if (oldModel &&
+            ((newModel === Model.FLUX_KONTEX && oldModel === Model.FLUX_KONTEX_MAX_MULTI) ||
+             (newModel === Model.FLUX_KONTEX_MAX_MULTI && oldModel === Model.FLUX_KONTEX))
+        ) {
+            shouldClearGeneralAttachments = true; // Always clear when switching between these two Flux types
+        }
+
+        if (shouldClearGeneralAttachments) {
+            if (uploadedImages.length > 0 || imagePreviews.length > 0) {
+                setUploadedImages([]);
+                setImagePreviews([]);
+                addNotification("Cleared previous image attachments for the new model.", "info");
+            }
+            if (uploadedTextFileContent || uploadedTextFileName) {
+                 setUploadedTextFileContent(null);
+                 setUploadedTextFileName(null);
+                 addNotification("Cleared previous file attachment for the new model.", "info");
+            }
+        }
+
+        // Clear personas if new model doesn't support them
+        if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || getIsFluxKontexModel(newModel) || isClaudeModelSelected || getIsFluxUltraModel(newModel) || getIsKlingVideoModel(newModel)) {
+          if (activePersonaId) {
+            setActivePersonaId(null);
+          }
+        }
+
+        // Microphone stopping logic
+        if (isListening && recognitionRef.current) {
+            const micIncompatibleForCurrentModel =
+                (isImagenModelSelected || isTextToSpeechModelSelected || isClaudeModelSelected || getIsFluxUltraModel(newModel) || getIsKlingVideoModel(newModel)) && !isRealTimeTranslationMode;
+            const stopForGptModal = newModel === Model.GPT4O && isGpt41AccessModalOpen;
+
+            if (micIncompatibleForCurrentModel || stopForGptModal) {
+                recognitionRef.current.stop();
+            }
+        }
+
+        // Stop audio playback
+        if (currentPlayingMessageId && audioPlayerRef.current) {
+            audioPlayerRef.current.pause();
+            setCurrentPlayingMessageId(null);
+        }
+
+        // Handle Real-Time Translation mode specific resets
+        if (newModel === Model.REAL_TIME_TRANSLATION) {
+            setInput(''); // Clear text input for RTT mode
+        } else { // Reset RTT states if switching away from it
+            setLiveTranscriptionDisplay("");
+            setLiveTranslationDisplay("");
+            liveTranscriptionRef.current = "";
+            currentInterimVisualRef.current = "";
+            interimTranslationBufferRef.current = "";
+            liveTranslationAccumulatorRef.current = "";
+            lastSuccessfullyTranslatedTextRef.current = null;
+            lastSuccessfullyTranslatedTimestampRef.current = 0;
+            currentTranslationStreamControllerRef.current?.abort();
+            if (audioPlayerRef.current && isSpeakingLiveTranslation) {
+                audioPlayerRef.current.pause();
+                setIsSpeakingLiveTranslation(false);
+                setLiveTranslationAudioUrl(null);
+            }
+        }
+        
+        // GPT-4.1 Modal logic
+        if (newModel === Model.GPT4O) {
+          if (!isGpt41Unlocked && !gpt41ModalInteractionFlagRef.current) {
+            previousModelBeforeGpt41ModalRef.current = newModel; // Store the new model which is GPT4O
+            setIsGpt41AccessModalOpen(true);
+            gpt41ModalInteractionFlagRef.current = true;
+          }
+        } else {
+          gpt41ModalInteractionFlagRef.current = false; // Reset flag if switching away from GPT4O
+          if (isGpt41AccessModalOpen) setIsGpt41AccessModalOpen(false); // Close modal if open
+        }
+        clearSearch(); // Clear search on any model change
     }
 
-
-    if (currentPlayingMessageId && audioPlayerRef.current) {
-        audioPlayerRef.current.pause();
-        setCurrentPlayingMessageId(null);
-    }
-
-    if (isRealTimeTranslationMode) {
-      setInput('');
-    } else {
-      setLiveTranscriptionDisplay("");
-      setLiveTranslationDisplay("");
-      liveTranscriptionRef.current = "";
-      currentInterimVisualRef.current = "";
-      interimTranslationBufferRef.current = "";
-      liveTranslationAccumulatorRef.current = "";
-      lastSuccessfullyTranslatedTextRef.current = null;
-      lastSuccessfullyTranslatedTimestampRef.current = 0;
-      currentTranslationStreamControllerRef.current?.abort();
-      if (audioPlayerRef.current && isSpeakingLiveTranslation) {
-          audioPlayerRef.current.pause();
-          setIsSpeakingLiveTranslation(false);
-          setLiveTranslationAudioUrl(null);
-      }
-    }
-
-
-    if (selectedModel === Model.GPT4O) {
-      if (!isGpt41Unlocked && !gpt41ModalInteractionFlagRef.current) {
-        previousModelBeforeGpt41ModalRef.current = selectedModel;
-        setIsGpt41AccessModalOpen(true);
-        gpt41ModalInteractionFlagRef.current = true;
-      }
-    } else {
-      gpt41ModalInteractionFlagRef.current = false;
-      if (isGpt41AccessModalOpen) setIsGpt41AccessModalOpen(false);
-    }
-    clearSearch();
+    // This should be the last thing in this effect after all conditional logic for the current model change.
     prevSelectedModelRef.current = selectedModel;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedModel, clearSearch, isGpt41AccessModalOpen, isListening, isRealTimeTranslationMode, isImagenModelSelected, isTextToSpeechModelSelected, isFluxUltraModelSelected, isClaudeModelSelected, isKlingVideoModelSelected, apiKeyStatuses, activePersonaId, uploadedImages.length, imagePreviews.length, uploadedTextFileContent, uploadedTextFileName, isWebSearchEnabled, currentPlayingMessageId, isSpeakingLiveTranslation, isGpt41Unlocked /* other relevant states from the original large dep array */ ]);
+  }, [selectedModel, addNotification, clearSearch, isGpt41Unlocked, isListening, isSpeakingLiveTranslation]);
+  // Removed dependencies: isImagenModelSelected, isTextToSpeechModelSelected, getIsFluxUltraModel(selectedModel), isClaudeModelSelected, getIsKlingVideoModel(selectedModel), apiKeyStatuses, activePersonaId, uploadedImages.length, imagePreviews.length, uploadedTextFileContent, uploadedTextFileName, isWebSearchEnabled, currentPlayingMessageId, isRealTimeTranslationMode, isPrivateModeSelected, isGpt41AccessModalOpen
+  // The main trigger is selectedModel. Other states read within are fine as long as the logic only executes on model change.
 
 
   const translateLiveSegment = useCallback(async (text: string, targetLangCode: string) => {
@@ -1083,7 +1120,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     }
     if (newModel !== Model.GPT4O) gpt41ModalInteractionFlagRef.current = false;
     setSelectedModel(newModel);
-    clearSearch();
+    // clearSearch(); // This will be handled by the main useEffect on selectedModel change
   };
 
   const handlePersonaChange = (personaId: string | null) => {
@@ -1115,8 +1152,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   };
 
   const handleSaveCurrentChat = useCallback(() => {
-    if (isRealTimeTranslationMode || isAiAgentMode || isPrivateModeSelected || isFluxKontexModelSelected || isFluxUltraModelSelected || isKlingVideoModelSelected) {
-        addNotification(`Cannot save chat in ${isRealTimeTranslationMode ? 'Real-Time Translation' : (isAiAgentMode ? 'AI Agent' : (isPrivateModeSelected ? 'Private' : (isFluxKontexModelSelected ? 'Image Editing' : (isFluxUltraModelSelected ? 'Flux Ultra Image Gen' : 'Kling Video Gen'))))} mode.`, "info");
+    if (isRealTimeTranslationMode || isAiAgentMode || isPrivateModeSelected || getIsFluxKontexModel(selectedModel) || getIsFluxUltraModel(selectedModel) || getIsKlingVideoModel(selectedModel)) {
+        addNotification(`Cannot save chat in ${isRealTimeTranslationMode ? 'Real-Time Translation' : (isAiAgentMode ? 'AI Agent' : (isPrivateModeSelected ? 'Private' : (getIsFluxKontexModel(selectedModel) ? 'Image Editing' : (getIsFluxUltraModel(selectedModel) ? 'Flux Ultra Image Gen' : 'Kling Video Gen'))))} mode.`, "info");
         return;
     }
     if (messages.length === 0) {
@@ -1198,12 +1235,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         addNotification(`Chat "${sessionName}" saved to browser.`, "success");
     }
     clearSearch();
-  }, [messages, selectedModel, currentModelSettings, activeSessionId, savedSessions, activePersonaId, addNotification, currentChatName, isRealTimeTranslationMode, isAiAgentMode, isPrivateModeSelected, isFluxKontexModelSelected, isFluxUltraModelSelected, isKlingVideoModelSelected, pruneChatSessions, clearSearch]);
+  }, [messages, selectedModel, currentModelSettings, activeSessionId, savedSessions, activePersonaId, addNotification, currentChatName, isRealTimeTranslationMode, isAiAgentMode, isPrivateModeSelected, pruneChatSessions, clearSearch]); // Removed specific model checks, now handled by getIs...Model functions
 
   const handleLoadSession = useCallback((sessionId: string) => {
     const sessionToLoad = savedSessions.find(s => s.id === sessionId);
     if (sessionToLoad) {
-      if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT || sessionToLoad.model === Model.PRIVATE || sessionToLoad.model === Model.FLUX_KONTEX || sessionToLoad.model === Model.FLUX_KONTEX_MAX_MULTI || sessionToLoad.model === Model.FLUX_ULTRA || sessionToLoad.model === Model.KLING_VIDEO) {
+      if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT || sessionToLoad.model === Model.PRIVATE || getIsFluxKontexModel(sessionToLoad.model) || getIsFluxUltraModel(sessionToLoad.model) || getIsKlingVideoModel(sessionToLoad.model)) {
           addNotification(`Cannot load "${sessionToLoad.model}" sessions directly. Please start a new one if needed.`, "info");
           return;
       }
@@ -1254,7 +1291,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     setUploadedTextFileName(null);
     setIsWebSearchEnabled(false);
 
-    if (selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.PRIVATE && selectedModel !== Model.FLUX_KONTEX && selectedModel !== Model.FLUX_KONTEX_MAX_MULTI && selectedModel !== Model.FLUX_ULTRA && selectedModel !== Model.KLING_VIDEO && !(selectedModel === Model.GPT4O && !isGpt41Unlocked)) {
+    if (selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.PRIVATE && !getIsFluxKontexModel(selectedModel) && !getIsFluxUltraModel(selectedModel) && !getIsKlingVideoModel(selectedModel) && !(selectedModel === Model.GPT4O && !isGpt41Unlocked)) {
         setAllSettings(prev => {
             const modelKey = selectedModel;
             const defaultSettingsForModel = getSpecificDefaultSettings(modelKey);
@@ -1274,7 +1311,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         });
     }
 
-    if (!isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected && !isFluxUltraModelSelected && !isKlingVideoModelSelected) setActivePersonaId(null);
+    if (!isAiAgentMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxUltraModel(selectedModel) && !getIsKlingVideoModel(selectedModel)) setActivePersonaId(null);
     setError(null);
     setIsSidebarOpen(false);
     addNotification("Started new chat.", "info");
@@ -1294,7 +1331,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             setIsSpeakingLiveTranslation(false);
         }
     }
-  }, [selectedModel, addNotification, isRealTimeTranslationMode, isSpeakingLiveTranslation, isGpt41Unlocked, isAiAgentMode, isPrivateModeSelected, isFluxKontexModelSelected, isFluxUltraModelSelected, isKlingVideoModelSelected, clearSearch]);
+  }, [selectedModel, addNotification, isRealTimeTranslationMode, isSpeakingLiveTranslation, isGpt41Unlocked, isAiAgentMode, isPrivateModeSelected, clearSearch]); // Removed specific model checks, now handled by getIs...Model functions
 
   const handleDeleteSession = useCallback((sessionId: string) => {
     const sessionToDelete = savedSessions.find(s => s.id === sessionId);
@@ -1350,8 +1387,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   }, [addNotification, pruneChatSessions]);
 
   const handleSaveChatToDevice = useCallback(() => {
-    if (isRealTimeTranslationMode || isAiAgentMode || isPrivateModeSelected || isFluxKontexModelSelected || isFluxUltraModelSelected || isKlingVideoModelSelected) {
-      addNotification(`Cannot save chat to device in ${isRealTimeTranslationMode ? 'Real-Time Translation' : (isAiAgentMode ? 'AI Agent' : (isPrivateModeSelected ? 'Private' : (isFluxKontexModelSelected ? 'Image Editing' : (isFluxUltraModelSelected ? 'Flux Ultra Image Gen' : 'Kling Video Gen'))))} mode.`, "info");
+    if (isRealTimeTranslationMode || isAiAgentMode || isPrivateModeSelected || getIsFluxKontexModel(selectedModel) || getIsFluxUltraModel(selectedModel) || getIsKlingVideoModel(selectedModel)) {
+      addNotification(`Cannot save chat to device in ${isRealTimeTranslationMode ? 'Real-Time Translation' : (isAiAgentMode ? 'AI Agent' : (isPrivateModeSelected ? 'Private' : (getIsFluxKontexModel(selectedModel) ? 'Image Editing' : (getIsFluxUltraModel(selectedModel) ? 'Flux Ultra Image Gen' : 'Kling Video Gen'))))} mode.`, "info");
       return;
     }
     if (messages.length === 0) {
@@ -1414,8 +1451,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       console.error("Error saving chat to device:", e);
       addNotification("Failed to save chat to device.", "error", e.message);
     }
-  }, [messages, selectedModel, currentModelSettings, activeSessionId, currentChatName, activePersonaId, addNotification, isRealTimeTranslationMode, isAiAgentMode, isPrivateModeSelected, isFluxKontexModelSelected, isFluxUltraModelSelected, isKlingVideoModelSelected, savedSessions]);
-
+  }, [messages, selectedModel, currentModelSettings, activeSessionId, currentChatName, activePersonaId, addNotification, isRealTimeTranslationMode, isAiAgentMode, isPrivateModeSelected, savedSessions]); // Removed specific model checks
 
   const handleLoadChatFromDevice = useCallback(async (file: File) => {
     if (!file) return;
@@ -1436,7 +1472,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             if (!sessionToLoad.messages || !sessionToLoad.model || !sessionToLoad.modelSettingsSnapshot || !sessionToLoad.name || !sessionToLoad.timestamp) {
                 throw new Error("File is not a valid chat session format. Missing required fields.");
             }
-            if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT || sessionToLoad.model === Model.PRIVATE || sessionToLoad.model === Model.FLUX_KONTEX || sessionToLoad.model === Model.FLUX_KONTEX_MAX_MULTI || sessionToLoad.model === Model.FLUX_ULTRA || sessionToLoad.model === Model.KLING_VIDEO) {
+            if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT || sessionToLoad.model === Model.PRIVATE || getIsFluxKontexModel(sessionToLoad.model) || getIsFluxUltraModel(sessionToLoad.model) || getIsKlingVideoModel(sessionToLoad.model)) {
                 addNotification(`Cannot load "${sessionToLoad.model}" sessions from file.`, "info");
                 return;
             }
@@ -1800,18 +1836,29 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     } else if (currentUploadedTextFileName && currentUploadedTextContent) {
         textForApi = `The user has uploaded a file named "${currentUploadedTextFileName}".\nThe content of this file is:\n${currentUploadedTextContent}\n\n---\n\n${textForApi}`;
     }
+    
+    const canHaveSingleImagePreview =
+        selectedModel === Model.GEMINI ||
+        selectedModel === Model.GEMINI_ADVANCED ||
+        selectedModel === Model.GPT4O ||
+        selectedModel === Model.GPT4O_MINI ||
+        selectedModel === Model.DEEPSEEK ||
+        selectedModel === Model.AI_AGENT ||
+        selectedModel === Model.PRIVATE ||
+        selectedModel === Model.FLUX_KONTEX ||
+        selectedModel === Model.KLING_VIDEO;
 
     const newUserMessage: ChatMessage = {
         id: userMessageId,
         text: userDisplayedText,
         sender: 'user',
         timestamp: messageTimestamp,
-        imagePreview: (selectedModel !== Model.FLUX_KONTEX_MAX_MULTI && !isFluxUltraModelSelected && !isKlingVideoModelSelected) && currentUploadedImagePreviews.length > 0 ? currentUploadedImagePreviews[0] : undefined,
-        imagePreviews: (selectedModel === Model.FLUX_KONTEX_MAX_MULTI || isFluxUltraModelSelected) ? currentUploadedImagePreviews : undefined,
-        imageMimeTypes: (selectedModel === Model.FLUX_KONTEX_MAX_MULTI || isFluxUltraModelSelected) ? currentUploadedImageFiles.map(f => f.type) : undefined,
+        imagePreview: canHaveSingleImagePreview && currentUploadedImagePreviews.length > 0 ? currentUploadedImagePreviews[0] : undefined,
+        imagePreviews: (selectedModel === Model.FLUX_KONTEX_MAX_MULTI || getIsFluxUltraModel(selectedModel)) ? currentUploadedImagePreviews : undefined,
+        imageMimeTypes: (selectedModel === Model.FLUX_KONTEX_MAX_MULTI || getIsFluxUltraModel(selectedModel)) ? currentUploadedImageFiles.map(f => f.type) : undefined,
         fileName: currentUploadedTextFileName || undefined,
-        isImageQuery: isImagenModelSelected || isFluxKontexModelSelected || isFluxUltraModelSelected,
-        isVideoQuery: isKlingVideoModelSelected,
+        isImageQuery: isImagenModelSelected || getIsFluxKontexModel(selectedModel) || getIsFluxUltraModel(selectedModel),
+        isVideoQuery: getIsKlingVideoModel(selectedModel),
         isTaskGoal: isAiAgentMode,
         isNote: isPrivateModeSelected && (currentUploadedImagePreviews.length === 0 && !currentUploadedTextFileName),
         model: isPrivateModeSelected ? Model.PRIVATE : undefined,
@@ -1823,7 +1870,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
     const aiMessageTimestamp = Date.now();
     const aiMessageId = isRegenerationOfAiMsgId || (aiMessageTimestamp + 1).toString();
-    const actualModelIdentifierForFal = (isFluxKontexModelSelected || isFluxUltraModelSelected || isKlingVideoModelSelected) ? getActualModelIdentifier(selectedModel) : undefined;
+    const actualModelIdentifierForFal = (getIsFluxKontexModel(selectedModel) || getIsFluxUltraModel(selectedModel) || getIsKlingVideoModel(selectedModel)) ? getActualModelIdentifier(selectedModel) : undefined;
     const isAdmin = !userSession.isDemoUser && !userSession.isPaidUser;
 
     if (selectedModel === Model.FLUX_KONTEX_MAX_MULTI && !userSession.isPaidUser && !isAdmin) {
@@ -1831,12 +1878,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         setIsLoading(false);
         return;
     }
-    if (selectedModel === Model.FLUX_ULTRA && !userSession.isPaidUser && !isAdmin) {
+    if (getIsFluxUltraModel(selectedModel) && !userSession.isPaidUser && !isAdmin) {
         addNotification("Flux1.1 [Ultra] is for Paid Users or Admin only.", "error");
         setIsLoading(false);
         return;
     }
-    if (selectedModel === Model.KLING_VIDEO && !userSession.isPaidUser && !isAdmin) {
+    if (getIsKlingVideoModel(selectedModel) && !userSession.isPaidUser && !isAdmin) {
       addNotification("Kling AI Video generation is only available for Paid Users or Admin.", "error");
       setIsLoading(false);
       return;
@@ -1846,9 +1893,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     let aiPlaceholderText = isRegenerationOfAiMsgId ? 'Regenerating...' : '';
     if (!isRegenerationOfAiMsgId) {
         if (isImagenModelSelected) aiPlaceholderText = 'Generating image(s)...';
-        else if (isFluxKontexModelSelected) aiPlaceholderText = 'Submitting image for editing...';
-        else if (isFluxUltraModelSelected) aiPlaceholderText = 'Generating image (Flux1.1 Ultra)...';
-        else if (isKlingVideoModelSelected) aiPlaceholderText = 'Submitting video request...';
+        else if (getIsFluxKontexModel(selectedModel)) aiPlaceholderText = 'Submitting image for editing...';
+        else if (getIsFluxUltraModel(selectedModel)) aiPlaceholderText = 'Generating image (Flux1.1 Ultra)...';
+        else if (getIsKlingVideoModel(selectedModel)) aiPlaceholderText = 'Submitting video request...';
         else if (isTextToSpeechModelSelected) aiPlaceholderText = 'Synthesizing audio...';
         else if (isAiAgentMode) aiPlaceholderText = 'AI Agent is processing your goal...';
         else if (isPrivateModeSelected) aiPlaceholderText = 'Data logged locally. No AI response.';
@@ -1866,7 +1913,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         promptedByMessageId: userMessageId,
         isTaskPlan: isAiAgentMode,
         originalPrompt: userDisplayedText,
-        fluxModelId: (isFluxKontexModelSelected || isFluxUltraModelSelected || isKlingVideoModelSelected) ? actualModelIdentifierForFal : undefined,
+        fluxModelId: (getIsFluxKontexModel(selectedModel) || getIsFluxUltraModel(selectedModel) || getIsKlingVideoModel(selectedModel)) ? actualModelIdentifierForFal : undefined,
     };
 
     if (isPrivateModeSelected) {
@@ -1899,17 +1946,17 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         let limitExceeded = false;
         let notificationMessage = "";
 
-        if (isFluxKontexModelSelected) {
+        if (getIsFluxKontexModel(selectedModel)) {
             const isMax = selectedModel === Model.FLUX_KONTEX_MAX_MULTI;
             const usesLeft = isMax ? limits?.fluxKontextMaxMonthlyUsesLeft : limits?.fluxKontextProMonthlyUsesLeft;
             if (!limits || usesLeft === undefined || usesLeft <= 0) {
                 limitExceeded = true;
                 notificationMessage = `Đã hết lượt dùng thử ${isMax ? 'Flux Kontext Max' : 'Flux Kontext Pro'}. Vui lòng liên hệ admin.`;
             }
-        } else if (isFluxUltraModelSelected) {
+        } else if (getIsFluxUltraModel(selectedModel)) {
             limitExceeded = true;
             notificationMessage = "Flux1.1 [Ultra] is for Paid Users or Admin only. DEMO users cannot use this model.";
-        } else if (isKlingVideoModelSelected) {
+        } else if (getIsKlingVideoModel(selectedModel)) {
             limitExceeded = true;
             notificationMessage = "Kling AI Video is for Paid Users or Admin only. DEMO users cannot use this model.";
         } else if (isImagenModelSelected) {
@@ -1934,7 +1981,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     }
 
     if (userSession.isPaidUser && userSession.paidLimits && !isAdmin) {
-        if (isFluxUltraModelSelected) {
+        if (getIsFluxUltraModel(selectedModel)) {
             const fluxUltraSettings = currentModelSettings as FluxUltraSettings;
             const numImagesToGenFluxUltra = fluxUltraSettings.num_images || 1;
             if (userSession.paidLimits.fluxUltraMonthlyImagesLeft < numImagesToGenFluxUltra) {
@@ -1943,7 +1990,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                 setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
                 return;
             }
-        } else if (isKlingVideoModelSelected) {
+        } else if (getIsKlingVideoModel(selectedModel)) {
             if ((userSession.paidLimits.klingVideoMonthlyUsed || 0) >= (userSession.paidLimits.klingVideoMonthlyMaxGenerations || PAID_USER_LIMITS_CONFIG.klingVideoMonthlyMaxGenerations || 1)) {
                  addNotification(`Monthly Kling AI Video generation limit reached. Max ${userSession.paidLimits.klingVideoMonthlyMaxGenerations || PAID_USER_LIMITS_CONFIG.klingVideoMonthlyMaxGenerations || 1} per month.`, "error");
                  setIsLoading(false);
@@ -2211,7 +2258,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           if (chunk.isFinished) break;
         }
 
-      } else if (currentModelStatus?.isMock && !isRealTimeTranslationMode && !isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected && !isFluxUltraModelSelected && !isKlingVideoModelSelected) {
+      } else if (currentModelStatus?.isMock && !isRealTimeTranslationMode && !isAiAgentMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxUltraModel(selectedModel) && !getIsKlingVideoModel(selectedModel)) {
         const mockParts: Part[] = [];
         if (textForApi.trim()) mockParts.push({ text: textForApi.trim() });
         if (currentUploadedTextFileName && !currentUploadedTextContent && currentUploadedImageFiles.length === 0) {
@@ -2226,7 +2273,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           currentText += chunk;
           setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? { ...msg, text: currentText, isRegenerating: false } : msg));
         }
-      } else if (!isRealTimeTranslationMode && !isPrivateModeSelected && !isFluxKontexModelSelected && !isFluxUltraModelSelected && !isKlingVideoModelSelected) {
+      } else if (!isRealTimeTranslationMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxUltraModel(selectedModel) && !getIsKlingVideoModel(selectedModel)) {
           throw new Error(`API integration for ${selectedModel} is not implemented or API key/Vertex config is missing and it's not a mock model.`);
       }
     } catch (e: any) {
@@ -2241,16 +2288,16 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       }]);
     }
 
-    if (!(isFluxKontexModelSelected || isFluxUltraModelSelected || isKlingVideoModelSelected) ||
-        ((isFluxKontexModelSelected || isFluxUltraModelSelected) && !messages.find(m => m.id === aiMessageId)?.fluxRequestId) ||
-        (isKlingVideoModelSelected && !messages.find(m => m.id === aiMessageId)?.klingVideoRequestId)) {
+    if (!(getIsFluxKontexModel(selectedModel) || getIsFluxUltraModel(selectedModel) || getIsKlingVideoModel(selectedModel)) ||
+        ((getIsFluxKontexModel(selectedModel) || getIsFluxUltraModel(selectedModel)) && !messages.find(m => m.id === aiMessageId)?.fluxRequestId) ||
+        (getIsKlingVideoModel(selectedModel) && !messages.find(m => m.id === aiMessageId)?.klingVideoRequestId)) {
       setIsLoading(false);
     }
 
 
     if (!isRegenerationOfAiMsgId && !isRealTimeTranslationMode && !isPrivateModeSelected) {
         setInput('');
-        if (!isFluxKontexModelSelected && !isFluxUltraModelSelected && !isKlingVideoModelSelected) {
+        if (!getIsFluxKontexModel(selectedModel) && !getIsFluxUltraModel(selectedModel) && !getIsKlingVideoModel(selectedModel)) {
             setUploadedImages([]);
             setImagePreviews([]);
         }
@@ -2270,12 +2317,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         determinedTtsMaxLength = userSession.paidLimits.openaiTtsMaxChars;
     }
 
-    if ((isImagenModelSelected || isFluxUltraModelSelected) && !input.trim()) {
+    if ((isImagenModelSelected || getIsFluxUltraModel(selectedModel)) && !input.trim()) {
         setError("Please enter a prompt for image generation.");
         addNotification("Please enter a prompt for image generation.", "info");
         return;
     }
-    if (isFluxKontexModelSelected) {
+    if (getIsFluxKontexModel(selectedModel)) {
         if (uploadedImages.length === 0) {
             setError("Please upload an image to edit.");
             addNotification("Please upload an image for Flux Kontext model.", "info");
@@ -2287,7 +2334,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             return;
         }
     }
-     if (isKlingVideoModelSelected) {
+     if (getIsKlingVideoModel(selectedModel)) {
         if (uploadedImages.length === 0) {
             setError("Please upload an image for video generation.");
             addNotification("Please upload an image for Kling AI video generation.", "info");
@@ -2319,7 +2366,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         addNotification("Please enter text, or upload an image/file to log in Private Mode.", "info");
         return;
     }
-    if (!isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected && !isFluxUltraModelSelected && !isKlingVideoModelSelected && !input.trim() && uploadedImages.length === 0 && !uploadedTextFileName) {
+    if (!isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxUltraModel(selectedModel) && !getIsKlingVideoModel(selectedModel) && !input.trim() && uploadedImages.length === 0 && !uploadedTextFileName) {
         return;
     }
 
@@ -2330,7 +2377,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   };
 
   const handleRegenerateResponse = async (aiMessageIdToRegenerate: string, promptedByMsgId: string) => {
-      if (isRealTimeTranslationMode || isAiAgentMode || isPrivateModeSelected || isFluxKontexModelSelected || isFluxUltraModelSelected || isKlingVideoModelSelected) return;
+      if (isRealTimeTranslationMode || isAiAgentMode || isPrivateModeSelected || getIsFluxKontexModel(selectedModel) || getIsFluxUltraModel(selectedModel) || getIsKlingVideoModel(selectedModel)) return;
       const userMessageForRegen = messages.find(m => m.id === promptedByMsgId && m.sender === 'user');
       const aiMessageToRegen = messages.find(m => m.id === aiMessageIdToRegenerate && m.sender === 'ai');
 
@@ -2376,15 +2423,15 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
   const imageUploadLimit = useMemo(() => {
       if (selectedModel === Model.FLUX_KONTEX_MAX_MULTI) return 4;
-      if (selectedModel === Model.KLING_VIDEO || selectedModel === Model.FLUX_KONTEX || selectedModel === Model.GEMINI || selectedModel === Model.GPT4O || selectedModel === Model.GPT4O_MINI || selectedModel === Model.PRIVATE) return 1;
-      if (selectedModel === Model.DEEPSEEK || selectedModel === Model.FLUX_ULTRA) return 0;
+      if (getIsKlingVideoModel(selectedModel) || selectedModel === Model.FLUX_KONTEX || selectedModel === Model.GEMINI || selectedModel === Model.GPT4O || selectedModel === Model.GPT4O_MINI || selectedModel === Model.PRIVATE) return 1;
+      if (selectedModel === Model.DEEPSEEK || getIsFluxUltraModel(selectedModel)) return 0;
       return 0;
   }, [selectedModel]);
 
 
   const handleSetUploadedImages = (newFiles: File[]) => {
-    if (isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || isKlingVideoModelSelected) {
-        if (isKlingVideoModelSelected) {
+    if (isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || getIsKlingVideoModel(selectedModel)) {
+        if (getIsKlingVideoModel(selectedModel)) {
             if (newFiles.length > 0) {
                 const firstFile = newFiles[0];
                 setUploadedImages([firstFile]);
@@ -2455,7 +2502,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
 
   const handleFileUpload = (file: File | null) => {
-    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isFluxKontexModelSelected || isClaudeModelSelected || isFluxUltraModelSelected || isKlingVideoModelSelected) return;
+    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || getIsFluxKontexModel(selectedModel) || isClaudeModelSelected || getIsFluxUltraModel(selectedModel) || getIsKlingVideoModel(selectedModel)) return;
 
     setUploadedImages([]);
     setImagePreviews([]);
@@ -2627,9 +2674,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
   const showMicrophoneButton = useMemo(() => {
     if (!isSpeechRecognitionSupported) return false;
-    if (isTextToSpeechModelSelected || isImagenModelSelected || isClaudeModelSelected || isFluxUltraModelSelected || isKlingVideoModelSelected) return false;
+    if (isTextToSpeechModelSelected || isImagenModelSelected || isClaudeModelSelected || getIsFluxUltraModel(selectedModel) || getIsKlingVideoModel(selectedModel)) return false;
     return true;
-  }, [isSpeechRecognitionSupported, selectedModel, isTextToSpeechModelSelected, isImagenModelSelected, isClaudeModelSelected, isFluxUltraModelSelected, isKlingVideoModelSelected]);
+  }, [isSpeechRecognitionSupported, selectedModel, isTextToSpeechModelSelected, isImagenModelSelected, isClaudeModelSelected]); // Removed specific model selected states
 
   const showImageUploadInChatBar = useMemo(() => {
     return imageUploadLimit > 0 &&
@@ -2638,26 +2685,26 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
            !isImagenModelSelected &&
            !isAiAgentMode &&
            !isClaudeModelSelected &&
-           !isKlingVideoModelSelected; // Exclude Kling from generic upload button
-  }, [imageUploadLimit, selectedModel, isTextToSpeechModelSelected, isRealTimeTranslationMode, isImagenModelSelected, isAiAgentMode, isClaudeModelSelected, isKlingVideoModelSelected]);
+           !getIsKlingVideoModel(selectedModel); 
+  }, [imageUploadLimit, selectedModel, isTextToSpeechModelSelected, isRealTimeTranslationMode, isImagenModelSelected, isAiAgentMode, isClaudeModelSelected]); // Removed specific model selected states
 
   const showFileUploadInChatBar = useMemo(() => {
     return !isImagenModelSelected &&
            !isTextToSpeechModelSelected &&
            !isRealTimeTranslationMode &&
-           !isFluxKontexModelSelected &&
-           !isFluxUltraModelSelected &&
-           !isKlingVideoModelSelected &&
+           !getIsFluxKontexModel(selectedModel) &&
+           !getIsFluxUltraModel(selectedModel) &&
+           !getIsKlingVideoModel(selectedModel) &&
            !isClaudeModelSelected;
-  }, [selectedModel, isImagenModelSelected, isTextToSpeechModelSelected, isRealTimeTranslationMode, isFluxKontexModelSelected, isFluxUltraModelSelected, isKlingVideoModelSelected, isClaudeModelSelected]);
+  }, [selectedModel, isImagenModelSelected, isTextToSpeechModelSelected, isRealTimeTranslationMode, isClaudeModelSelected]); // Removed specific model selected states
 
 
   const currentPromptPlaceholder = () => {
     if (isListening && !isRealTimeTranslationMode) return "Đang nghe...";
     if (isImagenModelSelected) return "Enter prompt for image generation...";
-    if (isFluxKontexModelSelected) return "Enter prompt to edit uploaded image...";
-    if (isFluxUltraModelSelected) return "Enter prompt for Flux1.1 [Ultra] image generation...";
-    if (isKlingVideoModelSelected) return "Enter prompt for video generation (image required)...";
+    if (getIsFluxKontexModel(selectedModel)) return "Enter prompt to edit uploaded image...";
+    if (getIsFluxUltraModel(selectedModel)) return "Enter prompt for Flux1.1 [Ultra] image generation...";
+    if (getIsKlingVideoModel(selectedModel)) return "Enter prompt for video generation (image required)...";
     if (isTextToSpeechModelSelected) return "Enter text to synthesize speech...";
     if (isRealTimeTranslationMode) return "Real-Time Translation Active. Use Microphone.";
     if (isAiAgentMode) return "Enter main goal for AI Agent, or upload file...";
@@ -2666,7 +2713,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
     let placeholder = "Type your message";
     if (uploadedImages.length === 0 && imagePreviews.length === 0 && !uploadedTextFileName) {
-        const canUploadImage = showImageUploadInChatBar || isKlingVideoModelSelected; // Include Kling for placeholder text
+        const canUploadImage = showImageUploadInChatBar || getIsKlingVideoModel(selectedModel);
         const canUploadFile = showFileUploadInChatBar;
         if (canUploadImage && canUploadFile) {
             placeholder += " or upload image/file";
@@ -2681,9 +2728,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   }
 
   const sendButtonLabel = () => {
-    if (isImagenModelSelected || isFluxUltraModelSelected) return "Generate Image";
-    if (isKlingVideoModelSelected) return "Generate Video";
-    if (isFluxKontexModelSelected) return "Edit Image";
+    if (isImagenModelSelected || getIsFluxUltraModel(selectedModel)) return "Generate Image";
+    if (getIsKlingVideoModel(selectedModel)) return "Generate Video";
+    if (getIsFluxKontexModel(selectedModel)) return "Edit Image";
     if (isTextToSpeechModelSelected) return "Synthesize Speech";
     if (isAiAgentMode) return "Set Goal";
     if (isPrivateModeSelected) return "Log Entry";
@@ -2691,9 +2738,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   }
 
   const sendButtonIcon = () => {
-    if (isImagenModelSelected || isFluxUltraModelSelected) return <PromptIcon className="w-6 h-6" />;
-    if (isKlingVideoModelSelected) return <FilmIcon className="w-6 h-6" />;
-    if (isFluxKontexModelSelected) return <EditIcon className="w-6 h-6" />;
+    if (isImagenModelSelected || getIsFluxUltraModel(selectedModel)) return <PromptIcon className="w-6 h-6" />;
+    if (getIsKlingVideoModel(selectedModel)) return <FilmIcon className="w-6 h-6" />;
+    if (getIsFluxKontexModel(selectedModel)) return <EditIcon className="w-6 h-6" />;
     if (isTextToSpeechModelSelected) return <SpeakerWaveIcon className="w-6 h-6" />;
     if (isAiAgentMode || isPrivateModeSelected) return <PaperAirplaneIcon className="w-6 h-6" />;
     return <PaperAirplaneIcon className="w-6 h-6" />;
@@ -2894,17 +2941,17 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   };
 
   const showGenericAttachmentPreview = useMemo(() => {
-    if (isKlingVideoModelSelected && imagePreviews.length > 0) {
+    if (getIsKlingVideoModel(selectedModel) && imagePreviews.length > 0) {
         return true;
     }
-    if (isTextToSpeechModelSelected || isRealTimeTranslationMode || isImagenModelSelected || isClaudeModelSelected || isFluxUltraModelSelected) {
+    if (isTextToSpeechModelSelected || isRealTimeTranslationMode || isImagenModelSelected || isClaudeModelSelected || getIsFluxUltraModel(selectedModel)) {
         return false;
     }
     if (imagePreviews.length > 0 || uploadedTextFileName) {
         return true;
     }
     return false;
-  }, [imagePreviews, uploadedTextFileName, isTextToSpeechModelSelected, isRealTimeTranslationMode, isImagenModelSelected, isClaudeModelSelected, isFluxUltraModelSelected, isKlingVideoModelSelected]);
+  }, [imagePreviews, uploadedTextFileName, isTextToSpeechModelSelected, isRealTimeTranslationMode, isImagenModelSelected, isClaudeModelSelected, selectedModel]); // Replaced specific model checks
 
 
   return (
@@ -3123,7 +3170,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                 <PhotoIcon className="w-5 h-5"/>
               </button>
             )}
-            {!isRealTimeTranslationMode && isKlingVideoModelSelected && (
+            {!isRealTimeTranslationMode && getIsKlingVideoModel(selectedModel) && (
               <button
                 onClick={() => document.getElementById('image-upload-chatbar-kling')?.click()}
                 disabled={generalChatBarInteractionDisabled || uploadedImages.length >= imageUploadLimit }
