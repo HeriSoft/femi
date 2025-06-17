@@ -25,7 +25,7 @@ import { ThemeContext } from '../App.tsx'; // Import ThemeContext
 // Assumes ALL_MODEL_DEFAULT_SETTINGS is correctly typed as ModelSpecificSettingsMap
 const getSpecificDefaultSettings = <M extends Model>(modelKey: M): ModelSpecificSettingsMap[M] => {
     const settings = ALL_MODEL_DEFAULT_SETTINGS[modelKey] as ModelSpecificSettingsMap[M]; // Added type assertion
-    if (!settings) { 
+    if (!settings) {
         console.error(`[ChatPage] CRITICAL: Default settings for model ${modelKey} are missing from ALL_MODEL_DEFAULT_SETTINGS. This is a bug in constants.ts.`);
         throw new Error(`Missing default settings for ${modelKey}`);
     }
@@ -42,14 +42,14 @@ const mergeSettings = (target: AllModelSettings, source: Partial<AllModelSetting
       if (Object.values(Model).includes(modelKey)) { // Ensure modelKey is a valid Model enum member
 
         const sourceSettingsPartialForModel = source[modelKey]; // This is Partial<ModelSpecificSettingsMap[typeof modelKey]> | undefined
-        
+
         if (sourceSettingsPartialForModel) {
-          const baseSettingsForModel: ModelSpecificSettingsMap[typeof modelKey] = 
+          const baseSettingsForModel: ModelSpecificSettingsMap[typeof modelKey] =
             target[modelKey] || getSpecificDefaultSettings(modelKey);
-          
+
           // Perform the merge with casts for spread operations, assuming modelKey correctly identifies the type
           output[modelKey] = {
-            ...(baseSettingsForModel as any), 
+            ...(baseSettingsForModel as any),
             ...(sourceSettingsPartialForModel as any),
           } as ModelSpecificSettingsMap[typeof modelKey]; // Cast the result back to the specific settings type
         }
@@ -179,7 +179,7 @@ interface ChatPageProps {
 async function safeResponseJson(response: Response): Promise<any> {
   const text = await response.text();
   try {
-    if (!text) { 
+    if (!text) {
       return { error: `Empty response from server. Status: ${response.status} ${response.statusText}` };
     }
     return JSON.parse(text);
@@ -204,6 +204,8 @@ const getIsKlingVideoModel = (model: Model | null): boolean => {
     if (!model) return false;
     return model === Model.KLING_VIDEO;
 };
+
+const TRANSLATION_REQUEST_COOLDOWN_MS = 1000; // Cooldown period in milliseconds
 
 
 const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, userSession, onUpdateDemoLimits }) => {
@@ -237,7 +239,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         const fluxModelsToSanitize: Model[] = [Model.FLUX_KONTEX, Model.FLUX_KONTEX_MAX_MULTI];
         fluxModelsToSanitize.forEach(fluxModelKey => {
             const modelSpecSettings = parsedSettings[fluxModelKey];
-            if (modelSpecSettings && 'aspect_ratio' in modelSpecSettings) { 
+            if (modelSpecSettings && 'aspect_ratio' in modelSpecSettings) {
                 const fluxKontextSpecific = modelSpecSettings as Partial<FluxKontexSettings>;
                 if (fluxKontextSpecific.aspect_ratio && !VALID_FLUX_KONTEX_ASPECT_RATIOS.includes(fluxKontextSpecific.aspect_ratio as FluxKontexAspectRatio)) {
                     console.warn(`[ChatPage Init] Invalid aspect_ratio "${fluxKontextSpecific.aspect_ratio}" found in localStorage for ${fluxModelKey}. Resetting to default "${DEFAULT_FLUX_KONTEX_SETTINGS.aspect_ratio}".`);
@@ -245,17 +247,17 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                 }
             }
         });
-        
+
         const fluxUltraModelSpecSettings = parsedSettings[Model.FLUX_ULTRA];
         if (fluxUltraModelSpecSettings) {
-            const fluxUltraSettings = fluxUltraModelSpecSettings as Partial<FluxUltraSettings & { image_size: any }>; 
+            const fluxUltraSettings = fluxUltraModelSpecSettings as Partial<FluxUltraSettings & { image_size: any }>;
             if ('image_size' in fluxUltraSettings) {
                 console.warn(`[ChatPage Init] Old 'image_size' found for Flux Ultra, removing. Value was: ${fluxUltraSettings.image_size}`);
                 delete fluxUltraSettings.image_size;
             }
 
             const validFluxUltraAspectRatios = FLUX_ULTRA_ASPECT_RATIOS.map(opt => opt.value);
-            if ('aspect_ratio' in fluxUltraSettings && fluxUltraSettings.aspect_ratio) { 
+            if ('aspect_ratio' in fluxUltraSettings && fluxUltraSettings.aspect_ratio) {
                 if (!validFluxUltraAspectRatios.includes(fluxUltraSettings.aspect_ratio as FluxUltraAspectRatio)) {
                     console.warn(`[ChatPage Init] Invalid aspect_ratio "${fluxUltraSettings.aspect_ratio}" found for Flux Ultra. Resetting to default "${DEFAULT_FLUX_ULTRA_SETTINGS.aspect_ratio}".`);
                     fluxUltraSettings.aspect_ratio = DEFAULT_FLUX_ULTRA_SETTINGS.aspect_ratio;
@@ -266,7 +268,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         }
         return mergeSettings(completeDefaults, parsedSettings);
       }
-      return completeDefaults; 
+      return completeDefaults;
     } catch (error: any) {
       console.error("Error loading settings from localStorage:", error);
        const fallbackSettings: AllModelSettings = {};
@@ -277,40 +279,40 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     }
   });
 
-  const modelSettings: AnyModelSettings = useMemo(() => {
-    const getTypedSpecificSettings = <M extends Model>(model: M): ModelSpecificSettingsMap[M] => {
-        return (allSettings[model] || getSpecificDefaultSettings(model)) as ModelSpecificSettingsMap[M];
+  const currentModelSettings = useMemo(() => {
+    const getTypedSpecificSettings = <M_PARAM extends Model>(modelKey: M_PARAM): ModelSpecificSettingsMap[M_PARAM] => {
+        return (allSettings[modelKey] || getSpecificDefaultSettings(modelKey)) as ModelSpecificSettingsMap[M_PARAM];
     };
 
-    let currentModelTypedSettings: ModelSpecificSettingsMap[typeof selectedModel];
+    let specificSettings: ModelSpecificSettingsMap[typeof selectedModel];
     switch (selectedModel) {
-        case Model.GEMINI: currentModelTypedSettings = getTypedSpecificSettings(Model.GEMINI); break;
-        case Model.GEMINI_ADVANCED: currentModelTypedSettings = getTypedSpecificSettings(Model.GEMINI_ADVANCED); break;
-        case Model.GPT4O: currentModelTypedSettings = getTypedSpecificSettings(Model.GPT4O); break;
-        case Model.GPT4O_MINI: currentModelTypedSettings = getTypedSpecificSettings(Model.GPT4O_MINI); break;
-        case Model.DEEPSEEK: currentModelTypedSettings = getTypedSpecificSettings(Model.DEEPSEEK); break;
-        case Model.CLAUDE: currentModelTypedSettings = getTypedSpecificSettings(Model.CLAUDE); break;
-        case Model.IMAGEN3: currentModelTypedSettings = getTypedSpecificSettings(Model.IMAGEN3); break;
-        case Model.OPENAI_TTS: currentModelTypedSettings = getTypedSpecificSettings(Model.OPENAI_TTS); break;
-        case Model.REAL_TIME_TRANSLATION: currentModelTypedSettings = getTypedSpecificSettings(Model.REAL_TIME_TRANSLATION); break;
-        case Model.AI_AGENT: currentModelTypedSettings = getTypedSpecificSettings(Model.AI_AGENT); break;
-        case Model.PRIVATE: currentModelTypedSettings = getTypedSpecificSettings(Model.PRIVATE); break;
-        case Model.FLUX_KONTEX: currentModelTypedSettings = getTypedSpecificSettings(Model.FLUX_KONTEX); break;
-        case Model.FLUX_KONTEX_MAX_MULTI: currentModelTypedSettings = getTypedSpecificSettings(Model.FLUX_KONTEX_MAX_MULTI); break;
-        case Model.FLUX_ULTRA: currentModelTypedSettings = getTypedSpecificSettings(Model.FLUX_ULTRA); break;
-        case Model.KLING_VIDEO: currentModelTypedSettings = getTypedSpecificSettings(Model.KLING_VIDEO); break;
+        case Model.GEMINI: specificSettings = getTypedSpecificSettings(Model.GEMINI); break;
+        case Model.GEMINI_ADVANCED: specificSettings = getTypedSpecificSettings(Model.GEMINI_ADVANCED); break;
+        case Model.GPT4O: specificSettings = getTypedSpecificSettings(Model.GPT4O); break;
+        case Model.GPT4O_MINI: specificSettings = getTypedSpecificSettings(Model.GPT4O_MINI); break;
+        case Model.DEEPSEEK: specificSettings = getTypedSpecificSettings(Model.DEEPSEEK); break;
+        case Model.CLAUDE: specificSettings = getTypedSpecificSettings(Model.CLAUDE); break;
+        case Model.IMAGEN3: specificSettings = getTypedSpecificSettings(Model.IMAGEN3); break;
+        case Model.OPENAI_TTS: specificSettings = getTypedSpecificSettings(Model.OPENAI_TTS); break;
+        case Model.REAL_TIME_TRANSLATION: specificSettings = getTypedSpecificSettings(Model.REAL_TIME_TRANSLATION); break;
+        case Model.AI_AGENT: specificSettings = getTypedSpecificSettings(Model.AI_AGENT); break;
+        case Model.PRIVATE: specificSettings = getTypedSpecificSettings(Model.PRIVATE); break;
+        case Model.FLUX_KONTEX: specificSettings = getTypedSpecificSettings(Model.FLUX_KONTEX); break;
+        case Model.FLUX_KONTEX_MAX_MULTI: specificSettings = getTypedSpecificSettings(Model.FLUX_KONTEX_MAX_MULTI); break;
+        case Model.FLUX_ULTRA: specificSettings = getTypedSpecificSettings(Model.FLUX_ULTRA); break;
+        case Model.KLING_VIDEO: specificSettings = getTypedSpecificSettings(Model.KLING_VIDEO); break;
         default:
             const _exhaustiveCheck: never = selectedModel;
-            console.error(`[ChatPage] modelSettings useMemo: Unhandled model ${selectedModel}. Falling back to generic defaults.`);
-            currentModelTypedSettings = getSpecificDefaultSettings(selectedModel) as ModelSpecificSettingsMap[typeof selectedModel]; 
+            console.error(`[ChatPage] currentModelSettings useMemo: Unhandled model ${selectedModel}.`);
+            specificSettings = getSpecificDefaultSettings(selectedModel) as ModelSpecificSettingsMap[typeof selectedModel];
     }
-    
-    let mutableSettings = { ...currentModelTypedSettings }; 
+
+    let mutableSettingsCopy = { ...specificSettings };
 
     const aboutMeText = userProfile?.aboutMe?.trim();
     const activePersona = activePersonaId ? personas.find(p => p.id === activePersonaId) : null;
 
-    if ('systemInstruction' in mutableSettings &&
+    if ('systemInstruction' in mutableSettingsCopy &&
         (selectedModel === Model.GEMINI ||
          selectedModel === Model.GEMINI_ADVANCED ||
          selectedModel === Model.GPT4O ||
@@ -318,21 +320,21 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
          selectedModel === Model.DEEPSEEK ||
          selectedModel === Model.CLAUDE ||
          selectedModel === Model.AI_AGENT ||
-         selectedModel === Model.PRIVATE 
+         selectedModel === Model.PRIVATE
         )
        ) {
-        let finalSystemInstruction = mutableSettings.systemInstruction; 
+        let finalSystemInstruction = mutableSettingsCopy.systemInstruction;
         if (activePersona) {
             finalSystemInstruction = activePersona.instruction;
             if (aboutMeText) {
                 finalSystemInstruction = `Background information about the user you are interacting with: "${aboutMeText}".\n\nYour current persona/task based on user's selection: "${activePersona.instruction}"`;
             }
         } else if (aboutMeText) {
-            finalSystemInstruction = `Background information about the user you are interacting with: "${aboutMeText}".\n\nYour task: "${mutableSettings.systemInstruction}"`;
+            finalSystemInstruction = `Background information about the user you are interacting with: "${aboutMeText}".\n\nYour task: "${mutableSettingsCopy.systemInstruction}"`;
         }
-        (mutableSettings as ModelSettings | AiAgentSettings | PrivateModeSettings).systemInstruction = finalSystemInstruction;
+        (mutableSettingsCopy as ModelSettings | AiAgentSettings | PrivateModeSettings).systemInstruction = finalSystemInstruction;
     }
-    return mutableSettings as AnyModelSettings; // Ensure the return conforms to AnyModelSettings for the state variable
+    return mutableSettingsCopy;
   }, [allSettings, selectedModel, activePersonaId, personas, userProfile]);
 
 
@@ -449,12 +451,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   const currentRecognizedTextSegmentRef = useRef<string>("");
 
   // Refs for Real-Time Translation
-  const liveTranscriptionRef = useRef<string>(""); 
-  const currentInterimVisualRef = useRef<string>(""); 
-  const interimTranslationBufferRef = useRef<string>(""); 
+  const liveTranscriptionRef = useRef<string>("");
+  const currentInterimVisualRef = useRef<string>("");
+  const interimTranslationBufferRef = useRef<string>("");
   const translationDebounceTimerRef = useRef<number | null>(null);
-  const DEBOUNCE_TRANSLATION_MS = 750; 
-  const RTT_GRACE_PERIOD_MS = DEBOUNCE_TRANSLATION_MS + 1000;
+  const DEBOUNCE_TRANSLATION_MS = 750;
 
   const [liveTranscriptionDisplay, setLiveTranscriptionDisplay] = useState<string>("");
   const liveTranslationAccumulatorRef = useRef<string>("");
@@ -462,8 +463,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   const currentTranslationStreamControllerRef = useRef<AbortController | null>(null);
   const [isSpeakingLiveTranslation, setIsSpeakingLiveTranslation] = useState(false);
   const [liveTranslationAudioUrl, setLiveTranslationAudioUrl] = useState<string | null>(null);
-  const lastTranslatedInterimTextRef = useRef<string|null>(null);
-  const lastTranslatedInterimTimestampRef = useRef<number>(0);
+
+  const lastSuccessfullyTranslatedTextRef = useRef<string|null>(null);
+  const lastSuccessfullyTranslatedTimestampRef = useRef<number>(0);
 
 
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
@@ -492,7 +494,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
 
   const apiKeyStatuses = React.useMemo((): Record<Model, ApiKeyStatus> => {
-    const isProxyExpectedToHaveKey = true; 
+    const isProxyExpectedToHaveKey = true;
 
     return {
       [Model.GEMINI]: {isSet: isProxyExpectedToHaveKey, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Gemini Flash', isMock: false, isGeminiPlatform: true},
@@ -534,7 +536,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         modelName: 'Flux Kontext Max (Multi-Image Edit)',
         isMock: false,
         isGeminiPlatform: false,
-        isImageEditing: false, 
+        isImageEditing: false,
         isMultiImageEditing: true,
       },
       [Model.FLUX_ULTRA]: {
@@ -557,7 +559,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   }, []);
 
   const displayedChatTitle = useMemo(() => {
-    if (!activeSessionId) { 
+    if (!activeSessionId) {
       switch (selectedModel) {
         case Model.FLUX_KONTEX:
           return "Flux Kontext Editor";
@@ -574,10 +576,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         case Model.REAL_TIME_TRANSLATION:
           return "Real-Time Translation";
         default:
-          return currentChatName; 
+          return currentChatName;
       }
     }
-    return currentChatName; 
+    return currentChatName;
   }, [activeSessionId, selectedModel, currentChatName]);
 
 
@@ -666,14 +668,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
     // Microphone stopping logic based on model/mode changes
     if (isListening && recognitionRef.current) {
-        const micIncompatibleForCurrentModel = 
-            (isImagenModelSelected || 
-             isTextToSpeechModelSelected || 
-             isClaudeModelSelected || 
-             isFluxUltraModelSelected || 
+        const micIncompatibleForCurrentModel =
+            (isImagenModelSelected ||
+             isTextToSpeechModelSelected ||
+             isClaudeModelSelected ||
+             isFluxUltraModelSelected ||
              isKlingVideoModelSelected) && !isRealTimeTranslationMode;
 
-        const stopForGptModal = 
+        const stopForGptModal =
             selectedModel === Model.GPT4O && isGpt41AccessModalOpen;
 
         if (micIncompatibleForCurrentModel || stopForGptModal) {
@@ -697,8 +699,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       currentInterimVisualRef.current = "";
       interimTranslationBufferRef.current = "";
       liveTranslationAccumulatorRef.current = "";
-      lastTranslatedInterimTextRef.current = null;
-      lastTranslatedInterimTimestampRef.current = 0;
+      lastSuccessfullyTranslatedTextRef.current = null;
+      lastSuccessfullyTranslatedTimestampRef.current = 0;
       currentTranslationStreamControllerRef.current?.abort();
       if (audioPlayerRef.current && isSpeakingLiveTranslation) {
           audioPlayerRef.current.pause();
@@ -725,11 +727,41 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
 
   const translateLiveSegment = useCallback(async (text: string, targetLangCode: string) => {
-      if (!text.trim() || !targetLangCode) return;
+      const trimmedText = text.trim();
+      if (!trimmedText || !targetLangCode) return;
+
+      if (trimmedText === lastSuccessfullyTranslatedTextRef.current &&
+          (Date.now() - lastSuccessfullyTranslatedTimestampRef.current < TRANSLATION_REQUEST_COOLDOWN_MS)) {
+          console.log(`[translateLiveSegment] Cooldown: Skipping identical translation request for "${trimmedText}".`);
+          // Update display to show it's from cache, if placeholder still exists or needs update.
+          // This part is tricky because the placeholder might have been replaced by the accumulator by now.
+          // A more robust way might involve checking if the accumulator already ends with the translation of this trimmedText.
+          // For now, we rely on the accumulator update at the end of a successful stream.
+          // If the placeholder is updated here, it should be specific.
+          const targetLangNameForCache = TRANSLATION_TARGET_LANGUAGES.find(l => l.code === targetLangCode)?.name || targetLangCode;
+          const cacheMessage = `[${targetLangNameForCache}]: ${trimmedText} (from cache)\n`;
+          // Avoid directly manipulating `prev` with `replace` if the placeholder might be complex or gone.
+          // Better to let the accumulator be the source of truth.
+          // If the text was already translated, the accumulator already has it.
+          // If the placeholder is very specific (unique ID), replacement is safer.
+          setLiveTranslationDisplay(prev => { // Example of a more targeted replacement if placeholder is unique
+            const placeholderRegex = new RegExp(RegExp.escape(`Translating to .*?: "${trimmedText.substring(0, 20)}.*? \\[ID: translate-.*?\\n`), 's');
+            if (prev.match(placeholderRegex)) {
+                return prev.replace(placeholderRegex, cacheMessage);
+            }
+            // If placeholder not found, and it's from cache, it should already be in accumulator.
+            // Avoid appending if it's already there (though accumulator itself should handle uniqueness).
+            return liveTranslationAccumulatorRef.current;
+          });
+          return;
+      }
+
+      lastSuccessfullyTranslatedTextRef.current = trimmedText;
+      lastSuccessfullyTranslatedTimestampRef.current = Date.now();
 
       const targetLangName = TRANSLATION_TARGET_LANGUAGES.find(l => l.code === targetLangCode)?.name || targetLangCode;
-      const translationPlaceholderId = `translate-${Date.now()}`;
-      const translationPlaceholder = `Translating to ${targetLangName}: "${text.substring(0, 20)}..." [ID: ${translationPlaceholderId}]\n`;
+      const translationPlaceholderId = `translate-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const translationPlaceholder = `Translating to ${targetLangName}: "${trimmedText.substring(0, 20)}..." [ID: ${translationPlaceholderId}]\n`;
 
       setLiveTranslationDisplay(prev => prev + translationPlaceholder);
 
@@ -738,7 +770,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       const signal = currentTranslationStreamControllerRef.current.signal;
 
       try {
-          const prompt = `Translate the following text to ${targetLangName}. Output only the translated text directly, without any introductory phrases or explanations: "${text}"`;
+          const prompt = `Translate the following text to ${targetLangName}. Output only the translated text directly, without any introductory phrases or explanations: "${trimmedText}"`;
           const history: Content[] = [{ role: 'user', parts: [{ text: prompt }] }];
           const geminiModelId = getActualModelIdentifier(Model.GEMINI);
 
@@ -747,21 +779,21 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
               modelSettings: { temperature: 0.3, topK: 1, topP: 1, systemInstruction: "You are a direct text translator." } as ModelSettings,
               enableGoogleSearch: false,
               modelName: geminiModelId,
-              userSession: userSession, 
-              signal: signal, // Pass the abort signal
+              userSession: userSession,
+              signal: signal,
           });
 
           let segmentTranslation = "";
           for await (const chunk of stream) {
               if (signal.aborted) {
-                  console.log("Translation stream aborted for segment:", text);
-                  setLiveTranslationDisplay(prev => prev.replace(translationPlaceholder, `[Translation cancelled for "${text.substring(0,20)}..."]\n`));
+                  console.log("Translation stream aborted for segment:", trimmedText);
+                  setLiveTranslationDisplay(prev => prev.replace(translationPlaceholder, `[Translation cancelled for "${trimmedText.substring(0,20)}..."]\n`));
                   return;
               }
               if (chunk.error) {
-                if (chunk.error === 'Request aborted by client.') { // Handle specific abort error
-                    console.log('Translation explicitly aborted by client for segment:', text);
-                    setLiveTranslationDisplay(prev => prev.replace(translationPlaceholder, `[Translation aborted for "${text.substring(0,20)}..."]\n`));
+                if (chunk.error === 'Request aborted by client.') {
+                    console.log('Translation explicitly aborted by client for segment:', trimmedText);
+                    setLiveTranslationDisplay(prev => prev.replace(translationPlaceholder, `[Translation aborted for "${trimmedText.substring(0,20)}..."]\n`));
                     return;
                 }
                 throw new Error(chunk.error);
@@ -771,7 +803,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                   setLiveTranslationDisplay(prev => prev.replace(translationPlaceholder, `[${targetLangName}]: ${segmentTranslation}\n`));
               }
           }
-          liveTranslationAccumulatorRef.current += `[${targetLangName}]: ${segmentTranslation.trim()}\n`;
+          const finalTranslatedSegment = `[${targetLangName}]: ${segmentTranslation.trim()}\n`;
+          // Avoid duplicate appends to accumulator if already processed (e.g., by a rapid onend after onresult)
+          if (!liveTranslationAccumulatorRef.current.endsWith(finalTranslatedSegment)) {
+              liveTranslationAccumulatorRef.current += finalTranslatedSegment;
+          }
           setLiveTranslationDisplay(liveTranslationAccumulatorRef.current);
 
       } catch (error: any) {
@@ -783,22 +819,24 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             liveTranslationAccumulatorRef.current += `[Error translating: ${error.message}]\n`;
             setLiveTranslationDisplay(liveTranslationAccumulatorRef.current);
           }
+          if (trimmedText === lastSuccessfullyTranslatedTextRef.current) {
+              lastSuccessfullyTranslatedTextRef.current = null;
+          }
       }
-  }, [addNotification, userSession]); 
+  }, [addNotification, userSession]);
 
   const targetLanguageForSpeechEffect = useMemo(() => {
     if (isRealTimeTranslationMode) {
-      return (modelSettings as RealTimeTranslationSettings).targetLanguage;
+      return (currentModelSettings as RealTimeTranslationSettings).targetLanguage;
     }
-    return undefined; 
-  }, [isRealTimeTranslationMode, modelSettings]);
+    return undefined;
+  }, [isRealTimeTranslationMode, currentModelSettings]);
 
   const translateLiveSegmentForSpeechEffect = useCallback((text: string, langCode: string) => {
       if (isRealTimeTranslationMode) {
           return translateLiveSegment(text, langCode);
       }
-      // No-op or return undefined if not RTT, to ensure stable reference
-      return Promise.resolve(); 
+      return Promise.resolve();
   }, [isRealTimeTranslationMode, translateLiveSegment]);
 
 
@@ -831,7 +869,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             if (event.results[i].isFinal) {
                 newlyFinalizedTextThisEvent += transcriptPart;
             } else {
-                latestInterimTextThisEvent = transcriptPart; 
+                latestInterimTextThisEvent = transcriptPart;
             }
         }
 
@@ -840,29 +878,27 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                 clearTimeout(translationDebounceTimerRef.current);
                 translationDebounceTimerRef.current = null;
             }
-            interimTranslationBufferRef.current = ""; 
+            interimTranslationBufferRef.current = "";
 
             const textToTranslate = newlyFinalizedTextThisEvent.trim();
-            liveTranscriptionRef.current += textToTranslate + "\n"; 
-            currentInterimVisualRef.current = ""; 
-            setLiveTranscriptionDisplay(liveTranscriptionRef.current); 
+            liveTranscriptionRef.current += textToTranslate + "\n";
+            currentInterimVisualRef.current = "";
+            setLiveTranscriptionDisplay(liveTranscriptionRef.current);
             translateLiveSegmentForSpeechEffect(textToTranslate, targetLanguageForSpeechEffect || 'en');
         } else if (latestInterimTextThisEvent.trim()) {
             currentInterimVisualRef.current = latestInterimTextThisEvent;
-            setLiveTranscriptionDisplay(liveTranscriptionRef.current + currentInterimVisualRef.current); 
+            setLiveTranscriptionDisplay(liveTranscriptionRef.current + currentInterimVisualRef.current);
 
-            interimTranslationBufferRef.current = latestInterimTextThisEvent.trim(); 
+            interimTranslationBufferRef.current = latestInterimTextThisEvent.trim();
             if (translationDebounceTimerRef.current) {
                 clearTimeout(translationDebounceTimerRef.current);
             }
             translationDebounceTimerRef.current = window.setTimeout(() => {
-                const textToTranslateInterim = interimTranslationBufferRef.current; 
+                const textToTranslateInterim = interimTranslationBufferRef.current;
                 if (textToTranslateInterim && currentInterimVisualRef.current.trim() === textToTranslateInterim) {
-                    lastTranslatedInterimTextRef.current = textToTranslateInterim;
-                    lastTranslatedInterimTimestampRef.current = Date.now();
                     translateLiveSegmentForSpeechEffect(textToTranslateInterim, targetLanguageForSpeechEffect || 'en');
                 }
-                translationDebounceTimerRef.current = null; 
+                translationDebounceTimerRef.current = null;
             }, DEBOUNCE_TRANSLATION_MS);
         }
       } else { // Not Real-Time Translation Mode
@@ -889,33 +925,37 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     };
 
     recognition.onend = () => {
-      setIsListening(false); 
+      setIsListening(false);
       if (translationDebounceTimerRef.current) {
           clearTimeout(translationDebounceTimerRef.current);
           translationDebounceTimerRef.current = null;
       }
       if (isRealTimeTranslationMode) {
           let remainingTextToTranslate = "";
-          if (currentInterimVisualRef.current.trim()) { 
-             remainingTextToTranslate = currentInterimVisualRef.current.trim();
+          if (currentInterimVisualRef.current.trim()) {
+             remainingTextToTranslate = currentInterimVisualRef.current.trim(); // This is now trimmed
           }
-          
-          if (remainingTextToTranslate) {
-              const recentlyTranslatedByDebouncer = 
-                  remainingTextToTranslate === lastTranslatedInterimTextRef.current &&
-                  (Date.now() - lastTranslatedInterimTimestampRef.current < RTT_GRACE_PERIOD_MS);
 
-              if (recentlyTranslatedByDebouncer) {
-                  console.log("[RTT onend] Skipping translation for text recently handled by debouncer:", remainingTextToTranslate);
-              } else {
+          if (remainingTextToTranslate) {
+              const recentlyTranslatedByCooldown =
+                  remainingTextToTranslate === lastSuccessfullyTranslatedTextRef.current && // lastSuccessfullyTranslatedTextRef.current is also trimmed
+                  (Date.now() - lastSuccessfullyTranslatedTimestampRef.current < TRANSLATION_REQUEST_COOLDOWN_MS);
+
+              if (recentlyTranslatedByCooldown) {
+                  console.log("[RTT onend] Cooldown: Skipping translation for final segment:", remainingTextToTranslate);
                   const alreadyTranscribed = liveTranscriptionRef.current.trim().endsWith(remainingTextToTranslate);
                   if (!alreadyTranscribed) {
                      liveTranscriptionRef.current += remainingTextToTranslate + "\n";
                      setLiveTranscriptionDisplay(liveTranscriptionRef.current);
-                     translateLiveSegmentForSpeechEffect(remainingTextToTranslate, targetLanguageForSpeechEffect || 'en');
-                  } else {
-                     console.log("[RTT onend] Skipping translation of already transcribed (via endsWith) final segment:", remainingTextToTranslate);
                   }
+              } else {
+                  console.log("[RTT onend] Cooldown MISS or new text. Attempting translation for final segment:", remainingTextToTranslate);
+                  const alreadyTranscribed = liveTranscriptionRef.current.trim().endsWith(remainingTextToTranslate);
+                  if (!alreadyTranscribed) {
+                     liveTranscriptionRef.current += remainingTextToTranslate + "\n"; // Append trimmed text
+                     setLiveTranscriptionDisplay(liveTranscriptionRef.current);
+                  }
+                  translateLiveSegmentForSpeechEffect(remainingTextToTranslate, targetLanguageForSpeechEffect || 'en'); // Pass trimmed text
               }
           }
           interimTranslationBufferRef.current = "";
@@ -936,13 +976,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       let errorMessage = `Speech recognition error: ${event.error}.`;
       if (event.error === 'not-allowed') {
         errorMessage = "Microphone access denied. Please allow microphone access in your browser settings.";
-      } else if (event.error === 'no-speech' && isListening) { // Modified to check isListening
+      } else if (event.error === 'no-speech' && isListening) {
         errorMessage = "No speech detected. Please try again.";
-      } else if (event.error === 'aborted' && !isListening) { 
+      } else if (event.error === 'aborted' && !isListening) {
         return;
       }
       addNotification(errorMessage, "error", event.message);
-      setIsListening(false); 
+      setIsListening(false);
       if (isRealTimeTranslationMode) {
         interimTranslationBufferRef.current = "";
         currentInterimVisualRef.current = "";
@@ -967,16 +1007,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
     if (isListening) {
       recognitionRef.current.stop();
-      // onend will set isListening to false
     } else {
-      // Reset states before starting
       if (isRealTimeTranslationMode) {
           liveTranscriptionRef.current = "";
           currentInterimVisualRef.current = "";
           interimTranslationBufferRef.current = "";
           liveTranslationAccumulatorRef.current = "";
-          lastTranslatedInterimTextRef.current = null;
-          lastTranslatedInterimTimestampRef.current = 0;
+          lastSuccessfullyTranslatedTextRef.current = null;
+          lastSuccessfullyTranslatedTimestampRef.current = 0;
           setLiveTranscriptionDisplay("");
           setLiveTranslationDisplay("");
           currentTranslationStreamControllerRef.current?.abort();
@@ -993,14 +1031,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           inputBeforeSpeechRef.current = input;
           currentRecognizedTextSegmentRef.current = "";
       }
-      
+
       try {
-        setIsListening(true); // Set listening state immediately for UI feedback
+        setIsListening(true);
         recognitionRef.current.start();
       } catch (e: any) {
         console.error("Error starting speech recognition:", e);
         addNotification("Could not start voice input. Please try again.", "error", e.message);
-        setIsListening(false); // Revert if start fails
+        setIsListening(false);
       }
     }
   };
@@ -1008,14 +1046,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   const handleModelSettingsChange = useCallback(
     (newSettings: Partial<ModelSpecificSettingsMap[typeof selectedModel]>) => {
     setAllSettings(prevAllSettings => {
-        const modelKey = selectedModel; 
+        const modelKey = selectedModel;
         const currentSettingsForModel = (prevAllSettings[modelKey] || getSpecificDefaultSettings(modelKey)) as ModelSpecificSettingsMap[typeof selectedModel];
-        
+
         const updatedModelSpecificSettings: ModelSpecificSettingsMap[typeof selectedModel] = {
-            ...(currentSettingsForModel as any), // Using 'as any' to bypass strict spread checks for complex unions/generics
-            ...(newSettings as any) 
+            ...(currentSettingsForModel as any),
+            ...(newSettings as any)
         };
-        
+
         return {
             ...prevAllSettings,
             [modelKey]: updatedModelSpecificSettings
@@ -1028,13 +1066,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     const isAdmin = !userSession.isDemoUser && !userSession.isPaidUser;
     if (newModel === Model.FLUX_KONTEX_MAX_MULTI && !userSession.isPaidUser && !isAdmin) {
       addNotification("Flux Kontext Max is for Paid Users or Admin only.", "error");
-      return; 
+      return;
     }
     if (newModel === Model.FLUX_ULTRA && !userSession.isPaidUser && !isAdmin) {
       addNotification("Flux1.1 [Ultra] is for Paid Users or Admin only.", "error");
       return;
     }
-    if (newModel === Model.KLING_VIDEO && !userSession.isPaidUser && !isAdmin) { 
+    if (newModel === Model.KLING_VIDEO && !userSession.isPaidUser && !isAdmin) {
       addNotification("Kling AI Video generation is only available for Paid Users or Admin.", "error");
       return;
     }
@@ -1098,14 +1136,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             sessionName = firstUserMessage.text.substring(0, 40) + (firstUserMessage.text.length > 40 ? '...' : '');
         } else if (firstUserMessage.imagePreview) {
             sessionName = "Chat with Image Upload";
-        } else if (firstUserMessage.imagePreviews && firstUserMessage.imagePreviews.length > 0) { 
+        } else if (firstUserMessage.imagePreviews && firstUserMessage.imagePreviews.length > 0) {
             sessionName = `Flux Edit (${firstUserMessage.imagePreviews.length} images)`;
         } else if (firstUserMessage.fileName) {
             sessionName = `Chat with File: ${firstUserMessage.fileName}`;
         }
     }
 
-    const sessionModelSettingsSnapshot: AnyModelSettings = {...modelSettings}; 
+    const sessionModelSettingsSnapshot: AnyModelSettings = currentModelSettings as AnyModelSettings;
 
     if (activeSessionId) {
         setSavedSessions(prev => {
@@ -1155,7 +1193,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         addNotification(`Chat "${sessionName}" saved to browser.`, "success");
     }
     clearSearch();
-  }, [messages, selectedModel, modelSettings, activeSessionId, savedSessions, activePersonaId, addNotification, currentChatName, isRealTimeTranslationMode, isAiAgentMode, isPrivateModeSelected, isFluxKontexModelSelected, isFluxUltraModelSelected, isKlingVideoModelSelected, pruneChatSessions, clearSearch]);
+  }, [messages, selectedModel, currentModelSettings, activeSessionId, savedSessions, activePersonaId, addNotification, currentChatName, isRealTimeTranslationMode, isAiAgentMode, isPrivateModeSelected, isFluxKontexModelSelected, isFluxUltraModelSelected, isKlingVideoModelSelected, pruneChatSessions, clearSearch]);
 
   const handleLoadSession = useCallback((sessionId: string) => {
     const sessionToLoad = savedSessions.find(s => s.id === sessionId);
@@ -1170,21 +1208,19 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
       setAllSettings(prevAllSettings => {
         const defaultsForModel = getSpecificDefaultSettings(sessionToLoad.model);
-        const snapshot = sessionToLoad.modelSettingsSnapshot; // This is AnyModelSettings
-        
-        // Explicitly cast snapshot to the specific model's settings type.
-        // This assumes that the snapshot is indeed of the type corresponding to sessionToLoad.model.
+        const snapshot = sessionToLoad.modelSettingsSnapshot;
+
         const specificSnapshot = snapshot as ModelSpecificSettingsMap[typeof sessionToLoad.model];
-        
+
         const newModelSettingsForLoadedSession: ModelSpecificSettingsMap[typeof sessionToLoad.model] = {
             ...defaultsForModel,
-            ...specificSnapshot // Spread the specifically-typed snapshot
+            ...specificSnapshot
         };
-        
+
         return {
             ...prevAllSettings,
             [sessionToLoad.model]: newModelSettingsForLoadedSession
-        }; 
+        };
       });
 
       setActiveSessionId(sessionId);
@@ -1238,8 +1274,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         currentInterimVisualRef.current = "";
         interimTranslationBufferRef.current = "";
         liveTranslationAccumulatorRef.current = "";
-        lastTranslatedInterimTextRef.current = null;
-        lastTranslatedInterimTimestampRef.current = 0;
+        lastSuccessfullyTranslatedTextRef.current = null;
+        lastSuccessfullyTranslatedTimestampRef.current = 0;
         if (audioPlayerRef.current && isSpeakingLiveTranslation) {
             audioPlayerRef.current.pause();
             setIsSpeakingLiveTranslation(false);
@@ -1343,7 +1379,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       timestamp: sessionTimestamp,
       model: selectedModel,
       messages: [...messages],
-      modelSettingsSnapshot: modelSettings, 
+      modelSettingsSnapshot: currentModelSettings as AnyModelSettings,
       isPinned: savedSessions.find(s => s.id === activeSessionId)?.isPinned || false,
       activePersonaIdSnapshot: activePersonaId,
     };
@@ -1365,7 +1401,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       console.error("Error saving chat to device:", e);
       addNotification("Failed to save chat to device.", "error", e.message);
     }
-  }, [messages, selectedModel, modelSettings, activeSessionId, currentChatName, activePersonaId, addNotification, isRealTimeTranslationMode, isAiAgentMode, isPrivateModeSelected, isFluxKontexModelSelected, isFluxUltraModelSelected, isKlingVideoModelSelected, savedSessions]);
+  }, [messages, selectedModel, currentModelSettings, activeSessionId, currentChatName, activePersonaId, addNotification, isRealTimeTranslationMode, isAiAgentMode, isPrivateModeSelected, isFluxKontexModelSelected, isFluxUltraModelSelected, isKlingVideoModelSelected, savedSessions]);
 
 
   const handleLoadChatFromDevice = useCallback(async (file: File) => {
@@ -1398,15 +1434,15 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
             setAllSettings(prevAllSettings => {
                 const defaultsForModel = getSpecificDefaultSettings(sessionToLoad.model);
-                const snapshot = sessionToLoad.modelSettingsSnapshot as ModelSpecificSettingsMap[typeof sessionToLoad.model]; 
-                
+                const snapshot = sessionToLoad.modelSettingsSnapshot as ModelSpecificSettingsMap[typeof sessionToLoad.model];
+
                 const relevantSnapshotFields: Partial<typeof defaultsForModel> = {};
-                for (const key in snapshot) { 
+                for (const key in snapshot) {
                     if (Object.prototype.hasOwnProperty.call(defaultsForModel, key) && (snapshot as any)[key] !== undefined) {
                         (relevantSnapshotFields as any)[key] = (snapshot as any)[key];
                     }
                 }
-                
+
                 const newModelSettingsForLoadedSession: ModelSpecificSettingsMap[typeof sessionToLoad.model] = {
                     ...defaultsForModel,
                     ...relevantSnapshotFields
@@ -1497,7 +1533,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   const handleSpeakLiveTranslation = useCallback(async () => {
     if (!audioPlayerRef.current || !liveTranslationDisplay.trim() || isListening) return;
 
-    if (userSession.isDemoUser && !userSession.isPaidUser) { 
+    if (userSession.isDemoUser && !userSession.isPaidUser) {
         addNotification("Chức năng này chỉ hoạt động cho người dùng trả phí", "info");
         return;
     }
@@ -1517,12 +1553,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     setLiveTranslationAudioUrl(null);
 
     const openAiTtsModelSettings = allSettings[Model.OPENAI_TTS] as OpenAITtsSettings | undefined;
-    const ttsParams: ProxiedOpenAITtsParams = { 
+    const ttsParams: ProxiedOpenAITtsParams = {
         modelIdentifier: openAiTtsModelSettings?.modelIdentifier || 'tts-1',
         textInput: liveTranslationDisplay.replace(/\[.*?\]:\s*/g, '').trim(),
         voice: 'nova' as OpenAiTtsVoice,
         speed: openAiTtsModelSettings?.speed || 1.0,
-        userSession: userSession, 
+        userSession: userSession,
     };
 
     try {
@@ -1545,7 +1581,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         addNotification(`TTS Error: ${error.message}`, "error");
         setIsSpeakingLiveTranslation(false);
     }
-  }, [liveTranslationDisplay, addNotification, allSettings, isListening, currentPlayingMessageId, isSpeakingLiveTranslation, userSession]); 
+  }, [liveTranslationDisplay, addNotification, allSettings, isListening, currentPlayingMessageId, isSpeakingLiveTranslation, userSession]);
 
 
   useEffect(() => {
@@ -1598,13 +1634,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         if (statusResult.status === 'COMPLETED') {
           if (intervalId) clearInterval(intervalId);
           const imageOutput = statusResult.imageUrls && statusResult.imageUrls.length > 0 ? statusResult.imageUrls : (statusResult.imageUrl ? [statusResult.imageUrl] : []);
-          
+
           if (imageOutput.length > 0) {
             setMessages(prev => prev.map(msg => msg.id === aiMessageId ? {
               ...msg,
               text: `Image(s) processed for prompt: "${userPrompt}"`,
               imagePreviews: imageOutput,
-              imageMimeType: 'image/png', 
+              imageMimeType: 'image/png',
               originalPrompt: userPrompt,
               isRegenerating: false,
               fluxRequestId: undefined,
@@ -1631,7 +1667,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             return;
           }
           setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Image processing: Verifying request (ID: ${requestId}). Attempt ${pollCount}/${MAX_TOTAL_POLLS}...` } : msg));
-        } else { 
+        } else {
           if (intervalId) clearInterval(intervalId);
           const errorMessage = statusResult.error || "Unknown error during image processing.";
           setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error processing image: ${errorMessage}. Prompt: "${userPrompt}"`, isRegenerating: false, fluxRequestId: undefined } : msg));
@@ -1651,8 +1687,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   }, [addNotification, setMessages, setIsLoading]);
 
    const pollKlingVideoStatus = useCallback(async (requestId: string, aiMessageId: string, userPrompt: string, falModelIdForPolling: string) => {
-    const MAX_TOTAL_POLLS_VIDEO = 60; 
-    const POLL_INTERVAL_VIDEO = 5000; 
+    const MAX_TOTAL_POLLS_VIDEO = 60;
+    const POLL_INTERVAL_VIDEO = 5000;
     const MAX_NOT_FOUND_POLLS_VIDEO = 15;
 
     let pollCount = 0;
@@ -1679,7 +1715,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
               ...msg,
               text: `Video processed for prompt: "${userPrompt}"`,
               videoUrl: statusResult.videoUrl,
-              videoMimeType: 'video/mp4', 
+              videoMimeType: 'video/mp4',
               originalPrompt: userPrompt,
               isRegenerating: false,
               klingVideoRequestId: undefined,
@@ -1706,7 +1742,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             return;
           }
           setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Video processing: Verifying request (ID: ${requestId.substring(0,8)}...). Attempt ${pollCount}/${MAX_TOTAL_POLLS_VIDEO}...` } : msg));
-        } else { 
+        } else {
           if (intervalId) clearInterval(intervalId);
           const errorMessage = statusResult.error || "Unknown error during video processing.";
           setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error processing video: ${errorMessage}. Prompt: "${userPrompt}"`, isRegenerating: false, klingVideoRequestId: undefined } : msg));
@@ -1779,15 +1815,15 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
     if (selectedModel === Model.FLUX_KONTEX_MAX_MULTI && !userSession.isPaidUser && !isAdmin) {
         addNotification("Flux Kontext Max is for Paid Users or Admin only.", "error");
-        setIsLoading(false); 
+        setIsLoading(false);
         return;
     }
     if (selectedModel === Model.FLUX_ULTRA && !userSession.isPaidUser && !isAdmin) {
         addNotification("Flux1.1 [Ultra] is for Paid Users or Admin only.", "error");
-        setIsLoading(false); 
+        setIsLoading(false);
         return;
     }
-    if (selectedModel === Model.KLING_VIDEO && !userSession.isPaidUser && !isAdmin) { 
+    if (selectedModel === Model.KLING_VIDEO && !userSession.isPaidUser && !isAdmin) {
       addNotification("Kling AI Video generation is only available for Paid Users or Admin.", "error");
       setIsLoading(false);
       return;
@@ -1845,7 +1881,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         requestHeaders['X-Demo-Token'] = userSession.demoUserToken;
     }
 
-    if (userSession.isDemoUser && !isAdmin) { 
+    if (userSession.isDemoUser && !isAdmin) {
         const limits = userSession.demoLimits;
         let limitExceeded = false;
         let notificationMessage = "";
@@ -1858,13 +1894,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                 notificationMessage = `Đã hết lượt dùng thử ${isMax ? 'Flux Kontext Max' : 'Flux Kontext Pro'}. Vui lòng liên hệ admin.`;
             }
         } else if (isFluxUltraModelSelected) {
-            limitExceeded = true; 
+            limitExceeded = true;
             notificationMessage = "Flux1.1 [Ultra] is for Paid Users or Admin only. DEMO users cannot use this model.";
         } else if (isKlingVideoModelSelected) {
             limitExceeded = true;
             notificationMessage = "Kling AI Video is for Paid Users or Admin only. DEMO users cannot use this model.";
         } else if (isImagenModelSelected) {
-            const imagenSettings = modelSettings as ImagenSettings;
+            const imagenSettings = currentModelSettings as ImagenSettings;
             const numImagesToGen = imagenSettings.numberOfImages || 1;
             if (!limits || limits.imagen3MonthlyImagesLeft < numImagesToGen) {
                 limitExceeded = true;
@@ -1883,10 +1919,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             return;
         }
     }
-    
+
     if (userSession.isPaidUser && userSession.paidLimits && !isAdmin) {
-        if (isFluxUltraModelSelected) { 
-            const fluxUltraSettings = modelSettings as FluxUltraSettings;
+        if (isFluxUltraModelSelected) {
+            const fluxUltraSettings = currentModelSettings as FluxUltraSettings;
             const numImagesToGenFluxUltra = fluxUltraSettings.num_images || 1;
             if (userSession.paidLimits.fluxUltraMonthlyImagesLeft < numImagesToGenFluxUltra) {
                 addNotification(`Not enough Flux1.1 [Ultra] paid uses left. Need ${numImagesToGenFluxUltra}, have ${userSession.paidLimits.fluxUltraMonthlyImagesLeft}.`, "error");
@@ -1906,14 +1942,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
 
     try {
-      const currentModelSpecificSettings: AnyModelSettings = modelSettings; 
+      const currentModelSpecificSettingsForApiCall: ModelSpecificSettingsMap[typeof selectedModel] = currentModelSettings;
       const currentModelStatus = apiKeyStatuses[selectedModel];
       const actualModelIdentifier = getActualModelIdentifier(selectedModel);
 
       let apiResponseData: any;
 
       if (currentModelStatus?.isTextToSpeech && !currentModelStatus.isMock) {
-          const ttsSettings = currentModelSpecificSettings as OpenAITtsSettings;
+          const ttsSettings = currentModelSpecificSettingsForApiCall as OpenAITtsSettings;
           const ttsParams: ProxiedOpenAITtsParams = {
             modelIdentifier: ttsSettings.modelIdentifier || 'tts-1',
             textInput: userDisplayedText,
@@ -1926,7 +1962,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           if (ttsResult.error || !ttsResult.audioBlob) {
               throw new Error(ttsResult.error || `OpenAI TTS Proxy Error`);
           }
-          
+
           setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? {
               ...msg, text: `Audio generated for: "${userDisplayedText}"`, audioUrl: URL.createObjectURL(ttsResult.audioBlob), isRegenerating: false, timestamp: msg.timestamp || Date.now()
           } : msg));
@@ -1936,11 +1972,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
               onUpdateDemoLimits({ openaiTtsMonthlyCharsLeft: (userSession.demoLimits?.openaiTtsMonthlyCharsLeft || 0) - userDisplayedText.length });
           }
 
-      } else if ((currentModelStatus?.isImageEditing || currentModelStatus?.isMultiImageEditing) && !currentModelStatus.isMock) { 
+      } else if ((currentModelStatus?.isImageEditing || currentModelStatus?.isMultiImageEditing) && !currentModelStatus.isMock) {
           if (currentUploadedImageFiles.length === 0 || currentUploadedImagePreviews.length === 0) {
             throw new Error("Flux Kontext requires at least one image to be uploaded.");
           }
-          
+
           let fluxImageData: SingleImageData | MultiImageData;
           if (selectedModel === Model.FLUX_KONTEX_MAX_MULTI) {
             const imagesData = currentUploadedImagePreviews.map((previewUrl, index) => {
@@ -1955,46 +1991,46 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                 };
             });
             fluxImageData = { images_data: imagesData };
-          } else { 
+          } else {
             const [header, base64DataOnly] = currentUploadedImagePreviews[0].split(',');
              if (!base64DataOnly || !/^[A-Za-z0-9+/=]+$/.test(base64DataOnly)) {
                 throw new Error("Invalid image data provided for Flux Kontext.");
             }
             const mimeTypeMatch = header?.match(/data:(image\/[a-zA-Z0-9-.+]+);base64/);
-            fluxImageData = { 
-                image_base_64: base64DataOnly, 
+            fluxImageData = {
+                image_base_64: base64DataOnly,
                 image_mime_type: (mimeTypeMatch ? mimeTypeMatch[1] : (currentUploadedImageFiles[0]?.type || 'image/png')) as 'image/jpeg' | 'image/png'
             };
           }
 
-          const fluxKontextApiSettings: Partial<FluxKontexSettings> = { ...(currentModelSpecificSettings as FluxKontexSettings) };
+          const fluxKontextApiSettings: Partial<FluxKontexSettings> = { ...(currentModelSpecificSettingsForApiCall as FluxKontexSettings) };
           if (fluxKontextApiSettings.aspect_ratio === 'default') {
               delete fluxKontextApiSettings.aspect_ratio;
           }
 
           const fluxParams: EditImageWithFluxKontexParams = {
-              modelIdentifier: actualModelIdentifier, 
+              modelIdentifier: actualModelIdentifier,
               prompt: textForApi,
-              settings: fluxKontextApiSettings as FluxKontexSettings, 
+              settings: fluxKontextApiSettings as FluxKontexSettings,
               imageData: fluxImageData,
-              requestHeaders: requestHeaders, 
-              userSession: userSession, 
+              requestHeaders: requestHeaders,
+              userSession: userSession,
           };
           const fluxResult = await editImageWithFluxKontexProxy(fluxParams);
-          
+
           if (fluxResult.error) throw new Error(fluxResult.error);
 
           if (fluxResult.requestId) {
             setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? {
                 ...msg, text: fluxResult.message || `Image editing submitted (ID: ${fluxResult.requestId}). Waiting for results...`, fluxRequestId: fluxResult.requestId, isRegenerating: false, timestamp: msg.timestamp || Date.now(), fluxModelId: actualModelIdentifier
             } : msg));
-            pollFalStatus(fluxResult.requestId, aiMessageId, userDisplayedText, actualModelIdentifier); 
+            pollFalStatus(fluxResult.requestId, aiMessageId, userDisplayedText, actualModelIdentifier);
             if (userSession.isDemoUser && !isAdmin && userSession.demoLimits) {
                 if (selectedModel === Model.FLUX_KONTEX) {
                     onUpdateDemoLimits({ fluxKontextProMonthlyUsesLeft: (userSession.demoLimits?.fluxKontextProMonthlyUsesLeft || 0) - 1 });
-                } 
+                }
             } else if (userSession.isPaidUser && !isAdmin && userSession.paidLimits) {
-                const numImagesProcessed = 1; 
+                const numImagesProcessed = 1;
                 if (selectedModel === Model.FLUX_KONTEX_MAX_MULTI) {
                    onUpdateDemoLimits({ fluxKontextMaxMonthlyUsesLeft: (userSession.paidLimits.fluxKontextMaxMonthlyUsesLeft || 0) - numImagesProcessed});
                 } else if (selectedModel === Model.FLUX_KONTEX) {
@@ -2003,14 +2039,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             }
           } else { throw new Error(fluxResult.error || "Flux Kontext submission failed (no request ID)."); }
       } else if (currentModelStatus?.isFluxUltraImageGeneration && !currentModelStatus.isMock) {
-            const fluxUltraApiSettings: FluxUltraSettings = { ...(currentModelSpecificSettings as FluxUltraSettings) };
+            const fluxUltraApiSettings: FluxUltraSettings = { ...(currentModelSpecificSettingsForApiCall as FluxUltraSettings) };
 
             const fluxUltraParams: GenerateImageWithFluxUltraParams = {
                 modelIdentifier: actualModelIdentifier,
                 prompt: textForApi,
                 settings: fluxUltraApiSettings,
-                requestHeaders: requestHeaders, 
-                userSession: userSession, 
+                requestHeaders: requestHeaders,
+                userSession: userSession,
             };
             const fluxUltraResult = await generateImageWithFluxUltraProxy(fluxUltraParams);
             if (fluxUltraResult.error) throw new Error(fluxUltraResult.error);
@@ -2020,8 +2056,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                     ...msg, text: fluxUltraResult.message || `Flux1.1 [Ultra] image generation submitted (ID: ${fluxUltraResult.requestId}). Waiting for results...`, fluxRequestId: fluxUltraResult.requestId, isRegenerating: false, timestamp: msg.timestamp || Date.now(), fluxModelId: actualModelIdentifier
                 } : msg));
                 pollFalStatus(fluxUltraResult.requestId, aiMessageId, userDisplayedText, actualModelIdentifier);
-                if (userSession.isPaidUser && !isAdmin && userSession.paidLimits) { 
-                    const numImages = (currentModelSpecificSettings as FluxUltraSettings).num_images || 1;
+                if (userSession.isPaidUser && !isAdmin && userSession.paidLimits) {
+                    const numImages = (currentModelSpecificSettingsForApiCall as FluxUltraSettings).num_images || 1;
                     onUpdateDemoLimits({ fluxUltraMonthlyImagesLeft: (userSession.paidLimits?.fluxUltraMonthlyImagesLeft || 0) - numImages });
                 }
             } else { throw new Error(fluxUltraResult.error || "Flux1.1 [Ultra] submission failed (no request ID)."); }
@@ -2034,13 +2070,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             throw new Error("Invalid image data provided for Kling AI.");
           }
           const mimeTypeMatch = header?.match(/data:(image\/[a-zA-Z0-9-.+]+);base64/);
-          const klingImageData: SingleImageData = { 
-              image_base_64: base64DataOnly, 
+          const klingImageData: SingleImageData = {
+              image_base_64: base64DataOnly,
               image_mime_type: (mimeTypeMatch ? mimeTypeMatch[1] : (currentUploadedImageFiles[0]?.type || 'image/png')) as 'image/jpeg' | 'image/png'
           };
 
-          const klingApiSettings: KlingAiSettings = { ...(currentModelSpecificSettings as KlingAiSettings) };
-          
+          const klingApiSettings: KlingAiSettings = { ...(currentModelSpecificSettingsForApiCall as KlingAiSettings) };
+
           const klingParams: GenerateVideoWithKlingParams = {
               modelIdentifier: actualModelIdentifier,
               prompt: textForApi,
@@ -2054,16 +2090,16 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
           if (klingResult.requestId) {
               setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? {
-                  ...msg, text: klingResult.message || `Kling AI video request submitted (ID: ${klingResult.requestId}). Waiting for results...`, klingVideoRequestId: klingResult.requestId, isRegenerating: false, timestamp: msg.timestamp || Date.now(), fluxModelId: actualModelIdentifier 
+                  ...msg, text: klingResult.message || `Kling AI video request submitted (ID: ${klingResult.requestId}). Waiting for results...`, klingVideoRequestId: klingResult.requestId, isRegenerating: false, timestamp: msg.timestamp || Date.now(), fluxModelId: actualModelIdentifier
               } : msg));
               pollKlingVideoStatus(klingResult.requestId, aiMessageId, userDisplayedText, actualModelIdentifier);
-              
+
               if (userSession.isPaidUser && !isAdmin && userSession.paidLimits) {
                   onUpdateDemoLimits({ klingVideoMonthlyUsed: (userSession.paidLimits.klingVideoMonthlyUsed || 0) + 1 });
               }
           } else { throw new Error(klingResult.error || "Kling AI video submission failed (no request ID)."); }
       } else if (isImagenModelSelected && !currentModelStatus.isMock) {
-          const imagenBody = { prompt: userDisplayedText, modelSettings: currentModelSpecificSettings as ImagenSettings, modelName: actualModelIdentifier };
+          const imagenBody = { prompt: userDisplayedText, modelSettings: currentModelSpecificSettingsForApiCall as ImagenSettings, modelName: actualModelIdentifier };
           const imagenFetchResponse = await fetch('/api/gemini/image/generate', {
               method: 'POST', headers: requestHeaders, body: JSON.stringify(imagenBody)
           });
@@ -2073,7 +2109,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           }
 
           if (apiResponseData.generatedImages && apiResponseData.generatedImages.length > 0) {
-            const mimeType = (currentModelSpecificSettings as ImagenSettings).outputMimeType || 'image/jpeg';
+            const mimeType = (currentModelSpecificSettingsForApiCall as ImagenSettings).outputMimeType || 'image/jpeg';
             const imageUrls = apiResponseData.generatedImages.map((img: any) => `data:${mimeType};base64,${img.image.imageBytes}`);
             setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? {
                     ...msg, text: `Generated ${imageUrls.length} image(s) for: "${userDisplayedText}"`,
@@ -2099,8 +2135,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         if (!isAiAgentMode && currentUploadedTextFileName && !currentUploadedTextContent && currentUploadedImageFiles.length === 0) {
             currentUserParts.push({ text: fileContextNote });
         }
-        if (currentUploadedImageFiles.length > 0 && currentUploadedImagePreviews.length > 0) { 
-            const base64Image = currentUploadedImagePreviews[0].split(',')[1]; 
+        if (currentUploadedImageFiles.length > 0 && currentUploadedImagePreviews.length > 0) {
+            const base64Image = currentUploadedImagePreviews[0].split(',')[1];
             if (base64Image) {
                   currentUserParts.push({ inlineData: { mimeType: currentUploadedImageFiles[0].type, data: base64Image } });
             }
@@ -2112,7 +2148,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         }
 
         const stream = sendGeminiMessageStream({
-          historyContents: geminiHistory, modelSettings: currentModelSpecificSettings as ModelSettings, enableGoogleSearch: isAiAgentMode || isWebSearchEnabled, modelName: actualModelIdentifier, userSession: userSession,
+          historyContents: geminiHistory, modelSettings: currentModelSpecificSettingsForApiCall as ModelSettings, enableGoogleSearch: isAiAgentMode || isWebSearchEnabled, modelName: actualModelIdentifier, userSession: userSession,
         });
         let currentText = ''; let currentGroundingSources: GroundingSource[] | undefined = undefined;
         for await (const chunk of stream) {
@@ -2126,9 +2162,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         const activeImageFileForOpenAI = currentUploadedImageFiles.length > 0 ? currentUploadedImageFiles[0] : null;
         const activeImagePreviewForOpenAI = currentUploadedImagePreviews.length > 0 ? currentUploadedImagePreviews[0] : null;
 
-        const history: ApiChatMessage[] = messagesToOpenAIHistory(messages, aiMessageId, newUserMessage.id, (currentModelSpecificSettings as ModelSettings).systemInstruction || getSpecificDefaultSettings(Model.GPT4O).systemInstruction, textForApi, activeImageFileForOpenAI, activeImagePreviewForOpenAI, currentUploadedTextFileName, currentUploadedTextContent, isRegen, isRegenerationOfAiMsgId);
+        const history: ApiChatMessage[] = messagesToOpenAIHistory(messages, aiMessageId, newUserMessage.id, (currentModelSpecificSettingsForApiCall as ModelSettings).systemInstruction || getSpecificDefaultSettings(Model.GPT4O).systemInstruction, textForApi, activeImageFileForOpenAI, activeImagePreviewForOpenAI, currentUploadedTextFileName, currentUploadedTextContent, isRegen, isRegenerationOfAiMsgId);
 
-        const stream = sendOpenAIMessageStream({ modelIdentifier: actualModelIdentifier, history, modelSettings: currentModelSpecificSettings as ModelSettings, userSession: userSession });
+        const stream = sendOpenAIMessageStream({ modelIdentifier: actualModelIdentifier, history, modelSettings: currentModelSpecificSettingsForApiCall as ModelSettings, userSession: userSession });
         let currentText = '';
         for await (const chunk of stream) {
           if (chunk.error) throw new Error(chunk.error);
@@ -2138,7 +2174,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         }
 
       } else if (selectedModel === Model.DEEPSEEK && !currentModelStatus.isMock) {
-        const history: ApiChatMessage[] = [{ role: 'system', content: (currentModelSpecificSettings as ModelSettings).systemInstruction || getSpecificDefaultSettings(Model.DEEPSEEK).systemInstruction }];
+        const history: ApiChatMessage[] = [{ role: 'system', content: (currentModelSpecificSettingsForApiCall as ModelSettings).systemInstruction || getSpecificDefaultSettings(Model.DEEPSEEK).systemInstruction }];
          messages.filter(m => m.id !== aiMessageId && m.id !== newUserMessage.id).forEach(msg => {
             let msgContent = msg.text || " ";
             if (msg.sender === 'user' && msg.fileName && !msg.imagePreview && !TEXT_READABLE_EXTENSIONS.some(ext => msg.fileName?.toLowerCase().endsWith(ext))) {
@@ -2153,7 +2189,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         }
         history.push({ role: 'user', content: currentTurnTextForDeepseek || " " });
 
-        const stream = sendDeepseekMessageStream({ modelIdentifier: actualModelIdentifier, history, modelSettings: currentModelSpecificSettings as ModelSettings, userSession: userSession });
+        const stream = sendDeepseekMessageStream({ modelIdentifier: actualModelIdentifier, history, modelSettings: currentModelSpecificSettingsForApiCall as ModelSettings, userSession: userSession });
         let currentText = '';
         for await (const chunk of stream) {
           if (chunk.error) throw new Error(chunk.error);
@@ -2171,7 +2207,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         if (currentUploadedImageFiles.length > 0 && currentUploadedImagePreviews.length > 0) {
             mockParts.push({ inlineData: { mimeType: currentUploadedImageFiles[0].type as 'image/jpeg' | 'image/png', data: currentUploadedImagePreviews[0].split(',')[1] } });
         }
-        const stream = sendMockMessageStream(mockParts, selectedModel, currentModelSpecificSettings as ModelSettings);
+        const stream = sendMockMessageStream(mockParts, selectedModel, currentModelSpecificSettingsForApiCall as ModelSettings);
         let currentText = '';
         for await (const chunk of stream) {
           currentText += chunk;
@@ -2192,7 +2228,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       }]);
     }
 
-    if (!(isFluxKontexModelSelected || isFluxUltraModelSelected || isKlingVideoModelSelected) || 
+    if (!(isFluxKontexModelSelected || isFluxUltraModelSelected || isKlingVideoModelSelected) ||
         ((isFluxKontexModelSelected || isFluxUltraModelSelected) && !messages.find(m => m.id === aiMessageId)?.fluxRequestId) ||
         (isKlingVideoModelSelected && !messages.find(m => m.id === aiMessageId)?.klingVideoRequestId)) {
       setIsLoading(false);
@@ -2201,7 +2237,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
     if (!isRegenerationOfAiMsgId && !isRealTimeTranslationMode && !isPrivateModeSelected) {
         setInput('');
-        if (!isFluxKontexModelSelected && !isFluxUltraModelSelected && !isKlingVideoModelSelected) { 
+        if (!isFluxKontexModelSelected && !isFluxUltraModelSelected && !isKlingVideoModelSelected) {
             setUploadedImages([]);
             setImagePreviews([]);
         }
@@ -2214,8 +2250,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   const handleSendMessage = async () => {
     if (isRealTimeTranslationMode || isListening) return;
 
-    let determinedTtsMaxLength = OPENAI_TTS_MAX_INPUT_LENGTH; 
-    if (userSession.isDemoUser && !isAdminUser && userSession.demoLimits) { 
+    let determinedTtsMaxLength = OPENAI_TTS_MAX_INPUT_LENGTH;
+    if (userSession.isDemoUser && !isAdminUser && userSession.demoLimits) {
         determinedTtsMaxLength = userSession.demoLimits.openaiTtsMonthlyMaxChars;
     } else if (userSession.isPaidUser && !isAdminUser && userSession.paidLimits) {
         determinedTtsMaxLength = userSession.paidLimits.openaiTtsMaxChars;
@@ -2276,7 +2312,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
     setIsLoading(true);
     setError(null);
-    
+
     await internalSendMessage(input, uploadedImages, imagePreviews, uploadedTextFileContent, uploadedTextFileName);
   };
 
@@ -2301,10 +2337,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
       const regenInputText = userMessageForRegen.text;
       const regenUploadedImagePreviews = userMessageForRegen.imagePreview ? [userMessageForRegen.imagePreview] : (userMessageForRegen.imagePreviews || []);
-      
-      const regenUploadedImageFiles: File[] = []; 
-      
-      let currentRegenUploadedTextContent: string | null = null; 
+
+      const regenUploadedImageFiles: File[] = [];
+
+      let currentRegenUploadedTextContent: string | null = null;
       let currentRegenUploadedTextFileName: string | null = userMessageForRegen.fileName || null;
 
       setMessages(prev => prev.map(msg => {
@@ -2329,7 +2365,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       if (selectedModel === Model.FLUX_KONTEX_MAX_MULTI) return 4;
       if (selectedModel === Model.KLING_VIDEO || selectedModel === Model.FLUX_KONTEX || selectedModel === Model.GEMINI || selectedModel === Model.GPT4O || selectedModel === Model.GPT4O_MINI || selectedModel === Model.PRIVATE) return 1;
       if (selectedModel === Model.DEEPSEEK || selectedModel === Model.FLUX_ULTRA) return 0;
-      return 0; 
+      return 0;
   }, [selectedModel]);
 
 
@@ -2356,28 +2392,28 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             clearSearch();
             return;
         }
-        return; 
+        return;
     }
-  
+
     let currentFiles: File[] = [];
-  
-    if (selectedModel === Model.FLUX_KONTEX_MAX_MULTI) { 
+
+    if (selectedModel === Model.FLUX_KONTEX_MAX_MULTI) {
       const combinedFiles = [...uploadedImages, ...newFiles];
       currentFiles = combinedFiles.slice(0, imageUploadLimit);
-  
+
       if (combinedFiles.length > imageUploadLimit) {
         addNotification(`Cannot upload more than ${imageUploadLimit} images for Flux Kontext Max. Only the first ${imageUploadLimit} were kept.`, "warning");
       }
     } else {
       currentFiles = newFiles.slice(0, 1);
     }
-  
+
     setUploadedImages(currentFiles);
     if (currentFiles.length > 0) {
         setUploadedTextFileContent(null);
         setUploadedTextFileName(null);
     }
-  
+
     if (currentFiles.length > 0) {
       const filePromises = currentFiles.map(file => {
         return new Promise<string>((resolve, reject) => {
@@ -2387,7 +2423,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           reader.readAsDataURL(file);
         });
       });
-  
+
       Promise.all(filePromises)
         .then(newPreviewsArray => {
           setImagePreviews(newPreviewsArray);
@@ -2395,12 +2431,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         .catch(error => {
           console.error("Error reading image files for preview:", error);
           addNotification("Error creating image previews.", "error");
-          setImagePreviews([]); 
+          setImagePreviews([]);
         });
     } else {
-      setImagePreviews([]); 
+      setImagePreviews([]);
     }
-  
+
     clearSearch();
   };
 
@@ -2445,7 +2481,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   };
 
   const handleRemoveTextFilePreview = () => {
-    handleFileUpload(null); 
+    handleFileUpload(null);
   };
 
   const executeSearch = useCallback(() => {
@@ -2535,7 +2571,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             <SettingsPanel
                 selectedModel={selectedModel}
                 onModelChange={handleModelSelection}
-                modelSettings={modelSettings as ModelSpecificSettingsMap[typeof selectedModel]} // Cast here
+                modelSettings={currentModelSettings}
                 onModelSettingsChange={handleModelSettingsChange}
                 isWebSearchEnabled={isWebSearchEnabled}
                 onWebSearchToggle={setIsWebSearchEnabled}
@@ -2583,11 +2619,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   }, [isSpeechRecognitionSupported, selectedModel, isTextToSpeechModelSelected, isImagenModelSelected, isClaudeModelSelected, isFluxUltraModelSelected, isKlingVideoModelSelected]);
 
   const showImageUploadInChatBar = useMemo(() => {
-    return imageUploadLimit > 0 && 
+    return imageUploadLimit > 0 &&
            !isTextToSpeechModelSelected &&
            !isRealTimeTranslationMode &&
-           !isImagenModelSelected && 
-           !isAiAgentMode && 
+           !isImagenModelSelected &&
+           !isAiAgentMode &&
            !isClaudeModelSelected &&
            !isKlingVideoModelSelected; // Exclude Kling from generic upload button
   }, [imageUploadLimit, selectedModel, isTextToSpeechModelSelected, isRealTimeTranslationMode, isImagenModelSelected, isAiAgentMode, isClaudeModelSelected, isKlingVideoModelSelected]);
@@ -2652,11 +2688,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
   const targetTranslationLangName = useMemo(() => {
     if (isRealTimeTranslationMode) {
-      const targetCode = (modelSettings as RealTimeTranslationSettings).targetLanguage || 'en';
+      const targetCode = (currentModelSettings as RealTimeTranslationSettings).targetLanguage || 'en';
       return TRANSLATION_TARGET_LANGUAGES.find(l => l.code === targetCode)?.name || targetCode;
     }
     return '';
-  }, [isRealTimeTranslationMode, modelSettings]);
+  }, [isRealTimeTranslationMode, currentModelSettings]);
 
 
   const handleGpt41AccessModalClose = (switchToMini: boolean, notificationMessage?: string) => {
@@ -2708,7 +2744,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         if (msg.isTaskPlan && !isAgentMode) return;
 
 
-        let role: 'user' | 'model' = 'user'; 
+        let role: 'user' | 'model' = 'user';
         if (msg.sender === 'ai') role = 'model';
 
         const parts: Part[] = [];
@@ -2721,7 +2757,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             parts.push({ text: textForHistory });
         }
 
-        if (msg.sender === 'user' && msg.imagePreview && !msg.isImageQuery && !msg.isVideoQuery && (!msg.imagePreviews || msg.imagePreviews.length === 0)) { 
+        if (msg.sender === 'user' && msg.imagePreview && !msg.isImageQuery && !msg.isVideoQuery && (!msg.imagePreviews || msg.imagePreviews.length === 0)) {
             try {
                 const base64Data = msg.imagePreview.split(',')[1];
                 const mimeTypeMatch = msg.imagePreview.match(/data:(image\/[a-zA-Z0-9-.+]+);base64/);
@@ -2745,12 +2781,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     currentUserMessageId: string | null,
     systemInstruction: string,
     currentInputTextForApi: string,
-    currentActiveImageFile: File | null, 
-    currentActiveImagePreview: string | null, 
+    currentActiveImageFile: File | null,
+    currentActiveImagePreview: string | null,
     currentUploadedTextFileName: string | null,
     currentUploadedTextContent: string | null,
     isRegeneration: boolean,
-    isRegenerationOfAiMsgId?: string 
+    isRegenerationOfAiMsgId?: string
   ): ApiChatMessage[] => {
     const history: ApiChatMessage[] = [{ role: 'system', content: systemInstruction }];
 
@@ -2777,7 +2813,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             }
             messageParts.push({ type: 'text', text: textForHistory });
         }
-        
+
         if (role === 'user' && msg.imagePreview && !msg.isImageQuery && !msg.isVideoQuery) {
             messageParts.push({ type: 'image_url', image_url: { url: msg.imagePreview, detail: "auto" } });
         }
@@ -2797,7 +2833,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         if (currentUploadedTextFileName) {
             if (currentUploadedTextContent) {
                 textForCurrentTurn = `The user has uploaded a file named "${currentUploadedTextFileName}".\nThe content of this file is:\n${currentUploadedTextContent}\n\n---\n\n${textForCurrentTurn}`;
-            } else if (!currentActiveImageFile) { 
+            } else if (!currentActiveImageFile) {
                 textForCurrentTurn = `${textForCurrentTurn}\n\n(System Note: User uploaded a file named '${currentUploadedTextFileName}'. Its content is not directly available to you.)`;
             }
         }
@@ -2805,7 +2841,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         if (textForCurrentTurn) {
             currentTurnContentParts.push({ type: 'text', text: textForCurrentTurn });
         }
-        if (currentActiveImagePreview && currentActiveImageFile) { 
+        if (currentActiveImagePreview && currentActiveImageFile) {
             currentTurnContentParts.push({ type: 'image_url', image_url: { url: currentActiveImagePreview, detail: "auto" } });
         }
 
@@ -2822,10 +2858,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   const generalFileAcceptTypes = ".txt,.md,.json,.js,.ts,.jsx,.tsx,.py,.java,.c,.cpp,.h,.hpp,.cs,.go,.rs,.rb,.php,.html,.htm,.css,.scss,.less,.xml,.yaml,.yml,.ini,.sh,.bat,.ps1,.sql,.csv,.log,.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
   const generalChatBarInteractionDisabled = (isLoading && !isRealTimeTranslationMode) || isListening || (isGpt41AccessModalOpen && selectedModel === Model.GPT4O);
-  const microphoneButtonDisabled = 
-    !isSpeechRecognitionSupported || 
-    (!isListening && ( // Only apply these disabling conditions if we are trying to START
-      (isLoading && !isRealTimeTranslationMode) || 
+  const microphoneButtonDisabled =
+    !isSpeechRecognitionSupported ||
+    (!isListening && (
+      (isLoading && !isRealTimeTranslationMode) ||
       (isGpt41AccessModalOpen && selectedModel === Model.GPT4O)
     ));
 
@@ -2846,10 +2882,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
   const showGenericAttachmentPreview = useMemo(() => {
     if (isKlingVideoModelSelected && imagePreviews.length > 0) {
-        return true; // Show preview for Kling if image is uploaded
+        return true;
     }
     if (isTextToSpeechModelSelected || isRealTimeTranslationMode || isImagenModelSelected || isClaudeModelSelected || isFluxUltraModelSelected) {
-        return false; // Keep original exclusions for other models
+        return false;
     }
     if (imagePreviews.length > 0 || uploadedTextFileName) {
         return true;
@@ -2877,13 +2913,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                 <span className="text-lg font-semibold text-neutral-darker dark:text-secondary-light ml-2">Menu</span>
                 <button
                     onClick={() => setIsSidebarOpen(false)}
-                    className="p-2 rounded-full hover:bg-secondary dark:hover:bg-neutral-dark relative z-10" 
+                    className="p-2 rounded-full hover:bg-secondary dark:hover:bg-neutral-dark relative z-10"
                     aria-label="Close settings and history panel"
                 >
                     <XMarkIcon className="w-6 h-6 text-neutral-darker dark:text-secondary-light"/>
                 </button>
             </div>
-            <div className="flex-grow overflow-y-auto overflow-x-hidden p-3 pt-0 md:pt-3 min-h-0"> 
+            <div className="flex-grow overflow-y-auto overflow-x-hidden p-3 pt-0 md:pt-3 min-h-0">
                 {sidebarContent}
             </div>
         </div>
@@ -2974,7 +3010,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             ) : (
                 <div ref={chatContainerRef} className="flex-grow min-h-0 p-4 space-y-4 overflow-y-auto">
                     {messages.map((msg, index) => (
-                        <div ref={(el: HTMLDivElement | null) => { messageRefs.current[msg.id] = el; }} key={msg.id} className="flex justify-start"> 
+                        <div ref={(el: HTMLDivElement | null) => { messageRefs.current[msg.id] = el; }} key={msg.id} className="flex justify-start">
                             <MessageBubble
                             message={msg}
                             showAvatar={index === 0 || messages[index-1]?.sender !== msg.sender}
@@ -2988,7 +3024,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                             />
                         </div>
                     ))}
-                    <div ref={chatEndRef} /> 
+                    <div ref={chatEndRef} />
                 </div>
             )}
            {showScrollToBottomButton && !isRealTimeTranslationMode && (
@@ -3116,14 +3152,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
               onClick={isRealTimeTranslationMode ? handleSpeakLiveTranslation : handleSendMessage}
               disabled={generalChatBarInteractionDisabled || (isRealTimeTranslationMode && (isListening || !liveTranslationDisplay.trim() || isSpeakingLiveTranslation || (userSession.isDemoUser && !userSession.isPaidUser)))}
               className={`ml-2 p-2.5 rounded-full transition-colors flex-shrink-0
-                          ${isRealTimeTranslationMode 
+                          ${isRealTimeTranslationMode
                             ? (isSpeakingLiveTranslation ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse' : 'bg-accent hover:bg-accent-dark text-white disabled:bg-accent/50')
                             : 'bg-primary hover:bg-primary-dark dark:bg-primary-light dark:hover:bg-primary text-white dark:text-neutral-darker'}
                           disabled:opacity-50`}
               aria-label={isRealTimeTranslationMode ? (isSpeakingLiveTranslation ? "Stop Speaking Translation" : "Speak Translation") : sendButtonLabel()}
               title={isRealTimeTranslationMode ? (isSpeakingLiveTranslation ? "Stop Speaking Translation" : (userSession.isDemoUser && !userSession.isPaidUser ? "TTS for Paid Users Only" : "Speak Translation") ) : sendButtonLabel()}
             >
-              {isRealTimeTranslationMode 
+              {isRealTimeTranslationMode
                 ? (isSpeakingLiveTranslation ? <StopCircleIcon className="w-6 h-6"/> : <SpeakerWaveIcon className="w-6 h-6"/>)
                 : sendButtonIcon()
               }
@@ -3135,5 +3171,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     </div>
   );
 };
+
+// Helper to escape characters for RegExp
+RegExp.escape = function(str) {
+  return str.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+};
+
 
 export default ChatPage;
