@@ -207,6 +207,11 @@ const getIsKlingVideoModel = (model: Model | null): boolean => {
 
 const TRANSLATION_REQUEST_COOLDOWN_MS = 1000; // Cooldown period in milliseconds
 
+// Helper to escape characters for RegExp
+const escapeRegExp = (string: string): string => {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
+};
+
 
 const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, userSession, onUpdateDemoLimits }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -279,7 +284,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     }
   });
 
-  const currentModelSettings = useMemo(() => {
+  const currentModelSettings: AnyModelSettings = useMemo(() => {
     const getTypedSpecificSettings = <M_PARAM extends Model>(modelKey: M_PARAM): ModelSpecificSettingsMap[M_PARAM] => {
         return (allSettings[modelKey] || getSpecificDefaultSettings(modelKey)) as ModelSpecificSettingsMap[M_PARAM];
     };
@@ -307,7 +312,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             specificSettings = getSpecificDefaultSettings(selectedModel) as ModelSpecificSettingsMap[typeof selectedModel];
     }
 
-    let mutableSettingsCopy = { ...specificSettings };
+    let mutableSettingsCopy = { ...specificSettings } as AnyModelSettings; // Ensure mutableSettingsCopy is AnyModelSettings
 
     const aboutMeText = userProfile?.aboutMe?.trim();
     const activePersona = activePersonaId ? personas.find(p => p.id === activePersonaId) : null;
@@ -745,7 +750,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           // If the text was already translated, the accumulator already has it.
           // If the placeholder is very specific (unique ID), replacement is safer.
           setLiveTranslationDisplay(prev => { // Example of a more targeted replacement if placeholder is unique
-            const placeholderRegex = new RegExp(RegExp.escape(`Translating to .*?: "${trimmedText.substring(0, 20)}.*? \\[ID: translate-.*?\\n`), 's');
+            const placeholderRegex = new RegExp(escapeRegExp(`Translating to .*?: "${trimmedText.substring(0, 20)}.*? \\[ID: translate-.*?\\n`), 's');
             if (prev.match(placeholderRegex)) {
                 return prev.replace(placeholderRegex, cacheMessage);
             }
@@ -1044,15 +1049,15 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   };
 
   const handleModelSettingsChange = useCallback(
-    (newSettings: Partial<ModelSpecificSettingsMap[typeof selectedModel]>) => {
+    (newSettings: Partial<AnyModelSettings>) => { // Changed to AnyModelSettings
     setAllSettings(prevAllSettings => {
         const modelKey = selectedModel;
-        const currentSettingsForModel = (prevAllSettings[modelKey] || getSpecificDefaultSettings(modelKey)) as ModelSpecificSettingsMap[typeof selectedModel];
+        const currentSettingsForModel = (prevAllSettings[modelKey] || getSpecificDefaultSettings(modelKey));
 
-        const updatedModelSpecificSettings: ModelSpecificSettingsMap[typeof selectedModel] = {
-            ...(currentSettingsForModel as any),
-            ...(newSettings as any)
-        };
+        const updatedModelSpecificSettings = {
+            ...currentSettingsForModel,
+            ...newSettings
+        } as ModelSpecificSettingsMap[typeof modelKey]; // Ensure specific type after merge
 
         return {
             ...prevAllSettings,
@@ -1250,15 +1255,23 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     setIsWebSearchEnabled(false);
 
     if (selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.PRIVATE && selectedModel !== Model.FLUX_KONTEX && selectedModel !== Model.FLUX_KONTEX_MAX_MULTI && selectedModel !== Model.FLUX_ULTRA && selectedModel !== Model.KLING_VIDEO && !(selectedModel === Model.GPT4O && !isGpt41Unlocked)) {
-        setAllSettings(prev => ({
-            ...prev,
-            [selectedModel]: { ...getSpecificDefaultSettings(selectedModel) }
-        }));
+        setAllSettings(prev => {
+            const modelKey = selectedModel;
+            const defaultSettingsForModel = getSpecificDefaultSettings(modelKey);
+            return {
+                ...prev,
+                [modelKey]: { ...defaultSettingsForModel } as AllModelSettings[typeof modelKey],
+            };
+        });
     } else if (selectedModel === Model.GPT4O && isGpt41Unlocked) {
-         setAllSettings(prev => ({
-            ...prev,
-            [selectedModel]: { ...getSpecificDefaultSettings(selectedModel) }
-        }));
+        setAllSettings(prev => {
+            const modelKey = selectedModel;
+            const defaultSettingsForModel = getSpecificDefaultSettings(modelKey);
+            return {
+                ...prev,
+                [modelKey]: { ...defaultSettingsForModel } as AllModelSettings[typeof modelKey],
+            };
+        });
     }
 
     if (!isAiAgentMode && !isPrivateModeSelected && !isFluxKontexModelSelected && !isFluxUltraModelSelected && !isKlingVideoModelSelected) setActivePersonaId(null);
@@ -1942,7 +1955,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
 
     try {
-      const currentModelSpecificSettingsForApiCall: ModelSpecificSettingsMap[typeof selectedModel] = currentModelSettings;
+      const currentModelSpecificSettingsForApiCall: AnyModelSettings = currentModelSettings; // Type is AnyModelSettings
       const currentModelStatus = apiKeyStatuses[selectedModel];
       const actualModelIdentifier = getActualModelIdentifier(selectedModel);
 
@@ -3171,11 +3184,5 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     </div>
   );
 };
-
-// Helper to escape characters for RegExp
-RegExp.escape = function(str) {
-  return str.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-};
-
 
 export default ChatPage;
