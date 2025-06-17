@@ -1,4 +1,5 @@
 
+
 // Fix: Remove triple-slash directive for 'vite/client' as its types are not found and import.meta.env is manually typed.
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo, useContext } from 'react';
@@ -277,7 +278,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     }
   });
 
-  const modelSettings: AnyModelSettings = useMemo(() => {
+  const modelSettings = useMemo(() => {
     const getTypedSettings = <M extends Model>(model: M): ModelSpecificSettingsMap[M] => {
         return (allSettings[model] || getSpecificDefaultSettings(model)) as ModelSpecificSettingsMap[M];
     };
@@ -332,7 +333,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         } else if (aboutMeText) {
             finalSystemInstruction = `Background information about the user you are interacting with: "${aboutMeText}".\n\nYour task: "${mutableSettings.systemInstruction}"`;
         }
-        mutableSettings.systemInstruction = finalSystemInstruction;
+        (mutableSettings as ModelSettings | AiAgentSettings).systemInstruction = finalSystemInstruction;
     }
     return mutableSettings;
   }, [allSettings, selectedModel, activePersonaId, personas, userProfile]);
@@ -951,17 +952,15 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     }
   };
 
-  const handleModelSettingsChange = useCallback((newSettings: Partial<AnyModelSettings>) => {
+  const handleModelSettingsChange = useCallback(
+    (newSettings: Partial<ModelSpecificSettingsMap[typeof selectedModel]>) => {
     setAllSettings(prevAllSettings => {
-        const modelKey = selectedModel;
-        // Ensure currentSettingsForModel gets the correct specific type for the modelKey
-        const currentSettingsForModel = (prevAllSettings[modelKey] || getSpecificDefaultSettings(modelKey)) as ModelSpecificSettingsMap[typeof modelKey];
+        const modelKey = selectedModel; 
+        const currentSettingsForModel = (prevAllSettings[modelKey] || getSpecificDefaultSettings(modelKey));
         
-        // Assert newSettings is a partial of the specific model's settings type
-        // This is generally safe if SettingsPanel only sends relevant fields for the selected model
         const updatedModelSpecificSettings = {
             ...currentSettingsForModel,
-            ...(newSettings as Partial<typeof currentSettingsForModel>)
+            ...newSettings 
         };
         
         return {
