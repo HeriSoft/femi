@@ -1,5 +1,4 @@
 
-
 // Fix: Remove triple-slash directive for 'vite/client' as its types are not found and import.meta.env is manually typed.
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo, useContext } from 'react';
@@ -25,7 +24,7 @@ import { ThemeContext } from '../App.tsx'; // Import ThemeContext
 // Helper function to get specific default settings with correct typing
 // Assumes ALL_MODEL_DEFAULT_SETTINGS is correctly typed as ModelSpecificSettingsMap
 const getSpecificDefaultSettings = <M extends Model>(modelKey: M): ModelSpecificSettingsMap[M] => {
-    const settings = ALL_MODEL_DEFAULT_SETTINGS[modelKey];
+    const settings = ALL_MODEL_DEFAULT_SETTINGS[modelKey] as ModelSpecificSettingsMap[M]; // Added type assertion
     if (!settings) { 
         console.error(`[ChatPage] CRITICAL: Default settings for model ${modelKey} are missing from ALL_MODEL_DEFAULT_SETTINGS. This is a bug in constants.ts.`);
         throw new Error(`Missing default settings for ${modelKey}`);
@@ -138,7 +137,7 @@ declare global {
     onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null;
     onsoundstart: ((this: SpeechRecognition, ev: Event) => any) | null;
     onsoundend: ((this: SpeechRecognition, ev: Event) => any) | null;
-    onspeechstart: ((this: SpeechRecognition, ev: Event) => any) | null;
+    onspeechstart: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null;
     onspeechend: ((this: SpeechRecognition, ev: Event) => any) | null;
     onstart: ((this: SpeechRecognition, ev: Event) => any) | null;
 
@@ -278,35 +277,32 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     }
   });
 
-  const modelSettings = useMemo(() => {
-    const getTypedSettings = <M extends Model>(model: M): ModelSpecificSettingsMap[M] => {
+  const modelSettings: AnyModelSettings = useMemo(() => {
+    const getTypedSpecificSettings = <M extends Model>(model: M): ModelSpecificSettingsMap[M] => {
         return (allSettings[model] || getSpecificDefaultSettings(model)) as ModelSpecificSettingsMap[M];
     };
 
-    let currentModelTypedSettings: AnyModelSettings;
-    // Use a switch statement to narrow down the type of settings based on selectedModel
+    let currentModelTypedSettings: ModelSpecificSettingsMap[typeof selectedModel];
     switch (selectedModel) {
-        case Model.GEMINI: currentModelTypedSettings = getTypedSettings(Model.GEMINI); break;
-        case Model.GEMINI_ADVANCED: currentModelTypedSettings = getTypedSettings(Model.GEMINI_ADVANCED); break;
-        case Model.GPT4O: currentModelTypedSettings = getTypedSettings(Model.GPT4O); break;
-        case Model.GPT4O_MINI: currentModelTypedSettings = getTypedSettings(Model.GPT4O_MINI); break;
-        case Model.DEEPSEEK: currentModelTypedSettings = getTypedSettings(Model.DEEPSEEK); break;
-        case Model.CLAUDE: currentModelTypedSettings = getTypedSettings(Model.CLAUDE); break;
-        case Model.IMAGEN3: currentModelTypedSettings = getTypedSettings(Model.IMAGEN3); break;
-        case Model.OPENAI_TTS: currentModelTypedSettings = getTypedSettings(Model.OPENAI_TTS); break;
-        case Model.REAL_TIME_TRANSLATION: currentModelTypedSettings = getTypedSettings(Model.REAL_TIME_TRANSLATION); break;
-        case Model.AI_AGENT: currentModelTypedSettings = getTypedSettings(Model.AI_AGENT); break;
-        case Model.PRIVATE: currentModelTypedSettings = getTypedSettings(Model.PRIVATE); break;
-        case Model.FLUX_KONTEX: currentModelTypedSettings = getTypedSettings(Model.FLUX_KONTEX); break;
-        case Model.FLUX_KONTEX_MAX_MULTI: currentModelTypedSettings = getTypedSettings(Model.FLUX_KONTEX_MAX_MULTI); break;
-        case Model.FLUX_ULTRA: currentModelTypedSettings = getTypedSettings(Model.FLUX_ULTRA); break;
-        case Model.KLING_VIDEO: currentModelTypedSettings = getTypedSettings(Model.KLING_VIDEO); break;
+        case Model.GEMINI: currentModelTypedSettings = getTypedSpecificSettings(Model.GEMINI); break;
+        case Model.GEMINI_ADVANCED: currentModelTypedSettings = getTypedSpecificSettings(Model.GEMINI_ADVANCED); break;
+        case Model.GPT4O: currentModelTypedSettings = getTypedSpecificSettings(Model.GPT4O); break;
+        case Model.GPT4O_MINI: currentModelTypedSettings = getTypedSpecificSettings(Model.GPT4O_MINI); break;
+        case Model.DEEPSEEK: currentModelTypedSettings = getTypedSpecificSettings(Model.DEEPSEEK); break;
+        case Model.CLAUDE: currentModelTypedSettings = getTypedSpecificSettings(Model.CLAUDE); break;
+        case Model.IMAGEN3: currentModelTypedSettings = getTypedSpecificSettings(Model.IMAGEN3); break;
+        case Model.OPENAI_TTS: currentModelTypedSettings = getTypedSpecificSettings(Model.OPENAI_TTS); break;
+        case Model.REAL_TIME_TRANSLATION: currentModelTypedSettings = getTypedSpecificSettings(Model.REAL_TIME_TRANSLATION); break;
+        case Model.AI_AGENT: currentModelTypedSettings = getTypedSpecificSettings(Model.AI_AGENT); break;
+        case Model.PRIVATE: currentModelTypedSettings = getTypedSpecificSettings(Model.PRIVATE); break;
+        case Model.FLUX_KONTEX: currentModelTypedSettings = getTypedSpecificSettings(Model.FLUX_KONTEX); break;
+        case Model.FLUX_KONTEX_MAX_MULTI: currentModelTypedSettings = getTypedSpecificSettings(Model.FLUX_KONTEX_MAX_MULTI); break;
+        case Model.FLUX_ULTRA: currentModelTypedSettings = getTypedSpecificSettings(Model.FLUX_ULTRA); break;
+        case Model.KLING_VIDEO: currentModelTypedSettings = getTypedSpecificSettings(Model.KLING_VIDEO); break;
         default:
-            // This should ideally be an exhaustive check
             const _exhaustiveCheck: never = selectedModel;
-            // Fallback if a model is missed, though the switch should cover all.
             console.error(`[ChatPage] modelSettings useMemo: Unhandled model ${selectedModel}. Falling back to generic defaults.`);
-            currentModelTypedSettings = getSpecificDefaultSettings(selectedModel); 
+            currentModelTypedSettings = getSpecificDefaultSettings(selectedModel) as ModelSpecificSettingsMap[typeof selectedModel]; 
     }
     
     let mutableSettings = { ...currentModelTypedSettings }; 
@@ -321,7 +317,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
          selectedModel === Model.GPT4O_MINI ||
          selectedModel === Model.DEEPSEEK ||
          selectedModel === Model.CLAUDE ||
-         selectedModel === Model.AI_AGENT
+         selectedModel === Model.AI_AGENT ||
+         selectedModel === Model.PRIVATE 
         )
        ) {
         let finalSystemInstruction = mutableSettings.systemInstruction; 
@@ -333,9 +330,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         } else if (aboutMeText) {
             finalSystemInstruction = `Background information about the user you are interacting with: "${aboutMeText}".\n\nYour task: "${mutableSettings.systemInstruction}"`;
         }
-        (mutableSettings as ModelSettings | AiAgentSettings).systemInstruction = finalSystemInstruction;
+        (mutableSettings as ModelSettings | AiAgentSettings | PrivateModeSettings).systemInstruction = finalSystemInstruction;
     }
-    return mutableSettings;
+    return mutableSettings as AnyModelSettings; // Ensure the return conforms to AnyModelSettings for the state variable
   }, [allSettings, selectedModel, activePersonaId, personas, userProfile]);
 
 
@@ -457,6 +454,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   const interimTranslationBufferRef = useRef<string>(""); 
   const translationDebounceTimerRef = useRef<number | null>(null);
   const DEBOUNCE_TRANSLATION_MS = 750; 
+  const RTT_GRACE_PERIOD_MS = DEBOUNCE_TRANSLATION_MS + 1000;
 
   const [liveTranscriptionDisplay, setLiveTranscriptionDisplay] = useState<string>("");
   const liveTranslationAccumulatorRef = useRef<string>("");
@@ -464,6 +462,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   const currentTranslationStreamControllerRef = useRef<AbortController | null>(null);
   const [isSpeakingLiveTranslation, setIsSpeakingLiveTranslation] = useState(false);
   const [liveTranslationAudioUrl, setLiveTranslationAudioUrl] = useState<string | null>(null);
+  const lastTranslatedInterimTextRef = useRef<string|null>(null);
+  const lastTranslatedInterimTimestampRef = useRef<number>(0);
 
 
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
@@ -664,24 +664,22 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       }
     }
 
+    // Microphone stopping logic based on model/mode changes
     if (isListening && recognitionRef.current) {
-      const stopMicForModel =
-        (isImagenModelSelected && !isRealTimeTranslationMode) ||
-        (isTextToSpeechModelSelected && !isRealTimeTranslationMode) ||
-        (isFluxUltraModelSelected && !isRealTimeTranslationMode) ||
-        (isClaudeModelSelected && !isRealTimeTranslationMode) ||
-        (isKlingVideoModelSelected && !isRealTimeTranslationMode);
+        const micIncompatibleForCurrentModel = 
+            (isImagenModelSelected || 
+             isTextToSpeechModelSelected || 
+             isClaudeModelSelected || 
+             isFluxUltraModelSelected || 
+             isKlingVideoModelSelected) && !isRealTimeTranslationMode;
 
-      if (stopMicForModel) {
-        recognitionRef.current.stop();
-      } else if (
-          !isRealTimeTranslationMode &&
-          selectedModel !== Model.GPT4O && 
-          !isGpt41AccessModalOpen && 
-          selectedModel !== Model.AI_AGENT 
-      ) {
-        recognitionRef.current.stop();
-      }
+        const stopForGptModal = 
+            selectedModel === Model.GPT4O && isGpt41AccessModalOpen;
+
+        if (micIncompatibleForCurrentModel || stopForGptModal) {
+            recognitionRef.current.stop();
+            // Note: onend handler will set isListening(false)
+        }
     }
 
 
@@ -699,6 +697,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       currentInterimVisualRef.current = "";
       interimTranslationBufferRef.current = "";
       liveTranslationAccumulatorRef.current = "";
+      lastTranslatedInterimTextRef.current = null;
+      lastTranslatedInterimTimestampRef.current = 0;
       currentTranslationStreamControllerRef.current?.abort();
       if (audioPlayerRef.current && isSpeakingLiveTranslation) {
           audioPlayerRef.current.pause();
@@ -721,7 +721,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     clearSearch();
     prevSelectedModelRef.current = selectedModel;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedModel, clearSearch]);
+  }, [selectedModel, clearSearch, isGpt41AccessModalOpen, isListening, isRealTimeTranslationMode, isImagenModelSelected, isTextToSpeechModelSelected, isFluxUltraModelSelected, isClaudeModelSelected, isKlingVideoModelSelected, apiKeyStatuses, activePersonaId, uploadedImages.length, imagePreviews.length, uploadedTextFileContent, uploadedTextFileName, isWebSearchEnabled, currentPlayingMessageId, isSpeakingLiveTranslation, isGpt41Unlocked /* other relevant states from the original large dep array */ ]);
 
 
   const translateLiveSegment = useCallback(async (text: string, targetLangCode: string) => {
@@ -748,6 +748,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
               enableGoogleSearch: false,
               modelName: geminiModelId,
               userSession: userSession, 
+              signal: signal, // Pass the abort signal
           });
 
           let segmentTranslation = "";
@@ -757,7 +758,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                   setLiveTranslationDisplay(prev => prev.replace(translationPlaceholder, `[Translation cancelled for "${text.substring(0,20)}..."]\n`));
                   return;
               }
-              if (chunk.error) throw new Error(chunk.error);
+              if (chunk.error) {
+                if (chunk.error === 'Request aborted by client.') { // Handle specific abort error
+                    console.log('Translation explicitly aborted by client for segment:', text);
+                    setLiveTranslationDisplay(prev => prev.replace(translationPlaceholder, `[Translation aborted for "${text.substring(0,20)}..."]\n`));
+                    return;
+                }
+                throw new Error(chunk.error);
+              }
               if (chunk.textDelta) {
                   segmentTranslation += chunk.textDelta;
                   setLiveTranslationDisplay(prev => prev.replace(translationPlaceholder, `[${targetLangName}]: ${segmentTranslation}\n`));
@@ -767,7 +775,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           setLiveTranslationDisplay(liveTranslationAccumulatorRef.current);
 
       } catch (error: any) {
-          if (error.name === 'AbortError') {
+          if (error.name === 'AbortError' || error.message === 'Request aborted by client.') {
             console.log('Previous translation fetch was aborted.');
           } else {
             console.error("Error translating segment:", error);
@@ -777,6 +785,22 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           }
       }
   }, [addNotification, userSession]); 
+
+  const targetLanguageForSpeechEffect = useMemo(() => {
+    if (isRealTimeTranslationMode) {
+      return (modelSettings as RealTimeTranslationSettings).targetLanguage;
+    }
+    return undefined; 
+  }, [isRealTimeTranslationMode, modelSettings]);
+
+  const translateLiveSegmentForSpeechEffect = useCallback((text: string, langCode: string) => {
+      if (isRealTimeTranslationMode) {
+          return translateLiveSegment(text, langCode);
+      }
+      // No-op or return undefined if not RTT, to ensure stable reference
+      return Promise.resolve(); 
+  }, [isRealTimeTranslationMode, translateLiveSegment]);
+
 
   useEffect(() => {
     const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -793,56 +817,65 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     recognition.interimResults = true;
     recognition.lang = isRealTimeTranslationMode ? (navigator.language || 'en-US') : (navigator.language.startsWith('vi') ? 'vi-VN' : (navigator.language || 'en-US'));
 
+    recognition.onstart = () => {
+        setIsListening(true);
+    };
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let newFinalTranscriptThisEvent = "";
-      let latestInterimForDisplay = "";
-
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-          const transcriptPart = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-              newFinalTranscriptThisEvent += transcriptPart;
-              currentInterimVisualRef.current = "";
-          } else {
-              latestInterimForDisplay = transcriptPart;
-          }
-      }
-
       if (isRealTimeTranslationMode) {
-          if (!newFinalTranscriptThisEvent.trim() && latestInterimForDisplay.trim()) {
-            currentInterimVisualRef.current = latestInterimForDisplay;
-          }
-          setLiveTranscriptionDisplay(liveTranscriptionRef.current + currentInterimVisualRef.current);
+        let newlyFinalizedTextThisEvent = "";
+        let latestInterimTextThisEvent = "";
 
-          if (newFinalTranscriptThisEvent.trim()) {
-              if (translationDebounceTimerRef.current) {
-                  clearTimeout(translationDebounceTimerRef.current);
-                  translationDebounceTimerRef.current = null;
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            const transcriptPart = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+                newlyFinalizedTextThisEvent += transcriptPart;
+            } else {
+                latestInterimTextThisEvent = transcriptPart; 
+            }
+        }
+
+        if (newlyFinalizedTextThisEvent.trim()) {
+            if (translationDebounceTimerRef.current) {
+                clearTimeout(translationDebounceTimerRef.current);
+                translationDebounceTimerRef.current = null;
+            }
+            interimTranslationBufferRef.current = ""; 
+
+            const textToTranslate = newlyFinalizedTextThisEvent.trim();
+            liveTranscriptionRef.current += textToTranslate + "\n"; 
+            currentInterimVisualRef.current = ""; 
+            setLiveTranscriptionDisplay(liveTranscriptionRef.current); 
+            translateLiveSegmentForSpeechEffect(textToTranslate, targetLanguageForSpeechEffect || 'en');
+        } else if (latestInterimTextThisEvent.trim()) {
+            currentInterimVisualRef.current = latestInterimTextThisEvent;
+            setLiveTranscriptionDisplay(liveTranscriptionRef.current + currentInterimVisualRef.current); 
+
+            interimTranslationBufferRef.current = latestInterimTextThisEvent.trim(); 
+            if (translationDebounceTimerRef.current) {
+                clearTimeout(translationDebounceTimerRef.current);
+            }
+            translationDebounceTimerRef.current = window.setTimeout(() => {
+                const textToTranslateInterim = interimTranslationBufferRef.current; 
+                if (textToTranslateInterim && currentInterimVisualRef.current.trim() === textToTranslateInterim) {
+                    lastTranslatedInterimTextRef.current = textToTranslateInterim;
+                    lastTranslatedInterimTimestampRef.current = Date.now();
+                    translateLiveSegmentForSpeechEffect(textToTranslateInterim, targetLanguageForSpeechEffect || 'en');
+                }
+                translationDebounceTimerRef.current = null; 
+            }, DEBOUNCE_TRANSLATION_MS);
+        }
+      } else { // Not Real-Time Translation Mode
+          let newFinalTranscriptThisEvent = "";
+          let latestInterimForDisplay = "";
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+              const transcriptPart = event.results[i][0].transcript;
+              if (event.results[i].isFinal) {
+                  newFinalTranscriptThisEvent += transcriptPart;
+              } else {
+                  latestInterimForDisplay = transcriptPart;
               }
-              const textToTranslate = newFinalTranscriptThisEvent.trim();
-              liveTranscriptionRef.current += textToTranslate + "\n";
-              setLiveTranscriptionDisplay(liveTranscriptionRef.current);
-              currentInterimVisualRef.current = "";
-              translateLiveSegment(textToTranslate, (modelSettings as RealTimeTranslationSettings).targetLanguage || 'en');
-              interimTranslationBufferRef.current = "";
-          } else if (latestInterimForDisplay.trim()) {
-              interimTranslationBufferRef.current = latestInterimForDisplay; 
-              if (translationDebounceTimerRef.current) {
-                  clearTimeout(translationDebounceTimerRef.current);
-              }
-              translationDebounceTimerRef.current = window.setTimeout(() => {
-                  if (interimTranslationBufferRef.current.trim()) {
-                      const textToTranslate = interimTranslationBufferRef.current.trim();
-                      liveTranscriptionRef.current += textToTranslate + "\n";
-                      setLiveTranscriptionDisplay(liveTranscriptionRef.current);
-                      currentInterimVisualRef.current = "";
-                      translateLiveSegment(textToTranslate, (modelSettings as RealTimeTranslationSettings).targetLanguage || 'en');
-                      interimTranslationBufferRef.current = "";
-                  }
-                  translationDebounceTimerRef.current = null;
-              }, DEBOUNCE_TRANSLATION_MS);
           }
-      } else { 
           currentRecognizedTextSegmentRef.current = newFinalTranscriptThisEvent.trim() +
               (newFinalTranscriptThisEvent.trim() && latestInterimForDisplay.trim() ? " " : "") +
               latestInterimForDisplay.trim();
@@ -863,16 +896,27 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       }
       if (isRealTimeTranslationMode) {
           let remainingTextToTranslate = "";
-          if (interimTranslationBufferRef.current.trim()) {
-              remainingTextToTranslate = interimTranslationBufferRef.current.trim();
-          } else if (currentInterimVisualRef.current.trim() && !liveTranscriptionRef.current.endsWith(currentInterimVisualRef.current.trim() + "\n")) {
-              remainingTextToTranslate = currentInterimVisualRef.current.trim();
+          if (currentInterimVisualRef.current.trim()) { 
+             remainingTextToTranslate = currentInterimVisualRef.current.trim();
           }
-
+          
           if (remainingTextToTranslate) {
-              liveTranscriptionRef.current += remainingTextToTranslate + "\n";
-              setLiveTranscriptionDisplay(liveTranscriptionRef.current);
-              translateLiveSegment(remainingTextToTranslate, (modelSettings as RealTimeTranslationSettings).targetLanguage || 'en');
+              const recentlyTranslatedByDebouncer = 
+                  remainingTextToTranslate === lastTranslatedInterimTextRef.current &&
+                  (Date.now() - lastTranslatedInterimTimestampRef.current < RTT_GRACE_PERIOD_MS);
+
+              if (recentlyTranslatedByDebouncer) {
+                  console.log("[RTT onend] Skipping translation for text recently handled by debouncer:", remainingTextToTranslate);
+              } else {
+                  const alreadyTranscribed = liveTranscriptionRef.current.trim().endsWith(remainingTextToTranslate);
+                  if (!alreadyTranscribed) {
+                     liveTranscriptionRef.current += remainingTextToTranslate + "\n";
+                     setLiveTranscriptionDisplay(liveTranscriptionRef.current);
+                     translateLiveSegmentForSpeechEffect(remainingTextToTranslate, targetLanguageForSpeechEffect || 'en');
+                  } else {
+                     console.log("[RTT onend] Skipping translation of already transcribed (via endsWith) final segment:", remainingTextToTranslate);
+                  }
+              }
           }
           interimTranslationBufferRef.current = "";
           currentInterimVisualRef.current = "";
@@ -892,9 +936,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       let errorMessage = `Speech recognition error: ${event.error}.`;
       if (event.error === 'not-allowed') {
         errorMessage = "Microphone access denied. Please allow microphone access in your browser settings.";
-      } else if (event.error === 'no-speech' && isListening) {
+      } else if (event.error === 'no-speech' && isListening) { // Modified to check isListening
         errorMessage = "No speech detected. Please try again.";
-      } else if (event.error === 'aborted' && !isListening) {
+      } else if (event.error === 'aborted' && !isListening) { 
         return;
       }
       addNotification(errorMessage, "error", event.message);
@@ -915,7 +959,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         clearTimeout(translationDebounceTimerRef.current);
       }
     };
-  }, [addNotification, isRealTimeTranslationMode, modelSettings, translateLiveSegment]); 
+  }, [addNotification, isRealTimeTranslationMode, targetLanguageForSpeechEffect, translateLiveSegmentForSpeechEffect]);
 
 
   const handleToggleListen = () => {
@@ -923,15 +967,23 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
     if (isListening) {
       recognitionRef.current.stop();
+      // onend will set isListening to false
     } else {
+      // Reset states before starting
       if (isRealTimeTranslationMode) {
           liveTranscriptionRef.current = "";
           currentInterimVisualRef.current = "";
           interimTranslationBufferRef.current = "";
           liveTranslationAccumulatorRef.current = "";
+          lastTranslatedInterimTextRef.current = null;
+          lastTranslatedInterimTimestampRef.current = 0;
           setLiveTranscriptionDisplay("");
           setLiveTranslationDisplay("");
           currentTranslationStreamControllerRef.current?.abort();
+          if (translationDebounceTimerRef.current) {
+              clearTimeout(translationDebounceTimerRef.current);
+              translationDebounceTimerRef.current = null;
+          }
           if (audioPlayerRef.current && isSpeakingLiveTranslation) {
             audioPlayerRef.current.pause();
             setIsSpeakingLiveTranslation(false);
@@ -941,13 +993,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           inputBeforeSpeechRef.current = input;
           currentRecognizedTextSegmentRef.current = "";
       }
+      
       try {
+        setIsListening(true); // Set listening state immediately for UI feedback
         recognitionRef.current.start();
-        setIsListening(true);
       } catch (e: any) {
         console.error("Error starting speech recognition:", e);
         addNotification("Could not start voice input. Please try again.", "error", e.message);
-        setIsListening(false);
+        setIsListening(false); // Revert if start fails
       }
     }
   };
@@ -956,11 +1009,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     (newSettings: Partial<ModelSpecificSettingsMap[typeof selectedModel]>) => {
     setAllSettings(prevAllSettings => {
         const modelKey = selectedModel; 
-        const currentSettingsForModel = (prevAllSettings[modelKey] || getSpecificDefaultSettings(modelKey));
+        const currentSettingsForModel = (prevAllSettings[modelKey] || getSpecificDefaultSettings(modelKey)) as ModelSpecificSettingsMap[typeof selectedModel];
         
-        const updatedModelSpecificSettings = {
-            ...currentSettingsForModel,
-            ...newSettings 
+        const updatedModelSpecificSettings: ModelSpecificSettingsMap[typeof selectedModel] = {
+            ...(currentSettingsForModel as any), // Using 'as any' to bypass strict spread checks for complex unions/generics
+            ...(newSettings as any) 
         };
         
         return {
@@ -1052,7 +1105,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         }
     }
 
-    const sessionModelSettingsSnapshot = {...modelSettings}; 
+    const sessionModelSettingsSnapshot: AnyModelSettings = {...modelSettings}; 
 
     if (activeSessionId) {
         setSavedSessions(prev => {
@@ -1117,23 +1170,20 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
       setAllSettings(prevAllSettings => {
         const defaultsForModel = getSpecificDefaultSettings(sessionToLoad.model);
-        const snapshot = sessionToLoad.modelSettingsSnapshot as ModelSpecificSettingsMap[typeof sessionToLoad.model]; 
+        const snapshot = sessionToLoad.modelSettingsSnapshot; // This is AnyModelSettings
         
-        const relevantSnapshotFields: Partial<typeof defaultsForModel> = {};
-        for (const key in snapshot) { 
-            if (Object.prototype.hasOwnProperty.call(defaultsForModel, key) && snapshot[key] !== undefined) {
-                (relevantSnapshotFields as any)[key] = snapshot[key];
-            }
-        }
+        // Explicitly cast snapshot to the specific model's settings type.
+        // This assumes that the snapshot is indeed of the type corresponding to sessionToLoad.model.
+        const specificSnapshot = snapshot as ModelSpecificSettingsMap[typeof sessionToLoad.model];
         
-        const newModelSettings: ModelSpecificSettingsMap[typeof sessionToLoad.model] = {
+        const newModelSettingsForLoadedSession: ModelSpecificSettingsMap[typeof sessionToLoad.model] = {
             ...defaultsForModel,
-            ...relevantSnapshotFields 
+            ...specificSnapshot // Spread the specifically-typed snapshot
         };
-
+        
         return {
             ...prevAllSettings,
-            [sessionToLoad.model]: newModelSettings
+            [sessionToLoad.model]: newModelSettingsForLoadedSession
         }; 
       });
 
@@ -1188,6 +1238,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         currentInterimVisualRef.current = "";
         interimTranslationBufferRef.current = "";
         liveTranslationAccumulatorRef.current = "";
+        lastTranslatedInterimTextRef.current = null;
+        lastTranslatedInterimTimestampRef.current = 0;
         if (audioPlayerRef.current && isSpeakingLiveTranslation) {
             audioPlayerRef.current.pause();
             setIsSpeakingLiveTranslation(false);
@@ -1350,18 +1402,18 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                 
                 const relevantSnapshotFields: Partial<typeof defaultsForModel> = {};
                 for (const key in snapshot) { 
-                    if (Object.prototype.hasOwnProperty.call(defaultsForModel, key) && snapshot[key] !== undefined) {
-                        (relevantSnapshotFields as any)[key] = snapshot[key];
+                    if (Object.prototype.hasOwnProperty.call(defaultsForModel, key) && (snapshot as any)[key] !== undefined) {
+                        (relevantSnapshotFields as any)[key] = (snapshot as any)[key];
                     }
                 }
                 
-                const newModelSettings: ModelSpecificSettingsMap[typeof sessionToLoad.model] = {
+                const newModelSettingsForLoadedSession: ModelSpecificSettingsMap[typeof sessionToLoad.model] = {
                     ...defaultsForModel,
                     ...relevantSnapshotFields
                 };
                 return {
                     ...prevAllSettings,
-                    [sessionToLoad.model]: newModelSettings
+                    [sessionToLoad.model]: newModelSettingsForLoadedSession
                 };
             });
 
@@ -1854,7 +1906,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
 
     try {
-      const currentModelSpecificSettings = modelSettings; 
+      const currentModelSpecificSettings: AnyModelSettings = modelSettings; 
       const currentModelStatus = apiKeyStatuses[selectedModel];
       const actualModelIdentifier = getActualModelIdentifier(selectedModel);
 
@@ -2483,7 +2535,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             <SettingsPanel
                 selectedModel={selectedModel}
                 onModelChange={handleModelSelection}
-                modelSettings={modelSettings}
+                modelSettings={modelSettings as ModelSpecificSettingsMap[typeof selectedModel]} // Cast here
                 onModelSettingsChange={handleModelSettingsChange}
                 isWebSearchEnabled={isWebSearchEnabled}
                 onWebSearchToggle={setIsWebSearchEnabled}
@@ -2770,6 +2822,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   const generalFileAcceptTypes = ".txt,.md,.json,.js,.ts,.jsx,.tsx,.py,.java,.c,.cpp,.h,.hpp,.cs,.go,.rs,.rb,.php,.html,.htm,.css,.scss,.less,.xml,.yaml,.yml,.ini,.sh,.bat,.ps1,.sql,.csv,.log,.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
   const generalChatBarInteractionDisabled = (isLoading && !isRealTimeTranslationMode) || isListening || (isGpt41AccessModalOpen && selectedModel === Model.GPT4O);
+  const microphoneButtonDisabled = 
+    !isSpeechRecognitionSupported || 
+    (!isListening && ( // Only apply these disabling conditions if we are trying to START
+      (isLoading && !isRealTimeTranslationMode) || 
+      (isGpt41AccessModalOpen && selectedModel === Model.GPT4O)
+    ));
 
   const handleChatBarImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -2992,7 +3050,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
           <div className="p-3 border-t border-secondary dark:border-neutral-darkest bg-neutral-light dark:bg-neutral-darker flex items-end flex-shrink-0">
             {showMicrophoneButton && (
-                <button onClick={handleToggleListen} disabled={generalChatBarInteractionDisabled}
+                <button onClick={handleToggleListen} disabled={microphoneButtonDisabled}
                     className={`p-2.5 rounded-full transition-colors flex-shrink-0 mr-2
                                 ${isListening ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse' : 'bg-secondary dark:bg-neutral-darkest hover:bg-secondary-dark dark:hover:bg-neutral-dark text-neutral-darker dark:text-secondary-light'}
                                 disabled:opacity-50`}
