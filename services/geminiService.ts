@@ -1,5 +1,6 @@
 
 
+
 import { ModelSettings, Part, GroundingSource, GeminiChatState, ImagenSettings, UserSessionState } from '../types.ts';
 import type { Content, GenerateImagesResponse } from "@google/genai"; // Only for type if needed, not direct use
 
@@ -19,7 +20,8 @@ interface SendMessageParams {
   modelSettings: ModelSettings;
   enableGoogleSearch: boolean;
   modelName: string;
-  userSession: UserSessionState; // Added userSession
+  userSession: UserSessionState; 
+  signal?: AbortSignal; // Added signal for aborting fetch
   // apiKey parameter removed
 }
 
@@ -27,14 +29,14 @@ interface GenerateImageParams {
   prompt: string;
   modelSettings: ImagenSettings;
   modelName: string; // e.g., 'imagen-3.0-generate-002'
-  userSession: UserSessionState; // Added userSession
+  userSession: UserSessionState; 
   // apiKey parameter removed
 }
 
 export async function* sendGeminiMessageStream(
   params: SendMessageParams
 ): AsyncGenerator<GeminiProxyStreamChunk, void, undefined> {
-  const { historyContents, modelSettings, enableGoogleSearch, modelName, userSession } = params;
+  const { historyContents, modelSettings, enableGoogleSearch, modelName, userSession, signal } = params;
 
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
   if (userSession.isPaidUser && userSession.paidUserToken) {
@@ -53,6 +55,7 @@ export async function* sendGeminiMessageStream(
         modelSettings,
         enableGoogleSearch,
       }),
+      signal: signal, // Pass the signal to fetch
     });
 
     if (!response.ok) {
@@ -104,6 +107,11 @@ export async function* sendGeminiMessageStream(
     }
 
   } catch (error: any) {
+    if (error.name === 'AbortError') {
+      console.log('Gemini stream fetch aborted by client.');
+      yield { error: 'Request aborted by client.' }; // Optionally yield an abort error
+      return;
+    }
     console.error("Error calling Gemini proxy service:", error);
     yield { error: `Network or unexpected error calling Gemini proxy: ${error.message}` };
   }
