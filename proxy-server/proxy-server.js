@@ -101,7 +101,7 @@ const DEMO_USER_MONTHLY_LIMITS = {
 
 // --- PAID USER LIMITS ---
 const PAID_USER_MAX_LIMITS_CONFIG = {
-  IMAGEN3_MAX_IMAGES_PER_DAY: 1,
+  IMAGEN3_MONTHLY_MAX_IMAGES: 25, // Renamed from IMAGEN3_MAX_IMAGES_PER_DAY
   OPENAI_TTS_MAX_CHARS_TOTAL: 20000,
   FLUX_KONTEX_MAX_MONTHLY_MAX_USES: 25,
   FLUX_KONTEX_PRO_MONTHLY_MAX_USES: 35,
@@ -147,7 +147,7 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
                 return next();
             }
             const [users] = await pool.execute(
-                'SELECT id, username, user_type, status, paid_flux_pro_monthly_used, paid_flux_max_monthly_used, paid_flux_ultra_monthly_used, paid_kling_video_monthly_used, paid_usage_last_reset_month FROM users WHERE username = ?',
+                'SELECT id, username, user_type, status, paid_flux_pro_monthly_used, paid_flux_max_monthly_used, paid_flux_ultra_monthly_used, paid_kling_video_monthly_used, paid_imagen3_monthly_used, paid_usage_last_reset_month FROM users WHERE username = ?',
                 [paidUserToken]
             );
             if (users.length > 0) {
@@ -167,15 +167,16 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
                             paid_flux_max_monthly_used: fluxMaxUsed = 0,
                             paid_flux_ultra_monthly_used: fluxUltraUsed = 0,
                             paid_kling_video_monthly_used: klingVideoUsed = 0,
+                            paid_imagen3_monthly_used: imagen3Used = 0,
                             paid_usage_last_reset_month: lastResetMonth
                         } = user;
 
                         if (lastResetMonth !== currentYearMonth) {
                             console.log(`[Paid Auth] Resetting monthly limits for PAID user ${user.username} for new month ${currentYearMonth}. Old month: ${lastResetMonth}`);
-                            fluxProUsed = 0; fluxMaxUsed = 0; fluxUltraUsed = 0; klingVideoUsed = 0;
+                            fluxProUsed = 0; fluxMaxUsed = 0; fluxUltraUsed = 0; klingVideoUsed = 0; imagen3Used = 0;
                             try {
                                 await pool.execute(
-                                    'UPDATE users SET paid_flux_pro_monthly_used=0, paid_flux_max_monthly_used=0, paid_flux_ultra_monthly_used=0, paid_kling_video_monthly_used=0, paid_usage_last_reset_month=? WHERE id=?',
+                                    'UPDATE users SET paid_flux_pro_monthly_used=0, paid_flux_max_monthly_used=0, paid_flux_ultra_monthly_used=0, paid_kling_video_monthly_used=0, paid_imagen3_monthly_used=0, paid_usage_last_reset_month=? WHERE id=?',
                                     [currentYearMonth, user.id]
                                 );
                             } catch (dbResetError) {
@@ -189,7 +190,8 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
                             fluxMaxMonthlyUsed: fluxMaxUsed,
                             fluxProMonthlyUsed: fluxProUsed,
                             fluxUltraMonthlyUsed: fluxUltraUsed,
-                            klingVideoMonthlyUsed: klingVideoUsed, // This is the value from DB before potential reset by this request.
+                            klingVideoMonthlyUsed: klingVideoUsed, 
+                            paid_imagen3_monthly_used: imagen3Used,
                         };
                         req.isPaidUser = true; // Set only if not suspended AND active sub
                         req.authenticationFailed = false; // Explicitly set to false on success
@@ -271,7 +273,7 @@ app.post('/api/auth/verify-code', async (req, res) => {
 
     try {
         const [users] = await pool.execute(
-            'SELECT id, username, user_type, status, password_hash, demo_flux_max_monthly_used, demo_flux_pro_monthly_used, demo_imagen_monthly_used, demo_tts_monthly_chars_used, demo_flux_ultra_monthly_used, demo_kling_video_monthly_used, demo_usage_last_reset_month, paid_flux_pro_monthly_used, paid_flux_max_monthly_used, paid_flux_ultra_monthly_used, paid_kling_video_monthly_used, paid_usage_last_reset_month FROM users WHERE username = ?',
+            'SELECT id, username, user_type, status, password_hash, demo_flux_max_monthly_used, demo_flux_pro_monthly_used, demo_imagen_monthly_used, demo_tts_monthly_chars_used, demo_flux_ultra_monthly_used, demo_kling_video_monthly_used, demo_usage_last_reset_month, paid_flux_pro_monthly_used, paid_flux_max_monthly_used, paid_flux_ultra_monthly_used, paid_kling_video_monthly_used, paid_imagen3_monthly_used, paid_usage_last_reset_month FROM users WHERE username = ?',
             [code] // 'code' is the username for DEMO/PAID users
         );
 
@@ -302,15 +304,16 @@ app.post('/api/auth/verify-code', async (req, res) => {
                     paid_flux_max_monthly_used: fluxMaxUsed = 0,
                     paid_flux_ultra_monthly_used: fluxUltraUsed = 0,
                     paid_kling_video_monthly_used: klingVideoUsed = 0,
+                    paid_imagen3_monthly_used: imagen3Used = 0,
                     paid_usage_last_reset_month: lastResetMonth
                 } = user;
 
                 if (lastResetMonth !== currentYearMonth) {
                     console.log(`[Paid Login] Resetting monthly limits for PAID user ${user.username} for new month ${currentYearMonth}. Old month: ${lastResetMonth}`);
-                    fluxProUsed = 0; fluxMaxUsed = 0; fluxUltraUsed = 0; klingVideoUsed = 0;
+                    fluxProUsed = 0; fluxMaxUsed = 0; fluxUltraUsed = 0; klingVideoUsed = 0; imagen3Used = 0;
                     try {
                         await pool.execute(
-                            'UPDATE users SET paid_flux_pro_monthly_used=0, paid_flux_max_monthly_used=0, paid_flux_ultra_monthly_used=0, paid_kling_video_monthly_used=0, paid_usage_last_reset_month=? WHERE id=?',
+                            'UPDATE users SET paid_flux_pro_monthly_used=0, paid_flux_max_monthly_used=0, paid_flux_ultra_monthly_used=0, paid_kling_video_monthly_used=0, paid_imagen3_monthly_used=0, paid_usage_last_reset_month=? WHERE id=?',
                             [currentYearMonth, user.id]
                         );
                     } catch (dbResetError) {
@@ -323,9 +326,9 @@ app.post('/api/auth/verify-code', async (req, res) => {
                     paidUserToken: user.username, // Using username as token for paid users
                     subscriptionEndDate: subEndDate.toISOString(),
                     limits: {
-                        imagen3ImagesLeft: PAID_USER_MAX_LIMITS_CONFIG.IMAGEN3_MAX_IMAGES_PER_DAY, // This is a daily limit enforced by proxy, client sees it as 'max' for the session
-                        imagen3MaxImages: PAID_USER_MAX_LIMITS_CONFIG.IMAGEN3_MAX_IMAGES_PER_DAY,
-                        openaiTtsCharsLeft: PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL, // This is a total/per-use, client sees it as 'max'
+                        imagen3ImagesLeft: PAID_USER_MAX_LIMITS_CONFIG.IMAGEN3_MONTHLY_MAX_IMAGES - imagen3Used,
+                        imagen3MaxImages: PAID_USER_MAX_LIMITS_CONFIG.IMAGEN3_MONTHLY_MAX_IMAGES,
+                        openaiTtsCharsLeft: PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL, 
                         openaiTtsMaxChars: PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL,
                         fluxKontextMaxMonthlyUsesLeft: PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_MAX_MONTHLY_MAX_USES - fluxMaxUsed,
                         fluxKontextMaxMonthlyMaxUses: PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_MAX_MONTHLY_MAX_USES,
@@ -506,9 +509,14 @@ app.post('/api/gemini/image/generate', async (req, res) => {
     const numImagesToGenerate = Math.max(1, Math.min(4, modelSettings?.numberOfImages || 1));
 
     if (req.isPaidUser && !isActualAdmin) {
-      console.log(`[Imagen Proxy] Paid user ${req.paidUser.username} generating ${numImagesToGenerate} image(s).`);
-      // Paid user limits for Imagen are typically daily/session based, might not need DB update here
-      // unless you want to track total images generated by paid users.
+      if (!req.paidUser || !pool) {
+          return res.status(500).json({ error: "Internal server error: Paid user data or DB not found."});
+      }
+      const currentUsed = req.paidUser.paid_imagen3_monthly_used || 0;
+      if (currentUsed + numImagesToGenerate > PAID_USER_MAX_LIMITS_CONFIG.IMAGEN3_MONTHLY_MAX_IMAGES) {
+        return res.status(429).json({ error: `Monthly Imagen3 limit for Paid user reached. Used: ${currentUsed}/${PAID_USER_MAX_LIMITS_CONFIG.IMAGEN3_MONTHLY_MAX_IMAGES}, Requested: ${numImagesToGenerate}`, limitReached: true });
+      }
+      console.log(`[Imagen Proxy] Paid user ${req.paidUser.username} generating ${numImagesToGenerate} image(s). Current monthly used: ${currentUsed}.`);
     } else if (req.isDemoUser && !isActualAdmin) {
       if (!req.demoUser || !pool) {
           return res.status(500).json({ error: "Internal server error: Demo user data or DB not found."});
@@ -528,17 +536,29 @@ app.post('/api/gemini/image/generate', async (req, res) => {
     };
     const response = await ai.models.generateImages({ model: modelName, prompt: prompt, config: config });
 
-    if (req.isDemoUser && !isActualAdmin && req.demoUser && response.generatedImages?.length > 0) {
-      const numGenerated = response.generatedImages.length;
-      try {
-        await pool.execute(
-            'UPDATE users SET demo_imagen_monthly_used = demo_imagen_monthly_used + ? WHERE id = ?',
-            [numGenerated, req.demoUser.id]
-        );
-        console.log(`[Demo Usage Update - Imagen] SUCCESS: User ${req.demoUser.username} used ${numGenerated} images.`);
-      } catch (dbUpdateError) {
-        console.error(`[Demo Usage Update - Imagen] FAILED DB update for user ${req.demoUser.username}:`, dbUpdateError);
-      }
+    if (response.generatedImages?.length > 0) {
+        const numGenerated = response.generatedImages.length;
+        if (req.isPaidUser && !isActualAdmin && req.paidUser) {
+            try {
+                await pool.execute(
+                    'UPDATE users SET paid_imagen3_monthly_used = paid_imagen3_monthly_used + ? WHERE id = ?',
+                    [numGenerated, req.paidUser.id]
+                );
+                console.log(`[Paid Usage Update - Imagen3] SUCCESS: User ${req.paidUser.username} used ${numGenerated} images.`);
+            } catch (dbUpdateError) {
+                console.error(`[Paid Usage Update - Imagen3] FAILED DB update for user ${req.paidUser.username}:`, dbUpdateError);
+            }
+        } else if (req.isDemoUser && !isActualAdmin && req.demoUser) {
+            try {
+                await pool.execute(
+                    'UPDATE users SET demo_imagen_monthly_used = demo_imagen_monthly_used + ? WHERE id = ?',
+                    [numGenerated, req.demoUser.id]
+                );
+                console.log(`[Demo Usage Update - Imagen3] SUCCESS: User ${req.demoUser.username} used ${numGenerated} images.`);
+            } catch (dbUpdateError) {
+                console.error(`[Demo Usage Update - Imagen3] FAILED DB update for user ${req.demoUser.username}:`, dbUpdateError);
+            }
+        }
     }
     res.json(response);
   } catch (error) {
