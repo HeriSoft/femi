@@ -24,7 +24,7 @@ import { ThemeContext } from '../App.tsx'; // Import ThemeContext
 // Helper function to get specific default settings with correct typing
 // Assumes ALL_MODEL_DEFAULT_SETTINGS is correctly typed as ModelSpecificSettingsMap
 const getSpecificDefaultSettings = <M extends Model>(modelKey: M): ModelSpecificSettingsMap[M] => {
-    const settings = ALL_MODEL_DEFAULT_SETTINGS[modelKey] as ModelSpecificSettingsMap[M]; // Added type assertion
+    const settings = ALL_MODEL_DEFAULT_SETTINGS[modelKey]; // Removed 'as ModelSpecificSettingsMap[M]' cast
     if (!settings) {
         console.error(`[ChatPage] CRITICAL: Default settings for model ${modelKey} are missing from ALL_MODEL_DEFAULT_SETTINGS. This is a bug in constants.ts.`);
         throw new Error(`Missing default settings for ${modelKey}`);
@@ -286,10 +286,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
   const currentModelSettings: AnyModelSettings = useMemo(() => {
     const getTypedSpecificSettings = <M_PARAM extends Model>(modelKey: M_PARAM): ModelSpecificSettingsMap[M_PARAM] => {
-        return (allSettings[modelKey] || getSpecificDefaultSettings(modelKey)) as ModelSpecificSettingsMap[M_PARAM];
+        return (allSettings[modelKey] || getSpecificDefaultSettings(modelKey));
     };
 
-    let specificSettings: ModelSpecificSettingsMap[typeof selectedModel];
+    let specificSettings: AnyModelSettings; // Use AnyModelSettings here for initial assignment flexibility
     switch (selectedModel) {
         case Model.GEMINI: specificSettings = getTypedSpecificSettings(Model.GEMINI); break;
         case Model.GEMINI_ADVANCED: specificSettings = getTypedSpecificSettings(Model.GEMINI_ADVANCED); break;
@@ -309,10 +309,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         default:
             const _exhaustiveCheck: never = selectedModel;
             console.error(`[ChatPage] currentModelSettings useMemo: Unhandled model ${selectedModel}.`);
-            specificSettings = getSpecificDefaultSettings(selectedModel) as ModelSpecificSettingsMap[typeof selectedModel];
+            specificSettings = getSpecificDefaultSettings(selectedModel); // Fallback
     }
 
-    let mutableSettingsCopy = { ...specificSettings } as AnyModelSettings; // Ensure mutableSettingsCopy is AnyModelSettings
+    let mutableSettingsCopy = { ...specificSettings } as AnyModelSettings; 
 
     const aboutMeText = userProfile?.aboutMe?.trim();
     const activePersona = activePersonaId ? personas.find(p => p.id === activePersonaId) : null;
@@ -1185,7 +1185,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         }
     }
 
-    const sessionModelSettingsSnapshot: AnyModelSettings = currentModelSettings as AnyModelSettings;
+    const sessionModelSettingsSnapshot: AnyModelSettings = currentModelSettings;
 
     if (activeSessionId) {
         setSavedSessions(prev => {
@@ -1429,7 +1429,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       timestamp: sessionTimestamp,
       model: selectedModel,
       messages: [...messages],
-      modelSettingsSnapshot: currentModelSettings as AnyModelSettings,
+      modelSettingsSnapshot: currentModelSettings,
       isPinned: savedSessions.find(s => s.id === activeSessionId)?.isPinned || false,
       activePersonaIdSnapshot: activePersonaId,
     };
@@ -2002,7 +2002,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
 
     try {
-      const currentModelSpecificSettingsForApiCall: AnyModelSettings = currentModelSettings; // Type is AnyModelSettings
+      const currentModelSpecificSettingsForApiCall: AnyModelSettings = currentModelSettings; 
       const currentModelStatus = apiKeyStatuses[selectedModel];
       const actualModelIdentifier = getActualModelIdentifier(selectedModel);
 
