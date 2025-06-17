@@ -146,8 +146,8 @@ export const INITIAL_DEMO_USER_LIMITS: DemoUserLimits = {
 
 
 export const PAID_USER_LIMITS_CONFIG: PaidUserLimits = {
-  imagen3ImagesLeft: 0, 
-  imagen3MaxImages: 1, // Updated from 20 (This represents daily for proxy, but client type is just "max")
+  imagen3ImagesLeft: 0, // This represents remaining for the current period for the client
+  imagen3MaxImages: 25, // Monthly limit for paid users
   openaiTtsCharsLeft: 0, 
   openaiTtsMaxChars: 20000, 
   fluxKontextMaxMonthlyUsesLeft: 0, 
@@ -156,8 +156,8 @@ export const PAID_USER_LIMITS_CONFIG: PaidUserLimits = {
   fluxKontextProMonthlyMaxUses: 35,  
   fluxUltraMonthlyImagesLeft: 0,
   fluxUltraMonthlyMaxImages: 30,
-  klingVideoMonthlyUsed: 0, // This would be the current usage this month for a user
-  klingVideoMonthlyMaxGenerations: 1, // Paid users get 1 Kling video generation per month
+  klingVideoMonthlyUsed: 0, 
+  klingVideoMonthlyMaxGenerations: 1, 
 };
 
 export const OPENAI_TTS_MAX_INPUT_LENGTH = PAID_USER_LIMITS_CONFIG.openaiTtsMaxChars;
