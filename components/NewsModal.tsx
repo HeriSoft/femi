@@ -21,7 +21,7 @@ const featureComparisonData: FeatureComparisonItem[] = [
   { feature: "Claude (Mock)", paidUser: "✅ Mock Access", demoUser: "✅ Mock Access" },
   { feature: "AI Agent (Gemini)", paidUser: "✅ Full Access", demoUser: "✅ Full Access" },
   { feature: "Private Mode (Local)", paidUser: "✅ Full Access", demoUser: "✅ Full Access" },
-  { category: "Image Generation", feature: "Imagen3", paidUser: "1 image/day", demoUser: "5 images/month" },
+  { category: "Image Generation", feature: "Imagen3", paidUser: "25 images/month", demoUser: "5 images/month" },
   { feature: "Flux1.1 [Ultra]", paidUser: "30 images/month", demoUser: <span className="text-red-500 dark:text-red-400">❌ Paid Only</span> },
   { category: "Image Editing", feature: "Flux Kontext Pro", paidUser: <span>35 uses/month <br/><small>(1 image input/use)</small></span>, demoUser: <span>1 use/month <br/><small>(1 image input/use)</small></span> },
   { feature: "Flux Kontext Max", paidUser: <span>25 uses/month <br/><small>(up to 4 image inputs/use)</small></span>, demoUser: <span className="text-red-500 dark:text-red-400">❌ Paid Only</span> },
