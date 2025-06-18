@@ -224,9 +224,9 @@ const TradingProView: React.FC<TradingProViewProps> = ({
                 <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-700 rounded-md">
                   <h5 className="font-semibold text-blue-700 dark:text-blue-300 mb-1">Trend Prediction (Next 1-7 Days):</h5>
                   <p className="text-sm text-blue-600 dark:text-blue-200">
-                    TĂNG (UP): <span className="font-bold">{tradingProState.trendPredictions.up}%</span> | 
-                    GIẢM (DOWN): <span className="font-bold">{tradingProState.trendPredictions.down}%</span> | 
-                    ĐI NGANG (SIDEWAYS): <span className="font-bold">{tradingProState.trendPredictions.sideways}%</span>
+                    TĂNG (UP): <span className="font-bold">{tradingProState.trendPredictions.up_percentage}%</span> | 
+                    GIẢM (DOWN): <span className="font-bold">{tradingProState.trendPredictions.down_percentage}%</span> | 
+                    ĐI NGANG (SIDEWAYS): <span className="font-bold">{tradingProState.trendPredictions.sideways_percentage}%</span>
                   </p>
                 </div>
               )}
