@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
-import { Model, ModelSettings, SettingsPanelProps, ApiKeyStatus, getActualModelIdentifier, ImagenSettings, Persona, OpenAITtsSettings, OpenAiTtsVoice, RealTimeTranslationSettings, AiAgentSettings, FluxKontexSettings, FluxKontexAspectRatio, FluxUltraSettings, FluxUltraAspectRatio, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, PrivateModeSettings, AnyModelSettings } from '../types.ts'; // Added AnyModelSettings
-import { ArrowUpTrayIcon, PhotoIcon, XMarkIcon, MagnifyingGlassIcon, KeyIcon, InformationCircleIcon, UserCircleIcon, PlusCircleIcon, TrashIcon, PencilSquareIcon, SpeakerWaveIcon, LanguageIcon, PencilIcon as EditIcon, ArrowPathIcon, FilmIcon } from './Icons.tsx';
-import { TRANSLATION_TARGET_LANGUAGES, DEFAULT_FLUX_KONTEX_SETTINGS, DEFAULT_FLUX_ULTRA_SETTINGS, FLUX_ULTRA_ASPECT_RATIOS, DEFAULT_KLING_AI_SETTINGS, KLING_AI_DURATIONS, KLING_AI_ASPECT_RATIOS, ALL_MODEL_DEFAULT_SETTINGS } from '../constants.ts'; // Imported ALL_MODEL_DEFAULT_SETTINGS
+import { Model, ModelSettings, SettingsPanelProps, ApiKeyStatus, getActualModelIdentifier, ImagenSettings, Persona, OpenAITtsSettings, OpenAiTtsVoice, RealTimeTranslationSettings, AiAgentSettings, FluxKontexSettings, FluxKontexAspectRatio, FluxUltraSettings, FluxUltraAspectRatio, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, PrivateModeSettings, AnyModelSettings, TradingProSettings } from '../types.ts'; 
+import { ArrowUpTrayIcon, PhotoIcon, XMarkIcon, MagnifyingGlassIcon, KeyIcon, InformationCircleIcon, UserCircleIcon, PlusCircleIcon, TrashIcon, PencilSquareIcon, SpeakerWaveIcon, LanguageIcon, PencilIcon as EditIcon, ArrowPathIcon, FilmIcon, PresentationChartLineIcon } from './Icons.tsx'; // Added PresentationChartLineIcon
+import { TRANSLATION_TARGET_LANGUAGES, DEFAULT_FLUX_KONTEX_SETTINGS, DEFAULT_FLUX_ULTRA_SETTINGS, FLUX_ULTRA_ASPECT_RATIOS, DEFAULT_KLING_AI_SETTINGS, KLING_AI_DURATIONS, KLING_AI_ASPECT_RATIOS, ALL_MODEL_DEFAULT_SETTINGS, TRADING_PRO_PAIRS } from '../constants.ts'; 
 
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({
@@ -35,10 +35,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const isFluxKontexModel = selectedModel === Model.FLUX_KONTEX || selectedModel === Model.FLUX_KONTEX_MAX_MULTI;
   const isFluxUltraImageGenModel = selectedModel === Model.FLUX_ULTRA || currentApiKeyStatus?.isFluxUltraImageGeneration;
   const isKlingVideoModel = selectedModel === Model.KLING_VIDEO || currentApiKeyStatus?.isKlingVideoGeneration;
+  const isTradingProModel = selectedModel === Model.TRADING_PRO || currentApiKeyStatus?.isTradingPro;
 
-  const showPersonaSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isPrivateModel && !isFluxKontexModel && !isFluxUltraImageGenModel && !isKlingVideoModel && selectedModel !== Model.CLAUDE;
-  const showChatModelSettingsSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isFluxKontexModel && !isFluxUltraImageGenModel && !isPrivateModel && !isKlingVideoModel && selectedModel !== Model.CLAUDE;
-  
+
+  const showPersonaSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isPrivateModel && !isFluxKontexModel && !isFluxUltraImageGenModel && !isKlingVideoModel && !isTradingProModel && selectedModel !== Model.CLAUDE;
+  const showChatModelSettingsSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isFluxKontexModel && !isFluxUltraImageGenModel && !isPrivateModel && !isKlingVideoModel && !isTradingProModel && selectedModel !== Model.CLAUDE;
+  const showWebSearchToggle = currentApiKeyStatus?.isGeminiPlatform && !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isPrivateModel && !isFluxKontexModel && !isFluxUltraImageGenModel && !isKlingVideoModel && !isTradingProModel;
+
 
   const handlePersonaEdit = (persona: Persona) => {
     setEditingPersona(persona);
@@ -93,7 +96,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                          !currentApiKeyStatus?.isImageEditing &&
                                          !currentApiKeyStatus?.isMultiImageEditing &&
                                          !currentApiKeyStatus?.isFluxUltraImageGeneration &&
-                                         !isKlingVideoModel;
+                                         !isKlingVideoModel &&
+                                         !isTradingProModel;
 
 
   const actualModelId = getActualModelIdentifier(selectedModel);
@@ -139,28 +143,18 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   
   const isAdminUser = !userSession.isDemoUser && !userSession.isPaidUser;
 
-  // Helper to determine the API type string for display
   let apiKeyTypeString = "";
   if (currentApiKeyStatus) {
-    if (currentApiKeyStatus.isMock) {
-        apiKeyTypeString = "Mock";
-    } else if (currentApiKeyStatus.isTextToSpeech) {
-        apiKeyTypeString = "TTS API";
-    } else if (currentApiKeyStatus.isRealTimeTranslation) {
-        apiKeyTypeString = "Translation API";
-    } else if (currentApiKeyStatus.isAiAgent) {
-        apiKeyTypeString = "AI Agent API";
-    } else if (currentApiKeyStatus.isImageEditing || currentApiKeyStatus.isMultiImageEditing) {
-        apiKeyTypeString = "Image Editing API";
-    } else if (currentApiKeyStatus.isFluxUltraImageGeneration) {
-        apiKeyTypeString = "Image Gen API (Flux Ultra)";
-    } else if (currentApiKeyStatus.isKlingVideoGeneration) {
-        apiKeyTypeString = "Video Gen API (Kling)";
-    } else if (currentApiKeyStatus.isPrivateMode) {
-        apiKeyTypeString = "Local Mode";
-    } else {
-        apiKeyTypeString = "Live API Key";
-    }
+    if (currentApiKeyStatus.isMock) apiKeyTypeString = "Mock";
+    else if (currentApiKeyStatus.isTextToSpeech) apiKeyTypeString = "TTS API";
+    else if (currentApiKeyStatus.isRealTimeTranslation) apiKeyTypeString = "Translation API";
+    else if (currentApiKeyStatus.isAiAgent) apiKeyTypeString = "AI Agent API";
+    else if (currentApiKeyStatus.isImageEditing || currentApiKeyStatus.isMultiImageEditing) apiKeyTypeString = "Image Editing API";
+    else if (currentApiKeyStatus.isFluxUltraImageGeneration) apiKeyTypeString = "Image Gen API (Flux Ultra)";
+    else if (currentApiKeyStatus.isKlingVideoGeneration) apiKeyTypeString = "Video Gen API (Kling)";
+    else if (currentApiKeyStatus.isPrivateMode) apiKeyTypeString = "Local Mode";
+    else if (currentApiKeyStatus.isTradingPro) apiKeyTypeString = "Trading Analysis APIs";
+    else apiKeyTypeString = "Live API Key";
   }
 
 
@@ -207,20 +201,25 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   <p className="font-medium">
                       {currentApiKeyStatus.modelName} ({apiKeyTypeString})
                   </p>
-                  <p>Env Variable: <code>process.env.{currentApiKeyStatus.envVarName}</code></p>
+                  <p>Env Variable(s): <code>process.env.{currentApiKeyStatus.envVarName}</code></p>
                   {currentApiKeyStatus.isSet ? (
-                      <p>Key detected in environment.</p>
+                      <p>Key(s) detected in environment.</p>
                   ) : (
                       currentApiKeyStatus.isMock || currentApiKeyStatus.isPrivateMode ? 
                       <p>Key NOT detected, but this is a mock/local model and will function.</p> :
-                      <p>Key NOT detected in environment.</p>
+                      <p>Key(s) NOT detected in environment.</p>
                   )}
                   {!currentApiKeyStatus.isSet && !currentApiKeyStatus.isMock && !currentApiKeyStatus.isPrivateMode && (
-                      <p className="mt-1 font-semibold">This model will not function without the API key (<code>process.env.{currentApiKeyStatus.envVarName}</code>).</p>
+                      <p className="mt-1 font-semibold">This model will not function without the API key(s) (<code>process.env.{currentApiKeyStatus.envVarName}</code>).</p>
                   )}
-                  {currentApiKeyStatus.isGeminiPlatform && (
+                  {currentApiKeyStatus.isGeminiPlatform && !isTradingProModel && (
                       <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
                           This model uses the Google AI Studio API Key (<code>GEMINI_API_KEY</code> on proxy).
+                      </p>
+                  )}
+                  {isTradingProModel && (
+                      <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
+                          Trading Pro uses Gemini for analysis and Alpha Vantage for chart data. Keys managed on proxy.
                       </p>
                   )}
                   <p className="mt-2 text-xs text-neutral-600 dark:text-neutral-400">
@@ -349,7 +348,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
             />
           </div>
-          { (currentApiKeyStatus?.isGeminiPlatform && !currentApiKeyStatus.isImageGeneration && !currentApiKeyStatus.isImageEditing && !currentApiKeyStatus.isPrivateMode && !currentApiKeyStatus.isMultiImageEditing && !currentApiKeyStatus.isFluxUltraImageGeneration && !isKlingVideoModel) && ( 
+          { (currentApiKeyStatus?.isGeminiPlatform && !currentApiKeyStatus.isImageGeneration && !currentApiKeyStatus.isImageEditing && !currentApiKeyStatus.isPrivateMode && !currentApiKeyStatus.isMultiImageEditing && !currentApiKeyStatus.isFluxUltraImageGeneration && !isKlingVideoModel && !isTradingProModel) && ( 
           <div>
             <label htmlFor="top-k" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
               Top K: {(modelSettings as ModelSettings).topK}
@@ -831,7 +830,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               min="10" max="100" step="1"
               value={(modelSettings as FluxKontexSettings).num_inference_steps ?? DEFAULT_FLUX_KONTEX_SETTINGS.num_inference_steps}
               onChange={(e) => onModelSettingsChange({ num_inference_steps: parseInt(e.target.value, 10) } as Partial<FluxKontexSettings>)}
-              disabled={disabled || selectedModel === Model.FLUX_KONTEX_MAX_MULTI} // MAX_MULTI doesn't use num_inference_steps directly
+              disabled={disabled || selectedModel === Model.FLUX_KONTEX_MAX_MULTI} 
               className={`w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light ${selectedModel === Model.FLUX_KONTEX_MAX_MULTI ? 'opacity-50' : ''}`}
             />
              {selectedModel === Model.FLUX_KONTEX_MAX_MULTI && <p className="text-xs text-neutral-400 mt-0.5">Inference steps are fixed for Flux Max.</p>}
@@ -895,7 +894,24 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
         </div>
       )}
 
-      {isCurrentModelGeminiPlatformChat && !isKlingVideoModel && (
+      {isTradingProModel && (
+         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
+            <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
+                <PresentationChartLineIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" /> 
+                Trading Pro Settings
+            </h3>
+             <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                Trading pair selection and analysis interactions are handled within the Trading Pro view. Web search is always enabled for this model.
+            </p>
+            {/* Future settings for Trading Pro (e.g., chart interval preferences) could go here, but are not requested for this panel yet. */}
+             <div className="mt-2 p-3 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-sm text-blue-700 dark:text-blue-300">
+                <InformationCircleIcon className="w-5 h-5 inline mr-1.5 align-text-bottom" />
+                Select a trading pair (e.g., XAU/USD, BTC/USD) and initiate analysis from the main Trading Pro interface.
+            </div>
+        </div>
+      )}
+
+      {showWebSearchToggle && (
         <div className="border-t border-secondary dark:border-neutral-darkest pt-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
@@ -903,22 +919,25 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             </h3>
             <button
               onClick={() => onWebSearchToggle(!isWebSearchEnabled)}
-              disabled={disabled}
+              disabled={disabled || isTradingProModel}
               className={`${
-                isWebSearchEnabled ? 'bg-primary dark:bg-primary-light' : 'bg-secondary dark:bg-neutral-darkest'
-              } relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:ring-offset-2 dark:focus:ring-offset-neutral-dark`}
+                isWebSearchEnabled && !isTradingProModel ? 'bg-primary dark:bg-primary-light' : 'bg-secondary dark:bg-neutral-darkest'
+              } relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:ring-offset-2 dark:focus:ring-offset-neutral-dark ${isTradingProModel ? 'opacity-50 cursor-not-allowed' : ''}`}
               role="switch"
-              aria-checked={isWebSearchEnabled}
+              aria-checked={isTradingProModel ? true : isWebSearchEnabled} // Trading Pro always uses it
             >
               <span
                 className={`${
-                  isWebSearchEnabled ? 'translate-x-6' : 'translate-x-1'
+                  (isWebSearchEnabled || isTradingProModel) ? 'translate-x-6' : 'translate-x-1'
                 } inline-block w-4 h-4 transform bg-white rounded-full transition-transform`}
               />
             </button>
           </div>
            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                Enable to allow the AI to search the web for up-to-date information. (Only for Gemini models)
+                {isTradingProModel 
+                    ? "Web search is always enabled for Trading Pro analysis." 
+                    : "Enable to allow the AI to search the web for up-to-date information. (Only for compatible Gemini chat models)"
+                }
             </p>
         </div>
       )}

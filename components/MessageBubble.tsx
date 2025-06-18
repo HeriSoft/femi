@@ -1,8 +1,8 @@
 
 import React, { useEffect, useRef, useState, useContext } from 'react';
 import hljs from 'https://esm.sh/highlight.js@11.9.0'; 
-import { ChatMessage, ThemeContextType, Model } from '../types.ts';
-import { RobotIcon, UserIcon, LinkIcon, PhotoIcon, ArrowPathIcon, ClipboardIcon, CheckIcon, SpeakerWaveIcon, StopCircleIcon, ArrowDownTrayIcon, FilmIcon, DocumentPlusIcon } from './Icons.tsx'; // Added FilmIcon, DocumentPlusIcon
+import { ChatMessage, ThemeContextType, Model, GroundingSource, TradingPairValue } from '../types.ts';
+import { RobotIcon, UserIcon, LinkIcon, PhotoIcon, ArrowPathIcon, ClipboardIcon, CheckIcon, SpeakerWaveIcon, StopCircleIcon, ArrowDownTrayIcon, FilmIcon, DocumentPlusIcon, PresentationChartLineIcon } from './Icons.tsx'; // Added PresentationChartLineIcon
 import { useNotification } from '../contexts/NotificationContext.tsx'; 
 import { ThemeContext } from '../App.tsx';
 
@@ -63,7 +63,7 @@ interface EnhancedMessageContentProps {
   searchQuery?: string; 
 }
 
-const EnhancedMessageContent: React.FC<EnhancedMessageContentProps> = React.memo(({ text, searchQuery }) => {
+export const EnhancedMessageContent: React.FC<EnhancedMessageContentProps> = React.memo(({ text, searchQuery }) => {
 
   const highlightText = (inputText: string, query: string, keyPrefix: string): React.ReactNode[] => {
     if (!query || !inputText) return [inputText];
@@ -263,12 +263,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       if (message.isTaskGoal) specialBorderClass = 'border-l-4 border-blue-400';
       else if (message.model === Model.PRIVATE) specialBorderClass = 'border-l-4 border-slate-400';
     } else { // AI in light theme
-      bubbleBackgroundColor = message.isTaskPlan ? '#d1fae5' : (message.model === Model.KLING_VIDEO && message.videoUrl ? '#e0e7ff' : '#ffffff'); // Lighter green for AI Agent plan, white for normal AI, light blue for Kling Video
+      bubbleBackgroundColor = message.isTaskPlan ? '#d1fae5' : (message.model === Model.KLING_VIDEO && message.videoUrl ? '#e0e7ff' : (message.model === Model.TRADING_PRO && message.tradingAnalysis ? '#eef2ff' : '#ffffff'));
       bubbleTextColor = '#374151';    
       audioButtonClasses = 'bg-gray-200 hover:bg-gray-300 text-neutral-700'; 
       timestampColor = 'rgba(107, 114, 128, 0.9)'; 
       if (message.isTaskPlan) specialBorderClass = 'border-l-4 border-green-400';
       else if (message.model === Model.KLING_VIDEO && message.videoUrl) specialBorderClass = 'border-l-4 border-indigo-400';
+      else if (message.model === Model.TRADING_PRO && message.tradingAnalysis) specialBorderClass = 'border-l-4 border-purple-400';
     }
   } else { // Dark theme
     if (isUser) {
@@ -279,12 +280,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       if (message.isTaskGoal) specialBorderClass = 'border-l-4 border-blue-500';
       else if (message.model === Model.PRIVATE) specialBorderClass = 'border-l-4 border-slate-500';
     } else { // AI in dark theme
-      bubbleBackgroundColor = message.isTaskPlan ? '#065f46' : (message.model === Model.KLING_VIDEO && message.videoUrl ? '#312e81' : '#182533'); // Darker green for AI Agent plan, standard dark gray/blue for normal AI, dark indigo for Kling Video
+      bubbleBackgroundColor = message.isTaskPlan ? '#065f46' : (message.model === Model.KLING_VIDEO && message.videoUrl ? '#312e81' : (message.model === Model.TRADING_PRO && message.tradingAnalysis ? '#3730a3' : '#182533'));
       bubbleTextColor = '#FFFFFF';    
       audioButtonClasses = 'bg-white/20 hover:bg-white/30 text-white'; 
       timestampColor = 'rgba(156, 163, 175, 0.8)'; 
       if (message.isTaskPlan) specialBorderClass = 'border-l-4 border-green-500';
       else if (message.model === Model.KLING_VIDEO && message.videoUrl) specialBorderClass = 'border-l-4 border-indigo-500';
+      else if (message.model === Model.TRADING_PRO && message.tradingAnalysis) specialBorderClass = 'border-l-4 border-purple-500';
     }
   }
   tailColor = bubbleBackgroundColor;
@@ -303,7 +305,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const searchHighlightStyle = isCurrentSearchResult ? 'ring-2 ring-accent dark:ring-accent-light ring-offset-2 ring-offset-secondary-light dark:ring-offset-neutral-dark' : '';
   
   const bubbleContentClasses = [
-    "max-w-md sm:max-w-lg md:max-w-xl p-3 rounded-xl shadow relative z-10", // Changed from rounded-xl
+    "max-w-md sm:max-w-lg md:max-w-xl p-3 rounded-xl shadow relative z-10", 
     message.isRegenerating ? 'opacity-75' : '',
     searchHighlightStyle,
     specialBorderClass 
@@ -315,7 +317,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const taskGoalPrefix = message.isTaskGoal ? "🎯 **Goal:** " : "";
   const taskPlanPrefix = message.isTaskPlan ? "📝 **Agent Response:** " : ""; 
   const privateNotePrefix = message.isNote && message.model === Model.PRIVATE ? "📝 **Note:** ": "";
-  const finalDisplayText = `${taskGoalPrefix}${taskPlanPrefix}${privateNotePrefix}${displayText}`;
+  const tradingProPrefix = message.model === Model.TRADING_PRO && message.tradingAnalysis ? `📊 **Trading Analysis (${message.tradingAnalysis.pair}):** ` : "";
+  const finalDisplayText = `${taskGoalPrefix}${taskPlanPrefix}${privateNotePrefix}${tradingProPrefix}${displayText}`;
 
   const handleCopyText = () => {
     if (!finalDisplayText.trim()) return;
@@ -431,12 +434,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           <div className={`w-full h-full rounded-full flex items-center justify-center ${
             isUser 
               ? (message.model === Model.PRIVATE ? 'bg-slate-200 dark:bg-slate-700' : 'bg-blue-100 dark:bg-blue-900')
-              : (message.model === Model.KLING_VIDEO ? 'bg-indigo-200 dark:bg-indigo-700' : 'bg-gray-200 dark:bg-gray-700')
+              : (message.model === Model.KLING_VIDEO ? 'bg-indigo-200 dark:bg-indigo-700' : (message.model === Model.TRADING_PRO ? 'bg-purple-200 dark:bg-purple-700' : 'bg-gray-200 dark:bg-gray-700'))
             } shadow-sm`}
             title={isUser ? 'User' : (message.model || 'AI Assistant')}
           >
             {isUser ? <UserIcon className={`w-5 h-5 ${message.model === Model.PRIVATE ? 'text-slate-600 dark:text-slate-300' : 'text-blue-600 dark:text-blue-300'}`} /> 
-                     : (message.model === Model.KLING_VIDEO ? <FilmIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-300" /> : <RobotIcon className="w-5 h-5 text-gray-600 dark:text-gray-300" />)}
+                     : (message.model === Model.KLING_VIDEO ? <FilmIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-300" /> 
+                     : (message.model === Model.TRADING_PRO ? <PresentationChartLineIcon className="w-5 h-5 text-purple-600 dark:text-purple-300" /> : <RobotIcon className="w-5 h-5 text-gray-600 dark:text-gray-300" />))}
           </div>
         )}
       </div>
@@ -514,6 +518,23 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             </div>
           )}
 
+           {message.tradingAnalysis && (
+            <div className="mt-3 p-3 border-t border-black/10 dark:border-white/10">
+              {/* This is a simplified view if a tradingAnalysis message appears in main chat. 
+                  TradingProView is the primary, richer display for this data. */}
+              {message.tradingAnalysis.chartImageUrl && (
+                <img src={message.tradingAnalysis.chartImageUrl} alt={`Chart for ${message.tradingAnalysis.pair}`} className="max-w-full h-auto rounded-md mb-2 shadow" />
+              )}
+              {message.tradingAnalysis.trendPredictions && (
+                <div className="text-xs mb-1">
+                  Prediction: UP {message.tradingAnalysis.trendPredictions.up}% | 
+                  DOWN {message.tradingAnalysis.trendPredictions.down}% | 
+                  SIDEWAYS {message.tradingAnalysis.trendPredictions.sideways}%
+                </div>
+              )}
+            </div>
+          )}
+
           {message.groundingSources && message.groundingSources.length > 0 && (
             <div className="mt-2 border-t border-black/10 dark:border-white/10 pt-2">
               <p className="text-xs font-semibold mb-0.5" style={{color: bubbleTextColor === '#FFFFFF' ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.7)'}}>Sources:</p>
@@ -554,7 +575,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   {isTextCopied ? <CheckIcon className="w-3.5 h-3.5" /> : <ClipboardIcon className="w-3.5 h-3.5" />}
                 </ActionButton>
               )}
-              {!isUser && onRegenerate && message.promptedByMessageId && !message.isImageQuery && !message.audioUrl && !message.isTaskPlan && !message.videoUrl && (
+              {!isUser && onRegenerate && message.promptedByMessageId && !message.isImageQuery && !message.audioUrl && !message.isTaskPlan && !message.videoUrl && !message.tradingAnalysis && (
                 <ActionButton onClick={() => onRegenerate(message.id, message.promptedByMessageId!)} disabled={isLoading} title="Regenerate Response" ariaLabel="Regenerate AI response">
                   <ArrowPathIcon className="w-3.5 h-3.5" />
                 </ActionButton>

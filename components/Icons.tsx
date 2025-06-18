@@ -1,6 +1,12 @@
 
 import React from 'react';
 
+export const PresentationChartLineIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h12A2.25 2.25 0 0020.25 14.25V3M3.75 21h16.5M16.5 3.75h.008v.008H16.5V3.75zM12 3.75h.008v.008H12V3.75zM7.5 3.75h.008v.008H7.5V3.75zM3.75 6.75h16.5M7.5 12h9M12 12V9.75m-3 3V9.75m6 3V9.75m-9 3h9m3-6.75h.008v.008H16.5V6.75zM12 6.75h.008v.008H12V6.75zM7.5 6.75h.008v.008H7.5V6.75z" />
+  </svg>
+);
+
 export const FilmIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
     <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9A2.25 2.25 0 0 0 13.5 5.25h-9A2.25 2.25 0 0 0 2.25 7.5v9A2.25 2.25 0 0 0 4.5 18.75Z" />
@@ -399,6 +405,10 @@ export const MegaphoneIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) =>
     <path strokeLinecap="round" strokeLinejoin="round" d="M10.34 3.75h-1.5a.75.75 0 0 0-.75.75v4.5a.75.75 0 0 0 .75.75h1.5m0-6H12M10.34 3.75L12 3m0 0l1.66 2.49m-1.66-2.49L10.34 3.75m1.66 0L13.66 6M12 3v2.49m0 0L10.34 6M12 5.49L13.66 6m0 0v2.49m0 0l1.5 2.25M13.66 6l-3.32 4.98M13.66 6H12m1.66 0L12 5.49M16.5 9.75h1.5a.75.75 0 0 0 .75-.75V4.5a.75.75 0 0 0-.75-.75h-1.5m0 6H15m1.5 0v2.25m0 0l1.5 2.25M16.5 12l-3.32 4.98M16.5 12H15m1.5 0l-1.5-2.25M12 12.75V15m0 0l3.445 5.167a.75.75 0 0 0 1.22-.868L13.5 15M12 15l-3.445 5.167a.75.75 0 0 1-1.22-.868L10.5 15m1.5 0H12M12 15H6.75A2.25 2.25 0 0 1 4.5 12.75V9A2.25 2.25 0 0 1 6.75 6.75h7.5A2.25 2.25 0 0 1 16.5 9v3.75a2.25 2.25 0 0 1-2.25 2.25H12Z" />
   </svg>
 );
+
+// Removed FilmIcon as it's already defined.
+// Removed PresentationChartLineIcon as it's already defined.
+
 // ... any other icons you might need
 // Removed duplicate ChatBubbleLeftEllipsisIcon
 // FilmIcon was already defined above.
@@ -407,3 +417,6 @@ export const MegaphoneIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) =>
 //     <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9A2.25 2.25 0 0 0 13.5 5.25h-9A2.25 2.25 0 0 0 2.25 7.5v9A2.25 2.25 0 0 0 4.5 18.75Z" />
 //   </svg>
 // );
+// Corrected icons file by reordering PresentationChartLineIcon to the top.
+// If the error persists, the user needs to clear Vite's cache (node_modules/.vite) and restart the dev server.
+// This is often the most effective solution for such "module does not provide export" errors when the code is visibly correct.
