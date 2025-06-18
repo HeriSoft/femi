@@ -101,7 +101,7 @@ const DEMO_USER_MONTHLY_LIMITS = {
 
 // --- PAID USER LIMITS ---
 const PAID_USER_MAX_LIMITS_CONFIG = {
-  IMAGEN3_MONTHLY_MAX_IMAGES: 25, // Renamed from IMAGEN3_MAX_IMAGES_PER_DAY
+  IMAGEN3_MONTHLY_MAX_IMAGES: 25,
   OPENAI_TTS_MAX_CHARS_TOTAL: 20000,
   FLUX_KONTEX_MAX_MONTHLY_MAX_USES: 25,
   FLUX_KONTEX_PRO_MONTHLY_MAX_USES: 35,
@@ -143,7 +143,7 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
             if (!pool) {
                 console.error("[Paid Auth Middleware Error] Database pool not available.");
                 req.authDbError = true;
-                req.authenticationFailed = true; // Critical failure if DB is out during auth
+                req.authenticationFailed = true;
                 return next();
             }
             const [users] = await pool.execute(
@@ -183,34 +183,34 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
                                 console.error(`[Paid Auth DB Reset Error] Failed to reset limits for user ${user.username}:`, dbResetError);
                             }
                         }
-                        
+
                         req.paidUser = {
                             id: user.id, username: user.username, isPaidUser: true,
                             subscriptionEndDate: subscriptions[0].end_date,
                             fluxMaxMonthlyUsed: fluxMaxUsed,
                             fluxProMonthlyUsed: fluxProUsed,
                             fluxUltraMonthlyUsed: fluxUltraUsed,
-                            klingVideoMonthlyUsed: klingVideoUsed, 
+                            klingVideoMonthlyUsed: klingVideoUsed,
                             paid_imagen3_monthly_used: imagen3Used,
                         };
-                        req.isPaidUser = true; // Set only if not suspended AND active sub
-                        req.authenticationFailed = false; // Explicitly set to false on success
+                        req.isPaidUser = true;
+                        req.authenticationFailed = false;
                     } else {
                         req.authenticationFailed = true;
                         console.log(`[Paid Auth] User ${user.username} found, but no active/valid subscription.`);
                     }
-                } else { // User type is not PAID (and not suspended)
+                } else {
                     req.authenticationFailed = true;
                     console.log(`[Paid Auth] User ${user.username} found, but user_type is not PAID.`);
                 }
-            } else { // User NOT found
+            } else {
                 req.authenticationFailed = true;
                 console.log(`[Paid Auth] Token ${paidUserToken} not found in DB.`);
             }
         } catch (dbError) {
             console.error("[Paid Auth DB Error]", dbError);
             req.authDbError = true;
-            req.authenticationFailed = true; // Critical failure
+            req.authenticationFailed = true;
         }
     } else if (demoUserToken) {
         req.authenticationAttempted = true;
@@ -218,7 +218,7 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
             if (!pool) {
                 console.error("[Demo Auth Middleware Error] Database pool not available.");
                 req.authDbError = true;
-                req.authenticationFailed = true; // Critical failure
+                req.authenticationFailed = true;
                 return next();
             }
             const [users] = await pool.execute(
@@ -241,27 +241,25 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
                         klingVideoMonthlyUsed: user.demo_kling_video_monthly_used || 0,
                         usageLastResetMonth: user.demo_usage_last_reset_month
                     };
-                    req.isDemoUser = true; // Set only if not suspended DEMO user
-                    req.authenticationFailed = false; // Explicitly set to false on success
+                    req.isDemoUser = true;
+                    req.authenticationFailed = false;
                 }
-            } else { // User NOT found (or not DEMO type)
+            } else {
                  req.authenticationFailed = true;
                  console.log(`[Demo Auth] Token ${demoUserToken} not found or not DEMO type.`);
             }
         } catch (dbError) {
             console.error("[Demo Auth DB Error]", dbError);
             req.authDbError = true;
-            req.authenticationFailed = true; // Critical failure
+            req.authenticationFailed = true;
         }
     }
-    // If no token was provided, req.authenticationAttempted remains false.
-    // This path is for Admin (no token) or public endpoints.
     next();
 }
 app.use(paidOrDemoUserAuthMiddleware);
 
 app.post('/api/auth/verify-code', async (req, res) => {
-    const { code } = req.body; // code here is the username for DEMO/PAID, or admin code
+    const { code } = req.body;
 
     if (code === LOGIN_CODE_AUTH_ADMIN) {
         if (!LOGIN_CODE_AUTH_ADMIN) return res.status(500).json({ success: false, message: "Admin login not configured." });
@@ -274,7 +272,7 @@ app.post('/api/auth/verify-code', async (req, res) => {
     try {
         const [users] = await pool.execute(
             'SELECT id, username, user_type, status, password_hash, demo_flux_max_monthly_used, demo_flux_pro_monthly_used, demo_imagen_monthly_used, demo_tts_monthly_chars_used, demo_flux_ultra_monthly_used, demo_kling_video_monthly_used, demo_usage_last_reset_month, paid_flux_pro_monthly_used, paid_flux_max_monthly_used, paid_flux_ultra_monthly_used, paid_kling_video_monthly_used, paid_imagen3_monthly_used, paid_usage_last_reset_month FROM users WHERE username = ?',
-            [code] // 'code' is the username for DEMO/PAID users
+            [code]
         );
 
         if (users.length === 0) {
@@ -323,12 +321,12 @@ app.post('/api/auth/verify-code', async (req, res) => {
 
                 return res.json({
                     success: true, isPaidUser: true, username: user.username,
-                    paidUserToken: user.username, // Using username as token for paid users
+                    paidUserToken: user.username, // Using username as token for simplicity
                     subscriptionEndDate: subEndDate.toISOString(),
                     limits: {
                         imagen3ImagesLeft: PAID_USER_MAX_LIMITS_CONFIG.IMAGEN3_MONTHLY_MAX_IMAGES - imagen3Used,
                         imagen3MaxImages: PAID_USER_MAX_LIMITS_CONFIG.IMAGEN3_MONTHLY_MAX_IMAGES,
-                        openaiTtsCharsLeft: PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL, 
+                        openaiTtsCharsLeft: PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL, // For paid, this is a per-use limit on proxy, not monthly.
                         openaiTtsMaxChars: PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL,
                         fluxKontextMaxMonthlyUsesLeft: PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_MAX_MONTHLY_MAX_USES - fluxMaxUsed,
                         fluxKontextMaxMonthlyMaxUses: PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_MAX_MONTHLY_MAX_USES,
@@ -336,7 +334,7 @@ app.post('/api/auth/verify-code', async (req, res) => {
                         fluxKontextProMonthlyMaxUses: PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_PRO_MONTHLY_MAX_USES,
                         fluxUltraMonthlyImagesLeft: PAID_USER_MAX_LIMITS_CONFIG.FLUX_ULTRA_MONTHLY_MAX_IMAGES - fluxUltraUsed,
                         fluxUltraMonthlyMaxImages: PAID_USER_MAX_LIMITS_CONFIG.FLUX_ULTRA_MONTHLY_MAX_IMAGES,
-                        klingVideoMonthlyUsed: klingVideoUsed,
+                        klingVideoMonthlyUsed: klingVideoUsed, // Send current usage for the month
                         klingVideoMonthlyMaxGenerations: PAID_USER_MAX_LIMITS_CONFIG.KLING_VIDEO_MONTHLY_MAX_GENERATIONS,
                     }
                 });
@@ -381,12 +379,12 @@ app.post('/api/auth/verify-code', async (req, res) => {
                 openaiTtsMonthlyMaxChars: DEMO_USER_MONTHLY_LIMITS.OPENAI_TTS_MONTHLY_CHARS,
                 fluxUltraMonthlyImagesLeft: Math.max(0, DEMO_USER_MONTHLY_LIMITS.FLUX_ULTRA_MONTHLY_IMAGES - fluxUltraUsed),
                 fluxUltraMonthlyMaxImages: DEMO_USER_MONTHLY_LIMITS.FLUX_ULTRA_MONTHLY_IMAGES,
-                klingVideoMonthlyUsed: klingVideoUsed,
+                klingVideoMonthlyUsed: klingVideoUsed, // Send current usage for the month
                 klingVideoMonthlyMaxUses: DEMO_USER_MONTHLY_LIMITS.KLING_VIDEO_MONTHLY_MAX_USES,
             };
             return res.json({
                 success: true, isDemoUser: true, username: user.username,
-                demoUserToken: user.username, // Using username as token for demo users
+                demoUserToken: user.username, // Using username as token for simplicity
                 limits
             });
         } else {
@@ -408,18 +406,15 @@ if (GEMINI_API_KEY_PROXY) {
 } else console.warn("PROXY WARNING: GEMINI_API_KEY missing.");
 
 app.post('/api/gemini/chat/stream', async (req, res) => {
-    // 1. Handle DB errors from middleware first
     if (req.authDbError) {
         console.log(`[Gemini Stream] Access denied due to database error during authentication (IP: ${getClientIp(req)}).`);
         return res.status(503).json({ error: "Service temporarily unavailable due to a database issue during authentication. Please try again later." });
     }
-
-    // 2. Handle general authentication failures (invalid token, suspended, etc.)
     if (req.authenticationAttempted && req.authenticationFailed) {
         console.log(`[Gemini Stream] Access denied due to failed authentication (IP: ${getClientIp(req)}).`);
         return res.status(403).json({ error: "Access Denied. Your session token is invalid, expired, account suspended, or access restricted." });
     }
-    
+
     const isActualAdmin = !req.isPaidUser && !req.isDemoUser && !req.authenticationAttempted;
     const isAuthenticUser = req.isPaidUser || req.isDemoUser;
 
@@ -427,7 +422,7 @@ app.post('/api/gemini/chat/stream', async (req, res) => {
         console.log(`[Gemini Stream] Unauthenticated access attempt (IP: ${getClientIp(req)}). No valid user session or admin privileges.`);
         return res.status(401).json({ error: "Unauthorized access. Please log in." });
     }
-    
+
     if (isActualAdmin) console.log(`[Gemini Stream] Admin access validated (IP: ${getClientIp(req)}).`);
     else if (req.isPaidUser) console.log(`[Gemini Stream] Paid user ${req.paidUser.username} validated.`);
     else if (req.isDemoUser) console.log(`[Gemini Stream] Demo user ${req.demoUser.username} validated.`);
@@ -492,7 +487,7 @@ app.post('/api/gemini/image/generate', async (req, res) => {
         console.log(`[Imagen Gen] Auth failed (IP: ${getClientIp(req)}).`);
         return res.status(403).json({ error: "Access Denied (auth failed)." });
     }
-    
+
     const isActualAdmin = !req.isPaidUser && !req.isDemoUser && !req.authenticationAttempted;
     const isAuthenticUser = req.isPaidUser || req.isDemoUser;
 
@@ -580,12 +575,12 @@ if (OPENAI_API_KEY) console.log("OpenAI API Key found."); else console.warn("PRO
 app.post('/api/openai/chat/stream', async (req, res) => {
     if (req.authDbError) return res.status(503).json({ error: "Service temporarily unavailable (DB auth)." });
     if (req.authenticationAttempted && req.authenticationFailed) return res.status(403).json({ error: "Access Denied (auth failed)." });
-    
+
     const isActualAdmin = !req.isPaidUser && !req.isDemoUser && !req.authenticationAttempted;
     const isAuthenticUser = req.isPaidUser || req.isDemoUser;
 
     if (!isAuthenticUser && !isActualAdmin) return res.status(401).json({ error: "Unauthorized access." });
-    
+
     if (isActualAdmin) console.log(`[OpenAI Chat Stream Proxy] Admin access granted (IP: ${getClientIp(req)}).`);
     else if (req.isPaidUser) console.log(`[OpenAI Stream] Paid user ${req.paidUser.username} validated.`);
     else if (req.isDemoUser) console.log(`[OpenAI Stream] Demo user ${req.demoUser.username} validated.`);
@@ -622,7 +617,7 @@ app.post('/api/openai/chat/stream', async (req, res) => {
 app.post('/api/openai/tts/generate', async (req, res) => {
     if (req.authDbError) return res.status(503).json({ error: "Service temporarily unavailable (DB auth)." });
     if (req.authenticationAttempted && req.authenticationFailed) return res.status(403).json({ error: "Access Denied (auth failed)." });
-    
+
     const isActualAdmin = !req.isPaidUser && !req.isDemoUser && !req.authenticationAttempted;
     const isAuthenticUser = req.isPaidUser || req.isDemoUser;
 
@@ -650,7 +645,7 @@ app.post('/api/openai/tts/generate', async (req, res) => {
       }
     } else if (isActualAdmin) {
       console.log(`[OpenAI TTS Proxy] Admin user (IP: ${getClientIp(req)}) generating audio for ${currentChars} chars.`);
-      if (currentChars > PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL) { // Admin still has a hard cap
+      if (currentChars > PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL) {
         return res.status(413).json({ error: `Input too long for TTS. Max: ${PAID_USER_MAX_LIMITS_CONFIG.OPENAI_TTS_MAX_CHARS_TOTAL}`, limitReached: true });
       }
     }
@@ -753,7 +748,7 @@ app.post('/api/fal/image/edit/flux-kontext', async (req, res) => {
     const isFluxMax = modelIdentifier === 'fal-ai/flux-pro/kontext/max/multi';
     const num_images_requested = clientSettings.num_images || PROXY_DEFAULT_FLUX_KONTEX_SETTINGS.num_images || 1;
 
-    if (!isActualAdmin) { // Paid or Demo user, apply limits
+    if (!isActualAdmin) {
         if (isFluxMax) {
             if (!req.isPaidUser) {
                 console.log(`[Fal Flux MAX Proxy] Access DENIED. Not a paid user. User: ${req.demoUser?.username || 'None'}, IP: ${getClientIp(req)}`);
@@ -764,7 +759,7 @@ app.post('/api/fal/image/edit/flux-kontext', async (req, res) => {
             if (currentUsed + num_images_requested > PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_MAX_MONTHLY_MAX_USES) {
                 return res.status(429).json({ error: `Monthly Flux Max limit reached. Used: ${currentUsed}/${PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_MAX_MONTHLY_MAX_USES}, Requested: ${num_images_requested}`, limitReached: true });
             }
-        } else { // Flux Pro
+        } else {
             if (req.isPaidUser && req.paidUser) {
                 if (!pool) return res.status(500).json({ error: "DB not available for PAID user Flux Pro limit check." });
                 const currentUsed = req.paidUser.fluxProMonthlyUsed || 0;
@@ -824,7 +819,7 @@ app.post('/api/fal/image/edit/flux-kontext', async (req, res) => {
             } catch (dbUpdateError) {
                 console.error(`[Paid Usage Update - Flux ${isFluxMax ? 'Max' : 'Pro'}] FAILED DB update for user ${req.paidUser.username}:`, dbUpdateError);
             }
-        } else if (req.isDemoUser && req.demoUser && !isFluxMax) { // Only update for Flux Pro for demo
+        } else if (req.isDemoUser && req.demoUser && !isFluxMax) {
             try {
                 await pool.execute(`UPDATE users SET demo_flux_pro_monthly_used = demo_flux_pro_monthly_used + ? WHERE id = ?`, [num_images_requested, req.demoUser.id]);
                 console.log(`[Demo Usage Update - Flux Pro] SUCCESS: User ${req.demoUser.username} used ${num_images_requested}.`);
@@ -860,12 +855,11 @@ app.post('/api/fal/image/generate/flux-ultra', async (req, res) => {
 
     const numImagesToGenerate = Math.max(1, Math.min(4, clientSettings?.num_images || PROXY_DEFAULT_FLUX_ULTRA_SETTINGS.num_images || 1));
 
-    if (!isActualAdmin) { // Paid or Demo user, apply limits
-        if (!req.isPaidUser) { // Demo users cannot use Flux Ultra
+    if (!isActualAdmin) {
+        if (!req.isPaidUser) {
             console.log(`[Fal Flux Ultra Proxy] Access DENIED. Not a paid user. User: ${req.demoUser?.username || 'None'}, IP: ${getClientIp(req)}`);
             return res.status(403).json({ error: "Flux1.1 [Ultra] is exclusively for Paid Users." });
         }
-        // Paid user check
         if (!pool) return res.status(500).json({ error: "DB not available for PAID user Flux Ultra limit check." });
         const currentUsed = req.paidUser.fluxUltraMonthlyUsed || 0;
         if (currentUsed + numImagesToGenerate > PAID_USER_MAX_LIMITS_CONFIG.FLUX_ULTRA_MONTHLY_MAX_IMAGES) {
@@ -913,12 +907,11 @@ app.post('/api/fal/video/generate/kling', async (req, res) => {
             return res.status(400).json({ error: "Missing fields for Kling AI video generation." });
         }
 
-        if (!isActualAdmin) { // Paid or Demo user
-            if (!req.isPaidUser) { // Demo users cannot use Kling
+        if (!isActualAdmin) {
+            if (!req.isPaidUser) {
                 console.log(`[Fal Kling Video Proxy] Access DENIED. Not a paid user. User: ${req.demoUser?.username || 'None'}, IP: ${getClientIp(req)}`);
                 return res.status(403).json({ error: "Kling AI Video generation is exclusively for Paid Users." });
             }
-            // Paid user check
             if (!pool) return res.status(500).json({ error: "DB not available for PAID user Kling AI Video limit check." });
             const currentUsed = req.paidUser.klingVideoMonthlyUsed || 0;
             if (currentUsed >= PAID_USER_MAX_LIMITS_CONFIG.KLING_VIDEO_MONTHLY_MAX_GENERATIONS) {
@@ -944,7 +937,7 @@ app.post('/api/fal/video/generate/kling', async (req, res) => {
         if (!queueResult?.request_id) return res.status(500).json({ error: "Fal.ai Kling AI video submission failed (no request ID)." });
 
         if (req.isPaidUser && !isActualAdmin && req.paidUser) {
-            const currentUsedInMiddleware = req.paidUser.klingVideoMonthlyUsed; // Value before this request
+            const currentUsedInMiddleware = req.paidUser.klingVideoMonthlyUsed;
             console.log(`[Paid Usage Update - Kling Video] Attempting to increment count for user ${req.paidUser.username} (ID: ${req.paidUser.id}). Current DB value (from middleware snapshot) was: ${currentUsedInMiddleware}`);
             try {
                 const [updateResult] = await pool.execute('UPDATE users SET paid_kling_video_monthly_used = paid_kling_video_monthly_used + 1 WHERE id = ?', [req.paidUser.id]);
@@ -967,8 +960,6 @@ app.post('/api/fal/video/generate/kling', async (req, res) => {
 
 
 app.post('/api/fal/image/edit/status', async (req, res) => {
-  // This endpoint is generally public for status checks, but could be rate-limited or logged.
-  // No specific paidOrDemoUserAuthMiddleware check here, assuming it's okay for now.
   try {
     if (!FAL_KEY) return res.status(500).json({ error: "Fal.ai API Key not configured." });
     const { requestId, modelIdentifier } = req.body;
@@ -1038,9 +1029,271 @@ app.post('/api/fal/image/edit/status', async (req, res) => {
   }
 });
 
-console.log("Debug: Type of app before listen:", typeof app);
-console.log("Debug: Type of app.listen before listen:", typeof app.listen);
-console.log("Debug: Script execution reached just before app.listen call.");
+// --- Trading Pro Endpoints ---
+const ALPHA_VANTAGE_API_KEY_PROXY = process.env.ALPHA_VANTAGE_API_KEY || 'N9STQCJB0YIWCCV1'; // Fallback to user-provided key if not in .env
+if (!process.env.ALPHA_VANTAGE_API_KEY) {
+    console.warn("PROXY WARNING: ALPHA_VANTAGE_API_KEY not found in .env, using fallback N9STQCJB0YIWCCV1. This key has usage limits.");
+} else {
+    console.log("Alpha Vantage API Key (ALPHA_VANTAGE_API_KEY) found in .env.");
+}
+
+app.post('/api/alphavantage/chart-data', async (req, res) => {
+  const { symbol, market, interval, outputsize, avFunction, from_symbol, to_symbol } = req.body;
+
+  if (avFunction === 'FX_INTRADAY' || avFunction === 'FX_DAILY') {
+    console.log(`[AlphaVantage Proxy] ${avFunction} request. From: ${from_symbol}, To: ${to_symbol}, Interval: ${interval}, Outputsize: ${outputsize}`);
+  }
+
+  if (!avFunction) {
+    return res.status(400).json({ error: 'Missing required parameter: avFunction.' });
+  }
+  if (!['FX_INTRADAY', 'FX_DAILY'].includes(avFunction) && !symbol) {
+      return res.status(400).json({ error: 'Missing required parameter: symbol (for non-FX functions).' });
+  }
+  if (['DIGITAL_CURRENCY_INTRADAY', 'DIGITAL_CURRENCY_DAILY'].includes(avFunction) && !market) {
+    return res.status(400).json({ error: "Missing 'market' parameter for digital currency." });
+  }
+  if (['FX_INTRADAY', 'FX_DAILY'].includes(avFunction) && (!from_symbol || !to_symbol)) {
+      return res.status(400).json({ error: "Missing 'from_symbol' or 'to_symbol' for FX functions."});
+  }
+
+  let apiUrl = '';
+  let dataKey = '';
+  let queryParams = new URLSearchParams({ apikey: ALPHA_VANTAGE_API_KEY_PROXY });
+
+  switch (avFunction) {
+    case 'TIME_SERIES_INTRADAY':
+      queryParams.set('function', 'TIME_SERIES_INTRADAY');
+      queryParams.set('symbol', symbol);
+      if (interval) queryParams.set('interval', interval);
+      if (outputsize) queryParams.set('outputsize', outputsize);
+      dataKey = `Time Series (${interval})`;
+      break;
+    case 'DIGITAL_CURRENCY_INTRADAY':
+      queryParams.set('function', 'DIGITAL_CURRENCY_INTRADAY');
+      queryParams.set('symbol', symbol);
+      queryParams.set('market', market);
+      if (interval) queryParams.set('interval', interval);
+      if (outputsize) queryParams.set('outputsize', outputsize);
+      dataKey = `Time Series Crypto (${interval})`;
+      break;
+    case 'FX_INTRADAY':
+      queryParams.set('function', 'FX_INTRADAY');
+      queryParams.set('from_symbol', from_symbol);
+      queryParams.set('to_symbol', to_symbol);
+      if (interval) queryParams.set('interval', interval);
+      if (outputsize) queryParams.set('outputsize', outputsize);
+      dataKey = `Time Series FX (${interval})`;
+      break;
+    case 'FX_DAILY':
+      queryParams.set('function', 'FX_DAILY');
+      queryParams.set('from_symbol', from_symbol);
+      queryParams.set('to_symbol', to_symbol);
+      if (outputsize) queryParams.set('outputsize', outputsize); // outputsize is valid for daily
+      dataKey = 'Time Series FX (Daily)';
+      break;
+    case 'DIGITAL_CURRENCY_DAILY':
+      queryParams.set('function', 'DIGITAL_CURRENCY_DAILY');
+      queryParams.set('symbol', symbol);
+      queryParams.set('market', market);
+      dataKey = 'Time Series (Digital Currency Daily)';
+      break;
+    default:
+      return res.status(400).json({ error: 'Invalid avFunction specified.' });
+  }
+  
+  apiUrl = `https://www.alphavantage.co/query?${queryParams.toString()}`;
+  console.log(`[AlphaVantage Proxy] Fetching URL: ${apiUrl}`);
+
+  try {
+    const alphaResponse = await fetch(apiUrl);
+
+    if (!alphaResponse.ok) {
+        const errorText = await alphaResponse.text().catch(() => "Could not retrieve error text from Alpha Vantage.");
+        console.error(`[AlphaVantage Proxy] Alpha Vantage HTTP Error: ${alphaResponse.status} ${alphaResponse.statusText}. Response: ${errorText.substring(0, 200)}`);
+        return res.status(alphaResponse.status).json({ error: `Alpha Vantage request failed: ${alphaResponse.statusText}. Details: ${errorText.substring(0,100)}...` });
+    }
+
+    const contentType = alphaResponse.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+        const responseText = await alphaResponse.text().catch(() => "Could not retrieve non-JSON response text from Alpha Vantage.");
+        console.warn(`[AlphaVantage Proxy] Unexpected content-type from Alpha Vantage: ${contentType}. Response (first 200 chars): ${responseText.substring(0, 200)}`);
+        return res.status(502).json({ error: `Alpha Vantage returned non-JSON response. Content-Type: ${contentType}. Ensure API key is valid and has not exceeded limits.` });
+    }
+
+    const alphaData = await alphaResponse.json(); 
+
+    if (alphaData['Error Message']) {
+      console.warn(`[AlphaVantage Proxy] Error Message from Alpha Vantage: ${alphaData['Error Message']}`);
+      return res.status(500).json({ error: `Alpha Vantage Error: ${alphaData['Error Message']}` });
+    }
+    if (alphaData['Note'] && alphaData['Note'].includes('API call frequency')) {
+        console.warn(`[AlphaVantage Proxy] API Limit Note from Alpha Vantage: ${alphaData['Note']}`);
+        return res.status(429).json({ error: `Alpha Vantage API limit reached: ${alphaData['Note']}` });
+    }
+
+    const timeSeries = alphaData[dataKey];
+    if (!timeSeries) {
+      console.warn(`[AlphaVantage Proxy] No time series data found for ${symbol || (from_symbol+'/'+to_symbol)} with key '${dataKey}'. Raw response keys: ${Object.keys(alphaData).join(', ')}. Full response: ${JSON.stringify(alphaData).substring(0, 300)}`);
+      return res.status(404).json({ error: `No time series data found for ${symbol || (from_symbol+'/'+to_symbol)} using key '${dataKey}'. Ensure API key is valid. Response (partial): ${JSON.stringify(alphaData).substring(0,100)}...` });
+    }
+    res.json({ data: timeSeries });
+  } catch (error) {
+    console.error("[Alpha Vantage Proxy Error] Catch block:", error);
+    if (!res.headersSent) {
+        res.status(500).json({ error: `Proxy error fetching chart data: ${error.message}` });
+    } else {
+        console.error("[Alpha Vantage Proxy Error] Headers already sent, cannot send JSON error response.");
+    }
+  }
+});
+
+app.post('/api/gemini/trading-analysis', async (req, res) => {
+    if (req.authDbError) {
+        console.log(`[Trading Analysis] Access denied due to database error during authentication (IP: ${getClientIp(req)}).`);
+        return res.status(503).json({ error: "Service temporarily unavailable (DB auth)." });
+    }
+    if (req.authenticationAttempted && req.authenticationFailed) {
+        console.log(`[Trading Analysis] Access denied due to failed authentication (IP: ${getClientIp(req)}).`);
+        return res.status(403).json({ error: "Access Denied (auth failed)." });
+    }
+
+    const isActualAdmin = !req.isPaidUser && !req.isDemoUser && !req.authenticationAttempted;
+    const isAuthenticUser = req.isPaidUser || req.isDemoUser;
+
+    if (!isAuthenticUser && !isActualAdmin) {
+        console.log(`[Trading Analysis] Unauthenticated access attempt (IP: ${getClientIp(req)}).`);
+        return res.status(401).json({ error: "Unauthorized access." });
+    }
+
+    if (isActualAdmin) console.log(`[Trading Analysis] Admin access validated (IP: ${getClientIp(req)}).`);
+    else if (req.isPaidUser) console.log(`[Trading Analysis] Paid user ${req.paidUser.username} validated.`);
+    else if (req.isDemoUser) console.log(`[Trading Analysis] Demo user ${req.demoUser.username} validated.`);
+
+
+    if (!ai) return res.status(500).json({ error: "Google GenAI SDK not initialized for Trading Analysis." });
+    const { prompt, chartImageBase64, pairLabel } = req.body;
+
+    if (!prompt || !chartImageBase64 || !pairLabel) {
+        return res.status(400).json({ error: "Missing fields: prompt, chartImageBase64, or pairLabel required for trading analysis." });
+    }
+
+    try {
+        const imagePart = {
+            inlineData: { mimeType: 'image/png', data: chartImageBase64 },
+        };
+        const textPart = { text: prompt };
+        const contents = { parts: [textPart, imagePart] };
+
+        const geminiResponse = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-preview-04-17',
+            contents: contents,
+            config: {
+                tools: [{ googleSearch: {} }],
+                // responseMimeType: "application/json", // Removed as per Gemini guidelines for tool use
+            }
+        });
+
+        let analysisText = "Analysis text not available.";
+        let trendPredictions = null;
+        let groundingSources = [];
+        
+        const responseTextFromGemini = geminiResponse.text;
+
+        if (responseTextFromGemini) {
+            let rawText = responseTextFromGemini.trim();
+            let jsonContentString = "";
+            let textBeforeJson = "";
+            let textAfterJson = "";
+
+            const jsonStartMarker = "```json";
+            const jsonEndMarker = "```";
+
+            const startIndex = rawText.indexOf(jsonStartMarker);
+
+            if (startIndex !== -1) {
+                const jsonBlockStartIndex = startIndex + jsonStartMarker.length;
+                const endIndex = rawText.indexOf(jsonEndMarker, jsonBlockStartIndex);
+
+                if (endIndex !== -1) {
+                    jsonContentString = rawText.substring(jsonBlockStartIndex, endIndex).trim();
+                    textBeforeJson = rawText.substring(0, startIndex).trim();
+                    textAfterJson = rawText.substring(endIndex + jsonEndMarker.length).trim();
+
+                    try {
+                        const parsedData = JSON.parse(jsonContentString);
+                        
+                        if (parsedData.trend_prediction) {
+                            const { up_percentage, down_percentage, sideways_percentage } = parsedData.trend_prediction;
+                            if (typeof up_percentage === 'number' && typeof down_percentage === 'number' && typeof sideways_percentage === 'number') {
+                                trendPredictions = { up_percentage, down_percentage, sideways_percentage };
+                                let sum = up_percentage + down_percentage + sideways_percentage;
+                                if (sum > 0 && Math.abs(sum - 100) <= 5) { // Sum is positive and close to 100
+                                    if (sum !== 100) {
+                                         console.warn(`[Trading Analysis Proxy] Normalizing trend prediction percentages. Original sum: ${sum}, Original values:`, JSON.stringify(trendPredictions));
+                                         trendPredictions.up_percentage = Math.round((up_percentage / sum) * 100);
+                                         trendPredictions.down_percentage = Math.round((down_percentage / sum) * 100);
+                                         trendPredictions.sideways_percentage = 100 - trendPredictions.up_percentage - trendPredictions.down_percentage;
+                                    }
+                                } else { 
+                                    console.warn(`[Trading Analysis Proxy] Invalid trend prediction sum (${sum}) or structure. Invalidating. Original:`, JSON.stringify(parsedData.trend_prediction));
+                                    trendPredictions = null;
+                                }
+                            } else { 
+                                console.warn("[Trading Analysis Proxy] Trend prediction percentages are not all numbers. Invalidating.", JSON.stringify(parsedData.trend_prediction));
+                                trendPredictions = null;
+                            }
+                        } else {
+                             trendPredictions = null;
+                        }
+
+                        let detailedAnalysisFromJson = parsedData.detailed_analysis || "";
+                        
+                        let combinedAnalysisText = textBeforeJson;
+                        if (detailedAnalysisFromJson) {
+                            if (combinedAnalysisText.trim()) combinedAnalysisText += "\n\n";
+                            combinedAnalysisText += detailedAnalysisFromJson.trim();
+                        }
+                        if (textAfterJson) {
+                            if (combinedAnalysisText.trim()) combinedAnalysisText += "\n\n";
+                            combinedAnalysisText += textAfterJson.trim();
+                        }
+                        analysisText = combinedAnalysisText.trim() || rawText;
+
+                    } catch (e) {
+                        console.error("[Trading Analysis Proxy] Failed to parse extracted JSON:", e, "Extracted JSON string:", jsonContentString, "Full raw text (first 500 chars):", rawText.substring(0, 500));
+                        analysisText = rawText; // Fallback to the full raw text
+                        trendPredictions = null;
+                    }
+                } else {
+                    console.warn("[Trading Analysis Proxy] Found JSON start marker but no end marker. Treating entire response as text.");
+                    analysisText = rawText;
+                }
+            } else {
+                console.warn("[Trading Analysis Proxy] No JSON block (```json ... ```) found in Gemini response. Treating entire response as text.");
+                analysisText = rawText;
+            }
+        }
+
+        if (geminiResponse.candidates?.[0]?.groundingMetadata?.groundingChunks) {
+            groundingSources = geminiResponse.candidates[0].groundingMetadata.groundingChunks
+                .filter(gc => gc.web?.uri)
+                .map(gc => ({
+                    uri: gc.web.uri,
+                    title: gc.web.title || gc.web.uri
+                }));
+        }
+
+        res.json({ analysisText, trendPredictions, groundingSources });
+
+    } catch (error) {
+        console.error("[Gemini Trading Analysis Proxy Error]", error);
+        const errorMessage = String(error.statusInfo?.message || error.message || "Gemini trading analysis failed due to an internal server error.");
+        const errorStatus = error.status || 500;
+        res.status(errorStatus).json({ error: errorMessage, analysisText: null, trendPredictions: null, groundingSources: [] });
+    }
+});
+
 
 app.listen(port, () => {
   console.log(`AI Chat Proxy Server listening at http://localhost:${port}`);
@@ -1050,7 +1303,6 @@ app.listen(port, () => {
   if (!pool) console.error("WARNING: MySQL connection pool IS NOT available. DB operations will fail.");
 });
 
-// Basic Error Handling Middleware (optional, Express has a default one)
 app.use((err, req, res, next) => {
     console.error("[Unhandled Error Middleware]", err.stack);
     if (!res.headersSent) {
