@@ -2,13 +2,13 @@
 import React, { useEffect, useRef, useImperativeHandle, forwardRef, useState, useLayoutEffect, useContext } from 'react';
 import Chart from "chart.js/auto"; // This should handle Colors and core components
 import 'chartjs-adapter-date-fns'; 
-// Import directly from the source ESM index file within the package
+// Import directly from the library using the import map alias
 import {
   CandlestickController,
   CandlestickElement,
   OhlcController,
   OhlcElement
-} from 'chart.js-chart-financial/src/index.esm.js'; // Target specific ESM entry
+} from 'chart.js-chart-financial'; 
 
 import { AlphaVantageTimeSeries, AlphaVantageCandle, ThemeContextType, CandlestickPoint } from '../types.ts';
 import { InformationCircleIcon } from './Icons.tsx';

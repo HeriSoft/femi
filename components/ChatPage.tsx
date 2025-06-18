@@ -23,14 +23,15 @@ import { PaperAirplaneIcon, CogIcon, XMarkIcon, PromptIcon, Bars3Icon, ChatBubbl
 import { ThemeContext } from '../App.tsx'; // Import ThemeContext
 
 // Helper function to get specific default settings with correct typing
-// Assumes ALL_MODEL_DEFAULT_SETTINGS is correctly typed as ModelSpecificSettingsMap
-const getSpecificDefaultSettings = <M extends Model>(modelKey: M): ModelSpecificSettingsMap[M] => {
+// This function is now non-generic in terms of Model type for simplicity in usage.
+const getSpecificDefaultSettings = (modelKey: Model): AnyModelSettings => {
     const settings = ALL_MODEL_DEFAULT_SETTINGS[modelKey];
     if (!settings) {
         console.error(`[ChatPage] CRITICAL: Default settings for model ${modelKey} are missing from ALL_MODEL_DEFAULT_SETTINGS. This is a bug in constants.ts.`);
-        throw new Error(`Missing default settings for ${modelKey}`);
+        // Fallback to a known default, e.g., Gemini, to prevent runtime errors if exhaustive check fails
+        return ALL_MODEL_DEFAULT_SETTINGS[Model.GEMINI] as ModelSettings;
     }
-    return settings as ModelSpecificSettingsMap[M]; // Explicit cast to satisfy potential strict inference issues
+    return settings; // settings is already of type AnyModelSettings effectively due to ALL_MODEL_DEFAULT_SETTINGS structure
 };
 
 
@@ -40,19 +41,18 @@ const mergeSettings = (target: AllModelSettings, source: Partial<AllModelSetting
   for (const keyString in source) {
     if (Object.prototype.hasOwnProperty.call(source, keyString)) {
       const modelKey = keyString as Model;
-      if (Object.values(Model).includes(modelKey)) { // Ensure modelKey is a valid Model enum member
+      if (Object.values(Model).includes(modelKey)) { 
 
-        const sourceSettingsPartialForModel = source[modelKey]; // This is Partial<ModelSpecificSettingsMap[typeof modelKey]> | undefined
+        const sourceSettingsPartialForModel = source[modelKey]; 
 
         if (sourceSettingsPartialForModel) {
-          const baseSettingsForModel: ModelSpecificSettingsMap[typeof modelKey] =
+          const baseSettingsForModel: AnyModelSettings =
             target[modelKey] || getSpecificDefaultSettings(modelKey);
 
-          // Perform the merge with casts for spread operations, assuming modelKey correctly identifies the type
           output[modelKey] = {
-            ...(baseSettingsForModel as any),
+            ...(baseSettingsForModel as any), // Using as any for spread, common pattern for union spreads
             ...(sourceSettingsPartialForModel as any),
-          } as ModelSpecificSettingsMap[typeof modelKey]; // Cast the result back to the specific settings type
+          } as AnyModelSettings; // Cast the result back to AnyModelSettings
         }
       }
     }
@@ -241,7 +241,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       const storedSettings = localStorage.getItem(LOCAL_STORAGE_SETTINGS_KEY);
       const completeDefaults: AllModelSettings = {};
       (Object.values(Model) as Model[]).forEach(modelKey => {
-          completeDefaults[modelKey] = { ...getSpecificDefaultSettings(modelKey) };
+          completeDefaults[modelKey] = getSpecificDefaultSettings(modelKey); // No spread here
       });
 
       if (storedSettings) {
@@ -283,64 +283,61 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       console.error("Error loading settings from localStorage:", error);
        const fallbackSettings: AllModelSettings = {};
         (Object.values(Model) as Model[]).forEach(modelKey => {
-            fallbackSettings[modelKey] = { ...getSpecificDefaultSettings(modelKey) };
+            fallbackSettings[modelKey] = getSpecificDefaultSettings(modelKey); // No spread
         });
         return fallbackSettings;
     }
   });
 
   const currentModelSettings = useMemo((): AnyModelSettings => {
-    const getTypedSpecificSettings = <M_PARAM extends Model>(modelKey: M_PARAM): ModelSpecificSettingsMap[M_PARAM] => {
-        const settingsForModelFromAllSettings: ModelSpecificSettingsMap[M_PARAM] | undefined = allSettings[modelKey] as ModelSpecificSettingsMap[M_PARAM] | undefined;
-         if (settingsForModelFromAllSettings === undefined) {
-             console.warn(`[ChatPage] Settings for model ${modelKey} were unexpectedly undefined in allSettings state. This indicates a problem with state initialization or update logic. Falling back to hard defaults for this model.`);
-             return getSpecificDefaultSettings(modelKey);
-        } else { 
-            return settingsForModelFromAllSettings;
+    const selectedModelKey: Model = selectedModel;
+
+    const getTypedSettings = <K extends Model>(modelKey: K): ModelSpecificSettingsMap[K] => {
+        const settings = allSettings[modelKey];
+        if (!settings) {
+            // This path should ideally not be hit if allSettings is always populated.
+            // Fallback to defaults for the specific modelKey.
+            return getSpecificDefaultSettings(modelKey) as ModelSpecificSettingsMap[K]; // Cast needed because getSpecificDefaultSettings returns AnyModelSettings
         }
+        return settings;
     };
 
-    let specificSettings: AnyModelSettings;
-    switch (selectedModel) {
-        case Model.GEMINI: specificSettings = getTypedSpecificSettings(Model.GEMINI); break;
-        case Model.GEMINI_ADVANCED: specificSettings = getTypedSpecificSettings(Model.GEMINI_ADVANCED); break;
-        case Model.GPT4O: specificSettings = getTypedSpecificSettings(Model.GPT4O); break;
-        case Model.GPT4O_MINI: specificSettings = getTypedSpecificSettings(Model.GPT4O_MINI); break;
-        case Model.DEEPSEEK: specificSettings = getTypedSpecificSettings(Model.DEEPSEEK); break;
-        case Model.CLAUDE: specificSettings = getTypedSpecificSettings(Model.CLAUDE); break;
-        case Model.IMAGEN3: specificSettings = getTypedSpecificSettings(Model.IMAGEN3); break;
-        case Model.OPENAI_TTS: specificSettings = getTypedSpecificSettings(Model.OPENAI_TTS); break;
-        case Model.REAL_TIME_TRANSLATION: specificSettings = getTypedSpecificSettings(Model.REAL_TIME_TRANSLATION); break;
-        case Model.AI_AGENT: specificSettings = getTypedSpecificSettings(Model.AI_AGENT); break;
-        case Model.PRIVATE: specificSettings = getTypedSpecificSettings(Model.PRIVATE); break;
-        case Model.FLUX_KONTEX: specificSettings = getTypedSpecificSettings(Model.FLUX_KONTEX); break;
-        case Model.FLUX_KONTEX_MAX_MULTI: specificSettings = getTypedSpecificSettings(Model.FLUX_KONTEX_MAX_MULTI); break;
-        case Model.FLUX_ULTRA: specificSettings = getTypedSpecificSettings(Model.FLUX_ULTRA); break;
-        case Model.KLING_VIDEO: specificSettings = getTypedSpecificSettings(Model.KLING_VIDEO); break;
-        case Model.TRADING_PRO: specificSettings = getTypedSpecificSettings(Model.TRADING_PRO); break;
-        default:
-            const _exhaustiveCheck: never = selectedModel;
-            console.error(`[ChatPage] currentModelSettings useMemo: Unhandled model ${selectedModel}.`);
-            // Fallback, though `allSettings[selectedModel]!` should ideally prevent needing getSpecificDefaultSettings here if allSettings is truly complete
-            specificSettings = allSettings[selectedModel] || getSpecificDefaultSettings(selectedModel);
-    }
+    let baseModelSettings: AnyModelSettings;
 
-    let mutableSettingsCopy = { ...specificSettings } as AnyModelSettings;
+    switch (selectedModelKey) {
+        case Model.GEMINI: baseModelSettings = getTypedSettings(Model.GEMINI); break;
+        case Model.GEMINI_ADVANCED: baseModelSettings = getTypedSettings(Model.GEMINI_ADVANCED); break;
+        case Model.GPT4O: baseModelSettings = getTypedSettings(Model.GPT4O); break;
+        case Model.GPT4O_MINI: baseModelSettings = getTypedSettings(Model.GPT4O_MINI); break;
+        case Model.DEEPSEEK: baseModelSettings = getTypedSettings(Model.DEEPSEEK); break;
+        case Model.CLAUDE: baseModelSettings = getTypedSettings(Model.CLAUDE); break;
+        case Model.IMAGEN3: baseModelSettings = getTypedSettings(Model.IMAGEN3); break;
+        case Model.OPENAI_TTS: baseModelSettings = getTypedSettings(Model.OPENAI_TTS); break;
+        case Model.REAL_TIME_TRANSLATION: baseModelSettings = getTypedSettings(Model.REAL_TIME_TRANSLATION); break;
+        case Model.AI_AGENT: baseModelSettings = getTypedSettings(Model.AI_AGENT); break;
+        case Model.PRIVATE: baseModelSettings = getTypedSettings(Model.PRIVATE); break;
+        case Model.FLUX_KONTEX: baseModelSettings = getTypedSettings(Model.FLUX_KONTEX); break;
+        case Model.FLUX_KONTEX_MAX_MULTI: baseModelSettings = getTypedSettings(Model.FLUX_KONTEX_MAX_MULTI); break;
+        case Model.FLUX_ULTRA: baseModelSettings = getTypedSettings(Model.FLUX_ULTRA); break;
+        case Model.KLING_VIDEO: baseModelSettings = getTypedSettings(Model.KLING_VIDEO); break;
+        case Model.TRADING_PRO: baseModelSettings = getTypedSettings(Model.TRADING_PRO); break;
+        default:
+            const _exhaustiveCheck: never = selectedModelKey;
+            console.error(`[ChatPage] currentModelSettings useMemo: Unhandled model ${selectedModelKey}.`);
+            baseModelSettings = getSpecificDefaultSettings(Model.GEMINI); // Fallback
+    }
+    
+    let mutableSettingsCopy = { ...baseModelSettings }; // Spread the concrete type determined by the switch
 
     const aboutMeText = userProfile?.aboutMe?.trim();
     const activePersona = activePersonaId ? personas.find(p => p.id === activePersonaId) : null;
 
-    if ('systemInstruction' in mutableSettingsCopy &&
-        (selectedModel === Model.GEMINI ||
-         selectedModel === Model.GEMINI_ADVANCED ||
-         selectedModel === Model.GPT4O ||
-         selectedModel === Model.GPT4O_MINI ||
-         selectedModel === Model.DEEPSEEK ||
-         selectedModel === Model.CLAUDE ||
-         selectedModel === Model.AI_AGENT ||
-         selectedModel === Model.PRIVATE
-        )
-       ) {
+    if ('systemInstruction' in mutableSettingsCopy && (
+        selectedModelKey === Model.GEMINI || selectedModelKey === Model.GEMINI_ADVANCED ||
+        selectedModelKey === Model.GPT4O || selectedModelKey === Model.GPT4O_MINI ||
+        selectedModelKey === Model.DEEPSEEK || selectedModelKey === Model.CLAUDE ||
+        selectedModelKey === Model.AI_AGENT || selectedModelKey === Model.PRIVATE
+    )) {
         let finalSystemInstruction = mutableSettingsCopy.systemInstruction;
         if (activePersona) {
             finalSystemInstruction = activePersona.instruction;
@@ -352,8 +349,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         }
         (mutableSettingsCopy as ModelSettings | AiAgentSettings | PrivateModeSettings).systemInstruction = finalSystemInstruction;
     }
-    return mutableSettingsCopy;
-  }, [allSettings, selectedModel, activePersonaId, personas, userProfile]) as AnyModelSettings;
+    
+    return mutableSettingsCopy as AnyModelSettings; // Ensure the return type matches the useMemo annotation
+
+  }, [allSettings, selectedModel, activePersonaId, personas, userProfile]);
 
 
   const [isLoading, setIsLoading] = useState(false);
