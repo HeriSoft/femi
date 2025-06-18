@@ -61,7 +61,7 @@ export interface ChatMessage {
   tradingAnalysis?: {
     pair: TradingPairValue;
     analysisText: string;
-    trendPredictions: { up: number; down: number; sideways: number };
+    trendPredictions: { up_percentage: number; down_percentage: number; sideways_percentage: number };
     chartImageUrl?: string; // Chart used for this analysis
   };
 }
@@ -189,7 +189,7 @@ export interface TradingProState {
   chartImageUrl: string | null; // Base64 image of the chart
   isLoadingAnalysis: boolean;
   analysisText: string | null;
-  trendPredictions: { up: number; down: number; sideways: number } | null;
+  trendPredictions: { up_percentage: number; down_percentage: number; sideways_percentage: number } | null;
   analysisError: string | null;
   groundingSources?: GroundingSource[];
   selectedPair: TradingPairValue | null; // For internal state tracking if needed
@@ -769,7 +769,7 @@ export interface AlphaVantageProxyResponse {
 
 export interface GeminiTradingAnalysisResponse {
   analysisText?: string;
-  trendPredictions?: { up: number; down: number; sideways: number };
+  trendPredictions?: { up_percentage: number; down_percentage: number; sideways_percentage: number };
   groundingSources?: GroundingSource[];
   error?: string;
 }
