@@ -10,7 +10,11 @@
     "@google/genai": "^1.0.1",
     "@google/generative-ai": "^0.24.1",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "chart.js": "^4.5.0",
+    "chartjs-adapter-date-fns": "^3.0.0",
+    "date-fns": "^3.6.0",
+    "chart.js-chart-financial": "github:chartjs/chartjs-chart-financial#v0.2.1"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",

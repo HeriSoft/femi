@@ -11,6 +11,7 @@ import NewsModal from './components/NewsModal.tsx'; // Import NewsModal
 import { NotificationProvider, useNotification } from './contexts/NotificationContext.tsx';
 import { KeyIcon } from './components/Icons.tsx';
 import { LOCAL_STORAGE_USER_PROFILE_KEY, DEFAULT_USER_LANGUAGE_PROFILE, EXP_MILESTONES_CONFIG, BADGES_CATALOG, LOCAL_STORAGE_CHAT_BACKGROUND_KEY, DEMO_CREDIT_PACKAGES, INITIAL_DEMO_USER_LIMITS, PAID_USER_LIMITS_CONFIG } from './constants.ts'; // Removed DEMO_USER_KEY
+import ErrorBoundary from './components/ErrorBoundary.tsx'; // Import ErrorBoundary
 
 export const ThemeContext = React.createContext<ThemeContextType | undefined>(undefined);
 
@@ -387,22 +388,24 @@ const App = (): JSX.Element => {
 
   return (
     <ThemeContext.Provider value={themeContextValue}>
-      <AppContent
-        currentUser={currentUser} onLogin={handleLogin} onLogout={handleLogout} isLoginModalInitiallyOpen={isLoginModalInitiallyOpen} onLoginModalOpened={onLoginModalOpened}
-        isLanguageLearningModalOpen={isLanguageLearningModalOpen} onToggleLanguageLearningModal={onToggleLanguageLearningModal}
-        isGamesModalOpen={isGamesModalOpen} onToggleGamesModal={onToggleGamesModal}
-        isVoiceAgentWidgetActive={isVoiceAgentWidgetActive} onToggleVoiceAgentWidget={onToggleVoiceAgentWidget}
-        userProfile={userProfile} onUpdateUserProfile={handleUpdateUserProfile} onAddExpWithNotification={handleAddExpWithNotification}
-        activeWebGameType={activeWebGameType} onPlayWebGame={onPlayWebGame} activeWebGameTitle={activeWebGameTitle} isWebGamePlayerModalOpen={isWebGamePlayerModalOpen} onCloseWebGamePlayerModal={onCloseWebGamePlayerModal}
-        isTienLenModalOpen={activeWebGameType === 'tien-len' && isWebGamePlayerModalOpen} onToggleTienLenModal={() => {}} // Empty func for now as it's part of WebGamePlayerModal flow
-        chatBackgroundUrl={chatBackgroundUrl} onChatBackgroundChange={handleChatBackgroundChange}
-        isAppReady={isAppReady}
-        currentUserCredits={userProfile.credits} onPurchaseCredits={handlePurchaseCredits} paypalEmail={userProfile.paypalEmail} onSavePayPalEmail={handleSavePayPalEmail}
-        userSession={userSession} onUpdateDemoLimits={updateDemoLimits}
-        isNewsModalOpen={isNewsModalOpen} 
-        onCloseNewsModal={() => setIsNewsModalOpen(false)} 
-        onToggleNewsModal={handleToggleNewsModal} // Pass handler
-      />
+      <ErrorBoundary fallbackUIMessage="A critical error occurred in the application.">
+        <AppContent
+          currentUser={currentUser} onLogin={handleLogin} onLogout={handleLogout} isLoginModalInitiallyOpen={isLoginModalInitiallyOpen} onLoginModalOpened={onLoginModalOpened}
+          isLanguageLearningModalOpen={isLanguageLearningModalOpen} onToggleLanguageLearningModal={onToggleLanguageLearningModal}
+          isGamesModalOpen={isGamesModalOpen} onToggleGamesModal={onToggleGamesModal}
+          isVoiceAgentWidgetActive={isVoiceAgentWidgetActive} onToggleVoiceAgentWidget={onToggleVoiceAgentWidget}
+          userProfile={userProfile} onUpdateUserProfile={handleUpdateUserProfile} onAddExpWithNotification={handleAddExpWithNotification}
+          activeWebGameType={activeWebGameType} onPlayWebGame={onPlayWebGame} activeWebGameTitle={activeWebGameTitle} isWebGamePlayerModalOpen={isWebGamePlayerModalOpen} onCloseWebGamePlayerModal={onCloseWebGamePlayerModal}
+          isTienLenModalOpen={activeWebGameType === 'tien-len' && isWebGamePlayerModalOpen} onToggleTienLenModal={() => {}} // Empty func for now as it's part of WebGamePlayerModal flow
+          chatBackgroundUrl={chatBackgroundUrl} onChatBackgroundChange={handleChatBackgroundChange}
+          isAppReady={isAppReady}
+          currentUserCredits={userProfile.credits} onPurchaseCredits={handlePurchaseCredits} paypalEmail={userProfile.paypalEmail} onSavePayPalEmail={handleSavePayPalEmail}
+          userSession={userSession} onUpdateDemoLimits={updateDemoLimits}
+          isNewsModalOpen={isNewsModalOpen} 
+          onCloseNewsModal={() => setIsNewsModalOpen(false)} 
+          onToggleNewsModal={handleToggleNewsModal} // Pass handler
+        />
+      </ErrorBoundary>
     </ThemeContext.Provider>
   );
 };

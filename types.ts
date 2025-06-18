@@ -1,8 +1,10 @@
+
+
 import { Chat } from '@google/genai'; // Updated import
 import React from 'react'; // Added for React.DetailedHTMLProps
 
 export enum Model {
-  GEMINI = 'Gemini (gemini-2.5-flash-preview-05-20)', // Updated model identifier
+  GEMINI = 'Gemini (gemini-2.5-flash-preview-04-17)', // Updated model identifier
   DEEPSEEK = 'Deepseek (deepseek-chat)', 
   GPT4O = 'ChatGPT (gpt-4.1)', // Changed display name and underlying model
   GPT4O_MINI = 'ChatGPT (gpt-4.1-mini)', // Updated to gpt-4.1-mini
@@ -17,6 +19,7 @@ export enum Model {
   FLUX_KONTEX_MAX_MULTI = 'Flux Kontext Max Multi-Image (fal-ai/flux-pro/kontext/max/multi)',
   FLUX_ULTRA = 'Flux1.1 [Ultra] (fal-ai/flux-pro/v1.1-ultra)', // Renamed from FLUX_DEV_IMAGE_GEN
   KLING_VIDEO = 'Kling AI Video Gen (fal-ai/kling-video/v2.1/standard/image-to-video)', // New Kling AI Video Model - Updated path
+  TRADING_PRO = 'Trading Pro (Gemini Analysis)', // New Trading Pro Model
 }
 
 export interface ChatMessage {
@@ -53,6 +56,14 @@ export interface ChatMessage {
   isVideoQuery?: boolean; // To flag user messages that are video generation prompts (e.g., Kling)
   videoUrl?: string; // For AI messages with generated video URL
   // videoMimeType for ChatMessage is already defined above for private mode, can be reused for Kling.
+
+  // Fields for Trading Pro (if we decide to log analysis as a message, unlikely given dedicated view)
+  tradingAnalysis?: {
+    pair: TradingPairValue;
+    analysisText: string;
+    trendPredictions: { up: number; down: number; sideways: number };
+    chartImageUrl?: string; // Chart used for this analysis
+  };
 }
 
 export interface GroundingSource {
@@ -136,6 +147,60 @@ export interface KlingAiSettings {
   cfg_scale?: number; // Default: 0.5
 }
 
+// --- Trading Pro Types ---
+export type TradingPairValue = 'XAUUSD' | 'BTCUSD'; // Add more like 'EURUSD', 'GBPUSD' etc.
+export interface TradingPair {
+  value: TradingPairValue;
+  label: string; // e.g., "XAU/USD (Gold)"
+  alphaVantageFunction: 'TIME_SERIES_INTRADAY' | 'DIGITAL_CURRENCY_INTRADAY' | 'FX_INTRADAY' | 'FX_DAILY' | 'DIGITAL_CURRENCY_DAILY';
+  alphaVantageSymbol?: string; // For stocks (TIME_SERIES_INTRADAY) & crypto (DIGITAL_CURRENCY_INTRADAY/DAILY)
+  alphaVantageMarket?: string; // e.g., "USD" for crypto
+  from_symbol?: string; // For FX_INTRADAY / FX_DAILY
+  to_symbol?: string; // For FX_INTRADAY / FX_DAILY
+  interval?: '1min' | '5min' | '15min' | '30min' | '60min'; // Optional, not used for daily
+  outputsize?: 'compact' | 'full'; // Optional, default to compact if not specified or for daily
+}
+
+export interface AlphaVantageCandle {
+  '1. open': string;
+  '2. high': string;
+  '3. low': string;
+  '4. close': string;
+  '5. volume': string;
+}
+export interface AlphaVantageTimeSeries {
+  [dateTime: string]: AlphaVantageCandle;
+}
+
+// CandlestickPoint for TradingChart
+export interface CandlestickPoint {
+  x: number; // Typically timestamp
+  o: number; // Open
+  h: number; // High
+  l: number; // Low
+  c: number; // Close
+}
+
+
+export interface TradingProState {
+  disclaimerAgreed: boolean;
+  isLoadingChart: boolean;
+  chartData: AlphaVantageTimeSeries | null;
+  chartImageUrl: string | null; // Base64 image of the chart
+  isLoadingAnalysis: boolean;
+  analysisText: string | null;
+  trendPredictions: { up: number; down: number; sideways: number } | null;
+  analysisError: string | null;
+  groundingSources?: GroundingSource[];
+  selectedPair: TradingPairValue | null; // For internal state tracking if needed
+}
+
+export interface TradingProSettings {
+  selectedPair: TradingPairValue | null;
+  // Add other Trading Pro specific settings here if needed in the future
+}
+// --- End Trading Pro Types ---
+
 export type ModelSpecificSettingsMap = {
   [Model.GEMINI]: ModelSettings;
   [Model.GEMINI_ADVANCED]: ModelSettings;
@@ -152,6 +217,7 @@ export type ModelSpecificSettingsMap = {
   [Model.FLUX_KONTEX_MAX_MULTI]: FluxKontexSettings;
   [Model.FLUX_ULTRA]: FluxUltraSettings;
   [Model.KLING_VIDEO]: KlingAiSettings;
+  [Model.TRADING_PRO]: TradingProSettings;
 };
 
 // Explicit union of all possible model-specific settings objects
@@ -164,7 +230,8 @@ export type AnyModelSettings =
   | PrivateModeSettings
   | FluxKontexSettings
   | FluxUltraSettings
-  | KlingAiSettings;
+  | KlingAiSettings
+  | TradingProSettings;
 
 
 export type AllModelSettings = {
@@ -210,6 +277,7 @@ export interface ApiKeyStatus {
   isMultiImageEditing?: boolean; // Flag for multi-image editing models like Flux Kontext Max
   isFluxUltraImageGeneration?: boolean; // Renamed from isFluxDevImageGeneration
   isKlingVideoGeneration?: boolean; // Flag for Kling AI video generation
+  isTradingPro?: boolean; // Flag for Trading Pro model
 }
 
 export interface Persona {
@@ -691,4 +759,17 @@ export interface FalStatusProxyResponse {
   error?: string;
   message?: string; 
   rawResult?: any; 
+}
+
+// Trading Pro API Response Types (from your new proxy endpoints)
+export interface AlphaVantageProxyResponse {
+  data?: AlphaVantageTimeSeries;
+  error?: string;
+}
+
+export interface GeminiTradingAnalysisResponse {
+  analysisText?: string;
+  trendPredictions?: { up: number; down: number; sideways: number };
+  groundingSources?: GroundingSource[];
+  error?: string;
 }
