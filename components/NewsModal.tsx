@@ -51,7 +51,7 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
       >
         <div className="flex justify-between items-center mb-4 pb-3 border-b border-secondary dark:border-neutral-darkest">
           <h2 id="news-modal-title" className="text-xl sm:text-2xl font-semibold text-primary dark:text-primary-light flex items-center">
-            <MegaphoneIcon className="w-7 h-7 mr-2" /> Version 1.5 - Feature Comparison
+            <MegaphoneIcon className="w-7 h-7 mr-2" /> Version 1.6 - Feature Comparison
           </h2>
           <button
             onClick={onClose}
@@ -64,7 +64,7 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
 
         <div className="overflow-y-auto flex-grow space-y-4 text-sm text-neutral-700 dark:text-neutral-200 pr-1">
           <p className="mb-4 text-neutral-600 dark:text-neutral-300">
-            Here's a summary of feature access for different user types. For DEMO access, please use a designated DEMO username (e.g., "guest_demo").
+            Change logs: Errors UX/UI fixed
           </p>
           
           <div className="overflow-x-auto">

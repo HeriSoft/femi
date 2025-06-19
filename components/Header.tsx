@@ -1,5 +1,5 @@
 
-import React, { useContext, useState, useRef, useEffect } from 'react';
+import React, { useContext, useState, useRef, useEffect, useCallback } from 'react';
 import { ThemeContext } from '../App.tsx';
 import { ThemeContextType, UserGlobalProfile, LoginDeviceLog, CreditPackage, HeaderProps } from '../types.ts'; 
 import { SunIcon, MoonIcon, BellIcon, UserCircleIcon as AvatarIcon, KeyIcon, XMarkIcon, AcademicCapIcon, PuzzlePieceIcon, UserCogIcon, ComputerDesktopIcon, IdentificationIcon, ChatBubbleLeftEllipsisIcon, MegaphoneIcon } from './Icons.tsx'; // Added MegaphoneIcon
@@ -91,7 +91,7 @@ const Header: React.FC<HeaderProps> = ({
     setLoginCodeInput('');
   };
 
-  const recordLoginDevice = () => {
+  const recordLoginDevice = useCallback(() => {
     try {
       const deviceLogsString = localStorage.getItem(LOCAL_STORAGE_DEVICE_LOGS_KEY);
       let deviceLogs: LoginDeviceLog[] = deviceLogsString ? JSON.parse(deviceLogsString) : [];
@@ -110,7 +110,14 @@ const Header: React.FC<HeaderProps> = ({
       console.error("Error recording login device:", error);
       addNotification("Could not record login device information.", "error", (error as Error).message);
     }
-  };
+  }, [addNotification]);
+
+  useEffect(() => {
+    if (currentUser) { // Assuming currentUser being truthy means login was successful
+      recordLoginDevice();
+    }
+  }, [currentUser, recordLoginDevice]);
+
 
   const handleLoginSubmit = async () => {
     if (!loginCodeInput.trim()) {

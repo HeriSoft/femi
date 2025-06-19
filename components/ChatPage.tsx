@@ -2647,18 +2647,18 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   }, [currentSearchResultIndex, searchResults, isSearchActive]);
 
   const handleScroll = useCallback(() => {
-    if (chatContainerRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
-      const atBottomThreshold = 1;
-      const isAtBottom = scrollHeight - scrollTop <= clientHeight + atBottomThreshold;
-
-      if (isAtBottom) {
-        if (showScrollToBottomButton) setShowScrollToBottomButton(false);
-      } else {
-        if (!showScrollToBottomButton) setShowScrollToBottomButton(true);
-      }
+    const chatDiv = chatContainerRef.current;
+    if (chatDiv) {
+      const { scrollTop, scrollHeight, clientHeight } = chatDiv;
+      // Show button if user has scrolled up more than 20% of the visible height from the bottom
+      const showButtonThreshold = clientHeight * 0.20; 
+      const scrolledUpEnough = (scrollHeight - scrollTop - clientHeight) > showButtonThreshold;
+      
+      // Only show the button if there's actually content to scroll to (scrollHeight > clientHeight)
+      // and the user has scrolled up enough.
+      setShowScrollToBottomButton(scrolledUpEnough && scrollHeight > clientHeight);
     }
-  }, [showScrollToBottomButton]);
+  }, []); // setShowScrollToBottomButton is stable from useState
 
   useEffect(() => {
     const chatDiv = chatContainerRef.current;
