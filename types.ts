@@ -4,7 +4,7 @@ import { Chat } from '@google/genai'; // Updated import
 import React from 'react'; // Added for React.DetailedHTMLProps
 
 export enum Model {
-  GEMINI = 'Gemini (gemini-2.5-flash-preview-04-17)', // Updated model identifier
+  GEMINI = 'Gemini (gemini-2.5-flash-preview-05-20)', // Updated model identifier
   DEEPSEEK = 'Deepseek (deepseek-chat)', 
   GPT4O = 'ChatGPT (gpt-4.1)', // Changed display name and underlying model
   GPT4O_MINI = 'ChatGPT (gpt-4.1-mini)', // Updated to gpt-4.1-mini
