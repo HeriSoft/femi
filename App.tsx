@@ -93,7 +93,7 @@ const AppContent: React.FC<AppContentProps> = ({
   const elevenLabsAgentId = "agent_01jwhhnh4recyazyeabp4sa3ne";
 
   return (
-    <div className="flex flex-col h-screen bg-secondary-light dark:bg-neutral-dark transition-colors duration-300 overflow-hidden">
+    <div className="flex flex-col h-full bg-secondary-light dark:bg-neutral-dark transition-colors duration-300 overflow-hidden">
       <Header
         key={currentUser ? 'header-logged-in' : 'header-logged-out'} 
         currentUser={currentUser}
