@@ -18,11 +18,12 @@
 *   Change Theme, Avatar
 *   Optimize UX/UI design for a good experience on Windows / Mobile
 *   AI agent with Voice chat by Elevenlabs
-*   AI agent sets a plan for an individual plan, work on request, advice ... etc
+*   AI agent Smart - The assistant is smart by Google
 *   Payment & Credit system
 *   Flux Kontext Pro/Max Multi Editing Images **( NEW HOT )**
 *   Flux 1.1 Ultra - Ultra 2K megapixel quality - Image Generate **( NEW HOT )**
 *   Kling AI 2.1 - High-quality video generation **( NEW HOT )**
+*   Trading Pro - Help traders save more time in technical analysis and profit optimization **( NEW HOT )**
 
 ## 🛠️ Tech Stack
 
