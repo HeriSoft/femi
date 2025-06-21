@@ -69,7 +69,7 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
               <li>Improved User Experience (UX) and User Interface (UI) for error display and handling throughout the application.</li>
               <li>Enhanced stability for Trading Pro analysis, especially for XAU/USD and BTC/USD when chart images are unavailable.</li>
               <li>Adjusted scroll-down button visibility in chat for better user experience.</li>
-              <li>Upgrade for AI-Agent Smart (AAS) - Location check-in</li>
+              <li>Upgrade for AI-Agent Smart (AAS) - Location Search</li>
             </ul>
           </div>
 
