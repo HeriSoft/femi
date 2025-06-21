@@ -40,18 +40,18 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
   return (
     <div
       className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[90] p-4 transition-opacity duration-300"
-      onClick={onClose} 
+      onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-labelledby="news-modal-title"
     >
       <div
         className="bg-neutral-light dark:bg-neutral-darker rounded-lg shadow-xl p-5 w-full max-w-md md:max-w-2xl max-h-[90vh] flex flex-col transform transition-all duration-300 scale-100 opacity-100"
-        onClick={(e) => e.stopPropagation()} 
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-4 pb-3 border-b border-secondary dark:border-neutral-darkest">
           <h2 id="news-modal-title" className="text-xl sm:text-2xl font-semibold text-primary dark:text-primary-light flex items-center">
-            <MegaphoneIcon className="w-7 h-7 mr-2" /> Version 1.6 - Feature Comparison
+            <MegaphoneIcon className="w-7 h-7 mr-2" /> Version 1.7 - Updates & Features
           </h2>
           <button
             onClick={onClose}
@@ -63,10 +63,17 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
         </div>
 
         <div className="overflow-y-auto flex-grow space-y-4 text-sm text-neutral-700 dark:text-neutral-200 pr-1">
-          <p className="mb-4 text-neutral-600 dark:text-neutral-300">
-            Change logs: Errors UX/UI fixed
-          </p>
-          
+          <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-md">
+            <h3 className="text-lg font-semibold text-blue-700 dark:text-blue-300 mb-2">Change Logs for v1.7:</h3>
+            <ul className="list-disc list-inside space-y-1 text-blue-600 dark:text-blue-200">
+              <li>Improved User Experience (UX) and User Interface (UI) for error display and handling throughout the application.</li>
+              <li>Enhanced stability for Trading Pro analysis, especially for XAU/USD and BTC/USD when chart images are unavailable.</li>
+              <li>Adjusted scroll-down button visibility in chat for better user experience.</li>
+              <li>Upgrade for AI-Agent Smart (AAS) - Location check-in</li>
+            </ul>
+          </div>
+
+          <h3 className="text-xl font-semibold text-neutral-darker dark:text-secondary-light mb-3 mt-6">Feature Comparison:</h3>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[500px] text-left border-collapse">
               <thead className="border-b-2 border-secondary dark:border-neutral-darkest">
