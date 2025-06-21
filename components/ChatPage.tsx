@@ -5,7 +5,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo, useContext } 
 // Update to .ts/.tsx extensions
 import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType, UserGlobalProfile, AiAgentSmartSettings, PrivateModeSettings, FluxKontexSettings, NotificationType, UserSessionState, DemoUserLimits, PaidUserLimits, SingleImageData, MultiImageData, FluxKontexAspectRatio, EditImageWithFluxKontexParams, FluxUltraSettings, GenerateImageWithFluxUltraParams, FluxUltraAspectRatio, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, GenerateVideoWithKlingParams, AnyModelSettings, ModelSpecificSettingsMap, TradingProSettings, TradingProState, TradingPair, GeminiTradingAnalysisResponse } from '../types.ts'; // Removed AlphaVantageProxyResponse
 import type { Content } from '@google/genai'; // For constructing Gemini history
-import { ALL_MODEL_DEFAULT_SETTINGS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY, TRANSLATION_TARGET_LANGUAGES, MAX_SAVED_CHAT_SESSIONS, OPENAI_TTS_MAX_INPUT_LENGTH, PAID_USER_LIMITS_CONFIG, DEFAULT_FLUX_KONTEX_SETTINGS, DEFAULT_FLUX_ULTRA_SETTINGS, FLUX_ULTRA_ASPECT_RATIOS, DEFAULT_KLING_AI_SETTINGS, KLING_AI_DURATIONS, KLING_AI_ASPECT_RATIOS, TRADING_PRO_PAIRS, DEFAULT_TRADING_PRO_SETTINGS, DEFAULT_MODEL_SETTINGS } from '../constants.ts';
+import { ALL_MODEL_DEFAULT_SETTINGS, API_KEY_STATUSES_DEFINITIONS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY, TRANSLATION_TARGET_LANGUAGES, MAX_SAVED_CHAT_SESSIONS, OPENAI_TTS_MAX_INPUT_LENGTH, PAID_USER_LIMITS_CONFIG, DEFAULT_FLUX_KONTEX_SETTINGS, DEFAULT_FLUX_ULTRA_SETTINGS, FLUX_ULTRA_ASPECT_RATIOS, DEFAULT_KLING_AI_SETTINGS, KLING_AI_DURATIONS, KLING_AI_ASPECT_RATIOS, TRADING_PRO_PAIRS, DEFAULT_TRADING_PRO_SETTINGS, DEFAULT_MODEL_SETTINGS } from '../constants.ts';
 import { MessageBubble } from './MessageBubble.tsx';
 import SettingsPanel from './SettingsPanel.tsx';
 import HistoryPanel from './HistoryPanel.tsx';
@@ -505,6 +505,17 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   const gpt41ModalInteractionFlagRef = useRef(false);
   const previousModelBeforeGpt41ModalRef = useRef<Model | null>(null);
 
+  // State for Trading Pro Demo Access Modal
+  const [isTradingProCodeModalOpen, setIsTradingProCodeModalOpen] = useState(false);
+  const [tradingProAccessCodeInput, setTradingProAccessCodeInput] = useState('');
+  const [tradingProCodeError, setTradingProCodeError] = useState<string | null>(null);
+  const [demoTradingProAccessGranted, setDemoTradingProAccessGranted] = useState(false);
+  const [modelBeforeTradingProModal, setModelBeforeTradingProModal] = useState<Model | null>(null);
+  const [isTradingProCodeLoading, setIsTradingProCodeLoading] = useState(false);
+  const [pendingSessionLoadForTradingPro, setPendingSessionLoadForTradingPro] = useState<ChatSession | null>(null);
+  const prevDemoUserTokenRef = useRef<string | null | undefined>(userSession.demoUserToken);
+
+
   const clearSearch = useCallback(() => {
     setIsSearchActive(false);
     setSearchQuery('');
@@ -514,77 +525,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   }, []);
 
 
-  const apiKeyStatuses = React.useMemo((): Record<Model, ApiKeyStatus> => {
-    const isProxyExpectedToHaveKey = true;
-
-    return {
-      [Model.GEMINI]: {isSet: isProxyExpectedToHaveKey, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Gemini Flash', isMock: false, isGeminiPlatform: true},
-      [Model.GEMINI_ADVANCED]: {isSet: isProxyExpectedToHaveKey, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Gemini Advanced', isMock: false, isGeminiPlatform: true},
-      [Model.GPT4O]: {isSet: isProxyExpectedToHaveKey, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'ChatGPT (gpt-4.1)', isMock: false, isGeminiPlatform: false},
-      [Model.GPT4O_MINI]: {isSet: isProxyExpectedToHaveKey, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'ChatGPT (gpt-4.1-mini)', isMock: false, isGeminiPlatform: false},
-      [Model.DEEPSEEK]: { isSet: isProxyExpectedToHaveKey, envVarName: 'DEEPSEEK_API_KEY (on proxy)', modelName: 'Deepseek', isMock: false, isGeminiPlatform: false},
-      [Model.CLAUDE]: { isSet: true, envVarName: 'N/A (Mock)', modelName: 'Claude', isMock: true, isGeminiPlatform: false},
-      [Model.IMAGEN3]: {isSet: isProxyExpectedToHaveKey, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Imagen3 Image Gen', isMock: false, isGeminiPlatform: true, isImageGeneration: true},
-      [Model.OPENAI_TTS]: {isSet: isProxyExpectedToHaveKey, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'OpenAI TTS', isMock: false, isGeminiPlatform: false, isTextToSpeech: true },
-      [Model.REAL_TIME_TRANSLATION]: {isSet: isProxyExpectedToHaveKey, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Real-Time Translation (Gemini)', isMock: false, isGeminiPlatform: true, isRealTimeTranslation: true },
-      [Model.AI_AGENT_SMART]: {
-        isSet: isProxyExpectedToHaveKey,
-        envVarName: 'GEMINI_API_KEY (on proxy)',
-        modelName: 'AI Agent Smart (gemini-2.5-flash-preview-04-17)',
-        isMock: false,
-        isGeminiPlatform: true,
-        isAiAgentSmart: true,
-      },
-      [Model.PRIVATE]: {
-        isSet: true,
-        envVarName: 'N/A (Local)',
-        modelName: 'Private (Local Data Storage)',
-        isMock: true,
-        isGeminiPlatform: false,
-        isPrivateMode: true,
-      },
-      [Model.FLUX_KONTEX]: {
-        isSet: isProxyExpectedToHaveKey,
-        envVarName: 'FAL_KEY (on proxy)',
-        modelName: 'Flux Kontext Image Edit',
-        isMock: false,
-        isGeminiPlatform: false,
-        isImageEditing: true
-      },
-      [Model.FLUX_KONTEX_MAX_MULTI]: {
-        isSet: isProxyExpectedToHaveKey,
-        envVarName: 'FAL_KEY (on proxy)',
-        modelName: 'Flux Kontext Max (Multi-Image Edit)',
-        isMock: false,
-        isGeminiPlatform: false,
-        isImageEditing: false,
-        isMultiImageEditing: true,
-      },
-      [Model.FLUX_ULTRA]: {
-        isSet: isProxyExpectedToHaveKey,
-        envVarName: 'FAL_KEY (on proxy)',
-        modelName: 'Flux1.1 [Ultra] Image Gen',
-        isMock: false,
-        isGeminiPlatform: false,
-        isFluxUltraImageGeneration: true,
-      },
-      [Model.KLING_VIDEO]: {
-        isSet: isProxyExpectedToHaveKey,
-        envVarName: 'FAL_KEY (on proxy)',
-        modelName: 'Kling AI Video Gen',
-        isMock: false,
-        isGeminiPlatform: false,
-        isKlingVideoGeneration: true,
-      },
-      [Model.TRADING_PRO]: {
-        isSet: isProxyExpectedToHaveKey,
-        envVarName: 'GEMINI_API_KEY (on proxy)', // Alpha Vantage key removed
-        modelName: 'Trading Pro Analysis',
-        isMock: false,
-        isGeminiPlatform: true,
-        isTradingPro: true,
-      },
-    };
+  const apiKeyStatuses = useMemo((): Record<Model, ApiKeyStatus> => {
+    // Use the imported definitions directly
+    return API_KEY_STATUSES_DEFINITIONS;
   }, []);
 
   const displayedChatTitle = useMemo(() => {
@@ -660,6 +603,15 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     }
   }, [messages, isSearchActive, isRealTimeTranslationMode, selectedModel]);
 
+  // Effect to reset demoTradingProAccessGranted if demo user changes or user is no longer demo
+  useEffect(() => {
+    if (!userSession.isDemoUser || (prevDemoUserTokenRef.current && prevDemoUserTokenRef.current !== userSession.demoUserToken)) {
+      setDemoTradingProAccessGranted(false);
+    }
+    prevDemoUserTokenRef.current = userSession.demoUserToken;
+  }, [userSession.isDemoUser, userSession.demoUserToken]);
+
+
   useEffect(() => {
     const currentModelStatus = apiKeyStatuses[selectedModel];
 
@@ -695,9 +647,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             getIsFluxKontexModel(newModel) ||
             getIsFluxUltraModel(newModel) ||
             getIsKlingVideoModel(newModel)
-            // Trading Pro now handles its own image (user-uploaded)
-            // So if switching TO Trading Pro, general attachments might be cleared.
-            // If switching FROM Trading Pro, its specific image should be cleared.
         ) {
             shouldClearGeneralAttachments = true;
         } else if (oldModel) {
@@ -1158,8 +1107,56 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     });
   }, [selectedModel]);
 
+  const handleTradingProCodeModalClose = useCallback(() => {
+    setIsTradingProCodeModalOpen(false);
+    setTradingProAccessCodeInput('');
+    setTradingProCodeError(null);
+    // If a model switch was pending and modal is cancelled, revert to the model before the attempt
+    if (modelBeforeTradingProModal && selectedModel !== modelBeforeTradingProModal) {
+        setSelectedModel(modelBeforeTradingProModal);
+    }
+    setModelBeforeTradingProModal(null);
+    setPendingSessionLoadForTradingPro(null);
+  }, [selectedModel, modelBeforeTradingProModal]);
 
-  const handleModelSelection = (newModel: Model) => {
+  const handleTradingProCodeModalSubmit = useCallback(async () => {
+    if (!userSession.demoUserToken || !tradingProAccessCodeInput.trim()) {
+        setTradingProCodeError("Please enter an access code.");
+        return;
+    }
+    setIsTradingProCodeLoading(true);
+    setTradingProCodeError(null);
+    try {
+        const response = await fetch('/api/auth/validate-trading-code', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                demoUserToken: userSession.demoUserToken,
+                tradingCode: tradingProAccessCodeInput.trim()
+            })
+        });
+        const data = await response.json();
+        if (data.success) {
+            setDemoTradingProAccessGranted(true);
+            setIsTradingProCodeModalOpen(false);
+            setTradingProAccessCodeInput('');
+            addNotification("Trading Pro access granted for this session!", "success");
+            setSelectedModel(Model.TRADING_PRO); // Now actually switch to Trading Pro
+            if (pendingSessionLoadForTradingPro) {
+                handleLoadSession(pendingSessionLoadForTradingPro.id, true); // Force load as Trading Pro
+                setPendingSessionLoadForTradingPro(null);
+            }
+        } else {
+            setTradingProCodeError(data.message || "Invalid access code.");
+        }
+    } catch (err: any) {
+        setTradingProCodeError(`Error validating code: ${err.message || 'Network error'}`);
+    }
+    setIsTradingProCodeLoading(false);
+  }, [userSession.demoUserToken, tradingProAccessCodeInput, addNotification, pendingSessionLoadForTradingPro]); // Added pendingSessionLoadForTradingPro dependency
+
+
+  const handleModelSelection = useCallback((newModel: Model) => {
     const isAdmin = !userSession.isDemoUser && !userSession.isPaidUser;
     if (newModel === Model.FLUX_KONTEX_MAX_MULTI && !userSession.isPaidUser && !isAdmin) {
       addNotification("Flux Kontext Max is for Paid Users or Admin only.", "error");
@@ -1173,9 +1170,19 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       addNotification("Kling AI Video generation is only available for Paid Users or Admin.", "error");
       return;
     }
+
+    // Trading Pro Access Logic for Demo Users
+    if (newModel === Model.TRADING_PRO && userSession.isDemoUser && !demoTradingProAccessGranted) {
+        setModelBeforeTradingProModal(selectedModel); // Store current model
+        setIsTradingProCodeModalOpen(true);
+        // Do NOT call setSelectedModel(newModel) here yet. It will be called on successful code validation.
+        return; 
+    }
+    
     if (newModel !== Model.GPT4O) gpt41ModalInteractionFlagRef.current = false;
     setSelectedModel(newModel);
-  };
+  }, [userSession.isDemoUser, userSession.isPaidUser, demoTradingProAccessGranted, selectedModel, addNotification]);
+
 
   const handlePersonaChange = (personaId: string | null) => {
     setActivePersonaId(personaId);
@@ -1291,11 +1298,20 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     clearSearch();
   }, [messages, selectedModel, currentModelSettings, activeSessionId, savedSessions, activePersonaId, addNotification, currentChatName, isRealTimeTranslationMode, isAiAgentSmartMode, isPrivateModeSelected, pruneChatSessions, clearSearch]);
 
-  const handleLoadSession = useCallback((sessionId: string) => {
+  const handleLoadSession = useCallback((sessionId: string, forceLoadAsTradingPro: boolean = false) => {
     const sessionToLoad = savedSessions.find(s => s.id === sessionId);
     if (sessionToLoad) {
-      if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT_SMART || sessionToLoad.model === Model.PRIVATE || getIsFluxKontexModel(sessionToLoad.model) || getIsFluxUltraModel(sessionToLoad.model) || getIsKlingVideoModel(sessionToLoad.model) || getIsTradingProModel(sessionToLoad.model)) {
-          addNotification(`Cannot load "${sessionToLoad.model}" sessions directly. Please start a new one if needed.`, "info");
+      // Handle Trading Pro access for Demo users when loading a session
+      if (sessionToLoad.model === Model.TRADING_PRO && userSession.isDemoUser && !demoTradingProAccessGranted && !forceLoadAsTradingPro) {
+          setModelBeforeTradingProModal(selectedModel); // Store current model
+          setPendingSessionLoadForTradingPro(sessionToLoad); // Store session for later loading
+          setIsTradingProCodeModalOpen(true); // Trigger modal
+          addNotification("Trading Pro session requires access code for Demo users.", "info");
+          return;
+      }
+
+      if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT_SMART || sessionToLoad.model === Model.PRIVATE || getIsFluxKontexModel(sessionToLoad.model) || getIsFluxUltraModel(sessionToLoad.model) || getIsKlingVideoModel(sessionToLoad.model) || (getIsTradingProModel(sessionToLoad.model) && !forceLoadAsTradingPro && !userSession.isPaidUser && !isAdminUser && !(userSession.isDemoUser && demoTradingProAccessGranted))) {
+          addNotification(`Cannot load "${sessionToLoad.model}" sessions directly or access restricted. Please start a new one or verify access.`, "info");
           return;
       }
       setMessages([...sessionToLoad.messages]);
@@ -1331,7 +1347,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     } else {
       addNotification("Failed to load chat session from browser.", "error");
     }
-  }, [savedSessions, addNotification, clearSearch]);
+  }, [savedSessions, addNotification, clearSearch, userSession.isDemoUser, demoTradingProAccessGranted, selectedModel, userSession.isPaidUser, isAdminUser]);
+
 
   const handleStartNewChat = useCallback(() => {
     setMessages([]);
@@ -3092,10 +3109,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           ...(userSession.isDemoUser && userSession.demoUserToken && { 'X-Demo-Token': userSession.demoUserToken }),
         },
         body: JSON.stringify({
-          // The detailed prompt is now constructed on the proxy server.
-          // We only send the pair label and optional image.
           chartImageBase64: chartImageBase64 ? chartImageBase64.split(',')[1] : null,
           pairLabel: pair.label,
+          demoTradingProAccessGranted: userSession.isDemoUser ? demoTradingProAccessGranted : undefined, // Pass flag for demo users
         }),
       });
       const result: GeminiTradingAnalysisResponse & { error?: string } = await response.json(); // Ensure result can have an error field
@@ -3133,7 +3149,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       addNotification(`Trading Analysis Error: ${error.message}`, "error");
       setTradingProState(prev => ({ ...prev, isLoadingAnalysis: false, analysisText: null, trendPredictions: null, analysisError: `Trading Analysis Error: ${error.message}`, uploadedImageValidationError: null }));
     }
-  }, [addNotification, userSession]);
+  }, [addNotification, userSession, demoTradingProAccessGranted]);
 
 
   const onAnalyzeTradingProClick = async () => {
@@ -3179,6 +3195,36 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
   return (
     <div className="h-full flex flex-col relative">
+       {isTradingProCodeModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[100] p-4" onClick={handleTradingProCodeModalClose}>
+            <div className="bg-neutral-light dark:bg-neutral-darker p-6 rounded-lg shadow-xl w-full max-w-md text-center" onClick={(e) => e.stopPropagation()}>
+                <KeyIcon className="w-12 h-12 text-primary dark:text-primary-light mx-auto mb-4"/>
+                <h3 className="text-xl font-semibold text-neutral-darker dark:text-secondary-light mb-3">Trading Pro Access</h3>
+                <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+                    Please enter your Trading Access Code to use this feature.
+                </p>
+                <input
+                    type="password"
+                    value={tradingProAccessCodeInput}
+                    onChange={(e) => setTradingProAccessCodeInput(e.target.value)}
+                    onKeyPress={(e) => { if (e.key === 'Enter') handleTradingProCodeModalSubmit(); }}
+                    placeholder="Access Code"
+                    className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none mb-2"
+                    autoFocus
+                    disabled={isTradingProCodeLoading}
+                />
+                {tradingProCodeError && <p className="text-red-500 dark:text-red-400 text-xs mb-3">{tradingProCodeError}</p>}
+                <div className="flex justify-center space-x-3">
+                    <button onClick={handleTradingProCodeModalSubmit} disabled={isTradingProCodeLoading} className="px-5 py-2 bg-primary hover:bg-primary-dark text-white rounded-md disabled:opacity-50">
+                        {isTradingProCodeLoading ? 'Verifying...' : 'Submit Code'}
+                    </button>
+                    <button onClick={handleTradingProCodeModalClose} disabled={isTradingProCodeLoading} className="px-4 py-2 bg-secondary dark:bg-neutral-darkest text-neutral-darker dark:text-secondary-light rounded-md">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
       {userSession.isPaidUser && userSession.paidSubscriptionEndDate && (
         <div className="bg-green-600 text-white text-xs text-center py-0.5 px-2 sticky top-0 z-40">
           Paid User: {userSession.paidUsername} | Subscription ends: {new Date(userSession.paidSubscriptionEndDate).toLocaleDateString()}
