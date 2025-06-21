@@ -19,7 +19,7 @@
 *   Optimize UX/UI design for a good experience on Windows / Mobile
 *   AI agent with Voice chat by Elevenlabs
 *   AI agent Smart - The assistant is smart by Google
-*   Payment & Credit system
+*   Payment & Credit system ( Demo )
 *   Flux Kontext Pro/Max Multi Editing Images **( NEW HOT )**
 *   Flux 1.1 Ultra - Ultra 2K megapixel quality - Image Generate **( NEW HOT )**
 *   Kling AI 2.1 - High-quality video generation **( NEW HOT )**
