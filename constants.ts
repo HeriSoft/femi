@@ -396,3 +396,72 @@ export const TRADING_PRO_PAIRS: TradingPair[] = [
 ];
 
 // ALPHA_VANTAGE_API_KEY removed
+// Update the apiKeyStatuses for Trading Pro
+export const API_KEY_STATUSES_DEFINITIONS = {
+  [Model.GEMINI]: {isSet: true, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Gemini Flash', isMock: false, isGeminiPlatform: true},
+  [Model.GEMINI_ADVANCED]: {isSet: true, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Gemini Advanced', isMock: false, isGeminiPlatform: true},
+  [Model.GPT4O]: {isSet: true, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'ChatGPT (gpt-4.1)', isMock: false, isGeminiPlatform: false},
+  [Model.GPT4O_MINI]: {isSet: true, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'ChatGPT (gpt-4.1-mini)', isMock: false, isGeminiPlatform: false},
+  [Model.DEEPSEEK]: { isSet: true, envVarName: 'DEEPSEEK_API_KEY (on proxy)', modelName: 'Deepseek', isMock: false, isGeminiPlatform: false},
+  [Model.CLAUDE]: { isSet: true, envVarName: 'N/A (Mock)', modelName: 'Claude', isMock: true, isGeminiPlatform: false},
+  [Model.IMAGEN3]: {isSet: true, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Imagen3 Image Gen', isMock: false, isGeminiPlatform: true, isImageGeneration: true},
+  [Model.OPENAI_TTS]: {isSet: true, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'OpenAI TTS', isMock: false, isGeminiPlatform: false, isTextToSpeech: true },
+  [Model.REAL_TIME_TRANSLATION]: {isSet: true, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Real-Time Translation (Gemini)', isMock: false, isGeminiPlatform: true, isRealTimeTranslation: true },
+  [Model.AI_AGENT_SMART]: {
+    isSet: true,
+    envVarName: 'GEMINI_API_KEY (on proxy)',
+    modelName: 'AI Agent Smart (gemini-2.5-flash-preview-04-17)',
+    isMock: false,
+    isGeminiPlatform: true,
+    isAiAgentSmart: true,
+  },
+  [Model.PRIVATE]: {
+    isSet: true,
+    envVarName: 'N/A (Local)',
+    modelName: 'Private (Local Data Storage)',
+    isMock: true,
+    isGeminiPlatform: false,
+    isPrivateMode: true,
+  },
+  [Model.FLUX_KONTEX]: {
+    isSet: true,
+    envVarName: 'FAL_KEY (on proxy)',
+    modelName: 'Flux Kontext Image Edit',
+    isMock: false,
+    isGeminiPlatform: false,
+    isImageEditing: true
+  },
+  [Model.FLUX_KONTEX_MAX_MULTI]: {
+    isSet: true,
+    envVarName: 'FAL_KEY (on proxy)',
+    modelName: 'Flux Kontext Max (Multi-Image Edit)',
+    isMock: false,
+    isGeminiPlatform: false,
+    isImageEditing: false,
+    isMultiImageEditing: true,
+  },
+  [Model.FLUX_ULTRA]: {
+    isSet: true,
+    envVarName: 'FAL_KEY (on proxy)',
+    modelName: 'Flux1.1 [Ultra] Image Gen',
+    isMock: false,
+    isGeminiPlatform: false,
+    isFluxUltraImageGeneration: true,
+  },
+  [Model.KLING_VIDEO]: {
+    isSet: true,
+    envVarName: 'FAL_KEY (on proxy)',
+    modelName: 'Kling AI Video Gen',
+    isMock: false,
+    isGeminiPlatform: false,
+    isKlingVideoGeneration: true,
+  },
+  [Model.TRADING_PRO]: {
+    isSet: true, // Assuming proxy has necessary keys (Gemini for analysis)
+    envVarName: 'GEMINI_API_KEY (on proxy)',
+    modelName: 'Trading Analysis (Paid/Admin, Demo w/ Code)', // Updated description
+    isMock: false,
+    isGeminiPlatform: true,
+    isTradingPro: true,
+  },
+};

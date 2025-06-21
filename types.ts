@@ -1,4 +1,5 @@
 
+
 import { Chat } from '@google/genai'; // Updated import
 import React from 'react'; // Added for React.DetailedHTMLProps
 
@@ -134,10 +135,17 @@ export type TradingPairValue = 'XAUUSD' | 'BTCUSD';
 export interface TradingPair {
   value: TradingPairValue;
   label: string; 
-  // Alpha Vantage specific fields removed
 }
 
-// AlphaVantageCandle, AlphaVantageTimeSeries, CandlestickPoint types removed
+// CandlestickPoint type for chart.js-chart-financial
+export interface CandlestickPoint {
+    x: number; // Timestamp
+    o: number; // Open
+    h: number; // High
+    l: number; // Low
+    c: number; // Close
+}
+
 
 export interface TradingProState {
   disclaimerAgreed: boolean;
@@ -697,8 +705,6 @@ export interface FalStatusProxyResponse {
   message?: string; 
   rawResult?: any; 
 }
-
-// AlphaVantageProxyResponse removed
 
 export interface GeminiTradingAnalysisResponse {
   analysisText?: string;
