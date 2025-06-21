@@ -399,11 +399,20 @@ app.post('/api/auth/verify-code', async (req, res) => {
 
 
 const GEMINI_API_KEY_PROXY = process.env.GEMINI_API_KEY;
+const GOOGLE_MAPS_API_KEY_PROXY = process.env.GOOGLE_MAPS_API_KEY;
 let ai;
+
 if (GEMINI_API_KEY_PROXY) {
   ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY_PROXY });
   console.log("Google GenAI SDK initialized.");
-} else console.warn("PROXY WARNING: GEMINI_API_KEY missing.");
+} else console.warn("PROXY WARNING: GEMINI_API_KEY missing. Gemini and Imagen models will not function.");
+
+if (GOOGLE_MAPS_API_KEY_PROXY) {
+    console.log("GOOGLE_MAPS_API_KEY found in environment. This is relevant for AI Agent Smart backend operations.");
+} else {
+    console.warn("PROXY WARNING: GOOGLE_MAPS_API_KEY missing. The AI Agent Smart's location-based features (e.g., finding places, directions) might be impaired as the backend system it relies on may require this key.");
+}
+
 
 app.post('/api/gemini/chat/stream', async (req, res) => {
     if (req.authDbError) {
@@ -1040,8 +1049,8 @@ if (!process.env.ALPHA_VANTAGE_API_KEY) {
 app.post('/api/alphavantage/chart-data', async (req, res) => {
   const { symbol, market, interval, outputsize, avFunction, from_symbol, to_symbol } = req.body;
 
-  if (avFunction === 'FX_INTRADAY' || avFunction === 'FX_DAILY') {
-    console.log(`[AlphaVantage Proxy] ${avFunction} request. From: ${from_symbol}, To: ${to_symbol}, Interval: ${interval}, Outputsize: ${outputsize}`);
+  if (avFunction === 'FX_INTRADAY' || avFunction === 'FX_DAILY' || avFunction === 'TIME_SERIES_DAILY') {
+    console.log(`[AlphaVantage Proxy] ${avFunction} request. Symbol: ${symbol}, From: ${from_symbol}, To: ${to_symbol}, Interval: ${interval}, Outputsize: ${outputsize}`);
   }
 
   if (!avFunction) {
@@ -1067,7 +1076,13 @@ app.post('/api/alphavantage/chart-data', async (req, res) => {
       queryParams.set('symbol', symbol);
       if (interval) queryParams.set('interval', interval);
       if (outputsize) queryParams.set('outputsize', outputsize);
-      dataKey = `Time Series (${interval})`;
+      dataKey = `Time Series (${interval || 'Default Interval'})`; // Use a consistent key format
+      break;
+    case 'TIME_SERIES_DAILY': // Added case for TIME_SERIES_DAILY
+      queryParams.set('function', 'TIME_SERIES_DAILY');
+      queryParams.set('symbol', symbol);
+      if (outputsize) queryParams.set('outputsize', outputsize);
+      dataKey = 'Time Series (Daily)';
       break;
     case 'DIGITAL_CURRENCY_INTRADAY':
       queryParams.set('function', 'DIGITAL_CURRENCY_INTRADAY');
@@ -1075,7 +1090,7 @@ app.post('/api/alphavantage/chart-data', async (req, res) => {
       queryParams.set('market', market);
       if (interval) queryParams.set('interval', interval);
       if (outputsize) queryParams.set('outputsize', outputsize);
-      dataKey = `Time Series Crypto (${interval})`;
+      dataKey = `Time Series Crypto (${interval || 'Default Interval'})`;
       break;
     case 'FX_INTRADAY':
       queryParams.set('function', 'FX_INTRADAY');
@@ -1083,25 +1098,26 @@ app.post('/api/alphavantage/chart-data', async (req, res) => {
       queryParams.set('to_symbol', to_symbol);
       if (interval) queryParams.set('interval', interval);
       if (outputsize) queryParams.set('outputsize', outputsize);
-      dataKey = `Time Series FX (${interval})`;
+      dataKey = `Time Series FX (${interval || 'Default Interval'})`;
       break;
     case 'FX_DAILY':
       queryParams.set('function', 'FX_DAILY');
       queryParams.set('from_symbol', from_symbol);
       queryParams.set('to_symbol', to_symbol);
-      if (outputsize) queryParams.set('outputsize', outputsize); // outputsize is valid for daily
+      if (outputsize) queryParams.set('outputsize', outputsize);
       dataKey = 'Time Series FX (Daily)';
       break;
     case 'DIGITAL_CURRENCY_DAILY':
       queryParams.set('function', 'DIGITAL_CURRENCY_DAILY');
       queryParams.set('symbol', symbol);
       queryParams.set('market', market);
+      if (outputsize) queryParams.set('outputsize', outputsize); // Add outputsize for digital daily too
       dataKey = 'Time Series (Digital Currency Daily)';
       break;
     default:
       return res.status(400).json({ error: 'Invalid avFunction specified.' });
   }
-  
+
   apiUrl = `https://www.alphavantage.co/query?${queryParams.toString()}`;
   console.log(`[AlphaVantage Proxy] Fetching URL: ${apiUrl}`);
 
@@ -1121,7 +1137,7 @@ app.post('/api/alphavantage/chart-data', async (req, res) => {
         return res.status(502).json({ error: `Alpha Vantage returned non-JSON response. Content-Type: ${contentType}. Ensure API key is valid and has not exceeded limits.` });
     }
 
-    const alphaData = await alphaResponse.json(); 
+    const alphaData = await alphaResponse.json();
 
     if (alphaData['Error Message']) {
       console.warn(`[AlphaVantage Proxy] Error Message from Alpha Vantage: ${alphaData['Error Message']}`);
@@ -1172,32 +1188,92 @@ app.post('/api/gemini/trading-analysis', async (req, res) => {
 
 
     if (!ai) return res.status(500).json({ error: "Google GenAI SDK not initialized for Trading Analysis." });
-    const { prompt, chartImageBase64, pairLabel } = req.body;
+    const { prompt: userProvidedPrompt, chartImageBase64, pairLabel } = req.body; // chartImageBase64 can be null
 
-    if (!prompt || !chartImageBase64 || !pairLabel) {
-        return res.status(400).json({ error: "Missing fields: prompt, chartImageBase64, or pairLabel required for trading analysis." });
+    if (!userProvidedPrompt || !pairLabel) { 
+        return res.status(400).json({ error: "Missing fields: prompt or pairLabel required for trading analysis." });
+    }
+
+    let analysisPrompt;
+
+    if (chartImageBase64) {
+      analysisPrompt = `You are an expert financial market analyst for ${pairLabel}.
+Analyze the provided trading chart image. The chart shows recent price action (OHLC, trends) on the H4 timeframe.
+Simultaneously, research current market conditions for ${pairLabel}, including:
+- Recent news and their impact on the H4 timeframe.
+- For Gold (XAUUSD): Federal Reserve (FED) policies, interest rate announcements/expectations, geopolitical events affecting gold.
+- For Bitcoin (BTCUSD): Crypto market news, institutional adoption, regulatory news, major economic indicators affecting Bitcoin.
+- Other potential upcoming factors.
+
+Based on your analysis of the chart image AND the researched market information, provide a detailed and accurate market analysis for the H4 timeframe.
+Conclude with a price prediction for the near future (next 1-7 days, considering H4 trends) in the following JSON format, embedded within your text response using a JSON code block:
+\`\`\`json
+{
+  "trend_prediction": {
+    "up_percentage": <integer between 0-100>,
+    "down_percentage": <integer between 0-100>,
+    "sideways_percentage": <integer between 0-100>
+  },
+  "detailed_analysis": "<Your detailed textual analysis here, explaining your reasoning based on chart and news. This detailed_analysis should be part of the JSON structure but will also be displayed as the main text content.>"
+}
+\`\`\`
+Ensure the sum of percentages for up, down, and sideways is 100.
+List any web sources used for your research clearly. Use the term "Sources:" followed by a list.`;
+    } else {
+        analysisPrompt = `You are an expert financial market analyst for ${pairLabel}.
+No chart image is provided for this analysis.
+Your task is to provide an analysis for the H4 (4-hour) timeframe based on current market conditions and data.
+Research current market information for ${pairLabel}, including:
+- Recent news and their impact on the H4 timeframe.
+- For Gold (XAUUSD): Federal Reserve (FED) policies, interest rate announcements/expectations, geopolitical events.
+- For Bitcoin (BTCUSD): Crypto market news, institutional adoption, regulatory news, major economic indicators.
+- Other potential upcoming factors relevant to the H4 chart.
+- You MUST prioritize and synthesize information from TradingView (or similar reputable financial data sources) to understand the current H4 chart patterns, price action, and key technical indicators for ${pairLabel} on the H4 timeframe. Describe your interpretation of this H4 chart data as part of your analysis.
+
+Based on your research of current H4 data and market information, provide a detailed market analysis.
+Conclude with a price prediction for the near future (next 1-7 days, considering H4 trends) in the following JSON format, embedded within your text response using a JSON code block:
+\`\`\`json
+{
+  "trend_prediction": {
+    "up_percentage": <integer between 0-100>,
+    "down_percentage": <integer between 0-100>,
+    "sideways_percentage": <integer between 0-100>
+  },
+  "detailed_analysis": "<Your detailed textual analysis here, explaining your reasoning based on researched H4 data and news. This detailed_analysis should be part of the JSON structure but will also be displayed as the main text content.>"
+}
+\`\`\`
+Ensure the sum of percentages for up, down, and sideways is 100.
+List any web sources used for your research clearly. Use the term "Sources:" followed by a list.`;
     }
 
     try {
-        const imagePart = {
-            inlineData: { mimeType: 'image/png', data: chartImageBase64 },
-        };
-        const textPart = { text: prompt };
-        const contents = { parts: [textPart, imagePart] };
+        const textPart = { text: analysisPrompt }; // Use the constructed analysisPrompt
+        let geminiContents;
+
+        if (chartImageBase64) {
+            const imagePart = {
+                inlineData: { mimeType: 'image/png', data: chartImageBase64 },
+            };
+            geminiContents = { parts: [textPart, imagePart] };
+            console.log(`[Trading Analysis Proxy] Performing analysis for ${pairLabel} with chart image.`);
+        } else {
+            geminiContents = { parts: [textPart] };
+            console.log(`[Trading Analysis Proxy] Performing analysis for ${pairLabel} without chart image.`);
+        }
+
 
         const geminiResponse = await ai.models.generateContent({
             model: 'gemini-2.5-flash-preview-04-17',
-            contents: contents,
+            contents: geminiContents,
             config: {
                 tools: [{ googleSearch: {} }],
-                // responseMimeType: "application/json", // Removed as per Gemini guidelines for tool use
             }
         });
 
         let analysisText = "Analysis text not available.";
         let trendPredictions = null;
         let groundingSources = [];
-        
+
         const responseTextFromGemini = geminiResponse.text;
 
         if (responseTextFromGemini) {
@@ -1222,54 +1298,58 @@ app.post('/api/gemini/trading-analysis', async (req, res) => {
 
                     try {
                         const parsedData = JSON.parse(jsonContentString);
-                        
+
                         if (parsedData.trend_prediction) {
                             const { up_percentage, down_percentage, sideways_percentage } = parsedData.trend_prediction;
                             if (typeof up_percentage === 'number' && typeof down_percentage === 'number' && typeof sideways_percentage === 'number') {
                                 trendPredictions = { up_percentage, down_percentage, sideways_percentage };
                                 let sum = up_percentage + down_percentage + sideways_percentage;
-                                if (sum > 0 && Math.abs(sum - 100) <= 5) { // Sum is positive and close to 100
+                                if (sum > 0 && Math.abs(sum - 100) <= 5) { // Allow small tolerance
                                     if (sum !== 100) {
                                          console.warn(`[Trading Analysis Proxy] Normalizing trend prediction percentages. Original sum: ${sum}, Original values:`, JSON.stringify(trendPredictions));
                                          trendPredictions.up_percentage = Math.round((up_percentage / sum) * 100);
                                          trendPredictions.down_percentage = Math.round((down_percentage / sum) * 100);
                                          trendPredictions.sideways_percentage = 100 - trendPredictions.up_percentage - trendPredictions.down_percentage;
                                     }
-                                } else { 
+                                } else {
                                     console.warn(`[Trading Analysis Proxy] Invalid trend prediction sum (${sum}) or structure. Invalidating. Original:`, JSON.stringify(parsedData.trend_prediction));
                                     trendPredictions = null;
                                 }
-                            } else { 
+                            } else {
                                 console.warn("[Trading Analysis Proxy] Trend prediction percentages are not all numbers. Invalidating.", JSON.stringify(parsedData.trend_prediction));
                                 trendPredictions = null;
                             }
                         } else {
-                             trendPredictions = null;
+                             trendPredictions = null; // Ensure it's null if not present
                         }
 
                         let detailedAnalysisFromJson = parsedData.detailed_analysis || "";
-                        
+
+                        // Construct analysisText from parts, preferring detailed_analysis from JSON if present
                         let combinedAnalysisText = textBeforeJson;
                         if (detailedAnalysisFromJson) {
-                            if (combinedAnalysisText.trim()) combinedAnalysisText += "\n\n";
+                            if (combinedAnalysisText.trim()) combinedAnalysisText += "\n\n"; // Add separator if textBeforeJson exists
                             combinedAnalysisText += detailedAnalysisFromJson.trim();
                         }
                         if (textAfterJson) {
-                            if (combinedAnalysisText.trim()) combinedAnalysisText += "\n\n";
+                            if (combinedAnalysisText.trim()) combinedAnalysisText += "\n\n"; // Add separator if text exists before textAfterJson
                             combinedAnalysisText += textAfterJson.trim();
                         }
-                        analysisText = combinedAnalysisText.trim() || rawText;
+                        // If detailed_analysis was empty and other parts were also empty, use the full rawText
+                        analysisText = combinedAnalysisText.trim() || rawText; 
 
                     } catch (e) {
                         console.error("[Trading Analysis Proxy] Failed to parse extracted JSON:", e, "Extracted JSON string:", jsonContentString, "Full raw text (first 500 chars):", rawText.substring(0, 500));
-                        analysisText = rawText; // Fallback to the full raw text
+                        analysisText = rawText; // Fallback to full raw text
                         trendPredictions = null;
                     }
                 } else {
+                    // JSON start marker found, but no end marker. Treat as plain text.
                     console.warn("[Trading Analysis Proxy] Found JSON start marker but no end marker. Treating entire response as text.");
                     analysisText = rawText;
                 }
             } else {
+                // No JSON block found. Treat as plain text.
                 console.warn("[Trading Analysis Proxy] No JSON block (```json ... ```) found in Gemini response. Treating entire response as text.");
                 analysisText = rawText;
             }
@@ -1277,7 +1357,7 @@ app.post('/api/gemini/trading-analysis', async (req, res) => {
 
         if (geminiResponse.candidates?.[0]?.groundingMetadata?.groundingChunks) {
             groundingSources = geminiResponse.candidates[0].groundingMetadata.groundingChunks
-                .filter(gc => gc.web?.uri)
+                .filter(gc => gc.web?.uri && !gc.web.uri.includes('vertexaisearch.cloud.google.com')) // Updated filter
                 .map(gc => ({
                     uri: gc.web.uri,
                     title: gc.web.title || gc.web.uri
