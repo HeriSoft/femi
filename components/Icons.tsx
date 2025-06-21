@@ -406,17 +406,15 @@ export const MegaphoneIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) =>
   </svg>
 );
 
-// Removed FilmIcon as it's already defined.
-// Removed PresentationChartLineIcon as it's already defined.
+export const MapPinIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+  </svg>
+);
 
-// ... any other icons you might need
-// Removed duplicate ChatBubbleLeftEllipsisIcon
-// FilmIcon was already defined above.
-// export const FilmIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-//   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-//     <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9A2.25 2.25 0 0 0 13.5 5.25h-9A2.25 2.25 0 0 0 2.25 7.5v9A2.25 2.25 0 0 0 4.5 18.75Z" />
-//   </svg>
-// );
-// Corrected icons file by reordering PresentationChartLineIcon to the top.
-// If the error persists, the user needs to clear Vite's cache (node_modules/.vite) and restart the dev server.
-// This is often the most effective solution for such "module does not provide export" errors when the code is visibly correct.
+export const ChatBubbleOvalLeftEllipsisIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 14.25h3M8.25 12h7.5M6 9.75h9M21 12a9 9 0 11-18 0 9 9 0 0118 0zM8.25 12h.008v.008H8.25V12zm3.75 0h.008v.008h-.008V12zm3.75 0h.008v.008h-.008V12z" />
+  </svg>
+);

@@ -23,7 +23,7 @@ const TradingProView: React.FC<TradingProViewProps> = ({
   setTradingProState,
   fetchChartData,
   handleAnalysis,
-  userSession 
+  userSession
 }) => {
   const [showDisclaimer, setShowDisclaimer] = useState(!tradingProState.disclaimerAgreed);
   const chartComponentRef = useRef<TradingChartRef>(null);
@@ -43,7 +43,7 @@ const TradingProView: React.FC<TradingProViewProps> = ({
   const handlePairChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const newPairValue = event.target.value as TradingPair['value'] | "";
     const newSelectedPairObject = TRADING_PRO_PAIRS.find(p => p.value === newPairValue) || null;
-    
+
     onSettingsChange({ selectedPair: newSelectedPairObject ? newSelectedPairObject.value : null });
     setTradingProState(prev => ({
       ...prev,
@@ -72,7 +72,7 @@ const TradingProView: React.FC<TradingProViewProps> = ({
       fetchChartDataCb(currentSelectedPairObject);
     }
   };
-  
+
   const memoizedOnChartRendered = useCallback((base64Image: string | null) => {
     if (base64Image) {
         setTradingProState(prev => {
@@ -82,26 +82,23 @@ const TradingProView: React.FC<TradingProViewProps> = ({
             return prev; // No change needed
         });
     }
-  // tradingProState.chartImageUrl is included to allow comparison, 
-  // but setTradingProState itself is stable and doesn't need to be a dependency.
-  // If we only want this to update once per chart data change, we might adjust dependencies.
-  // However, for ensuring the image URL is always current IF IT CHANGES after render, this is okay.
-  // The critical fix is that the function reference itself is stable.
   }, [setTradingProState]);
 
 
-  const onAnalyzeClick = async () => {
+  // This onAnalyzeClick is for the button INSIDE TradingProView, if it were used.
+  // The main "Analyze Market" button is typically in ChatPage.tsx and calls handleAnalysis prop directly.
+  const onAnalyzeClickInternal = async () => {
     const currentSelectedPairObject = TRADING_PRO_PAIRS.find(p => p.value === settings.selectedPair);
     if (!currentSelectedPairObject) {
       setTradingProState(prev => ({ ...prev, analysisError: "Please select a trading pair first." }));
       return;
     }
     if (!tradingProState.disclaimerAgreed) {
-      setShowDisclaimer(true);
+      setShowDisclaimer(true); // This component should manage its own disclaimer pop-up if button is here
       return;
     }
     if (tradingProState.isLoadingChart || tradingProState.isLoadingAnalysis) {
-        return; 
+        return;
     }
 
     let currentChartImage = tradingProState.chartImageUrl;
@@ -109,32 +106,34 @@ const TradingProView: React.FC<TradingProViewProps> = ({
         currentChartImage = chartComponentRef.current.getChartAsBase64();
     }
     
-    if (!currentChartImage) {
-        const errorMsg = tradingProState.chartData 
-            ? "Chart image is not ready. Please wait for the chart to render fully."
-            : "Chart data not loaded. Cannot generate analysis.";
-        setTradingProState(prev => ({ ...prev, analysisError: errorMsg }));
-        return;
-    }
+    // No longer blocking analysis if chart image is missing
+    // if (!currentChartImage && (settings.selectedPair !== 'XAUUSD' && settings.selectedPair !== 'BTCUSD') ) {
+    //     const errorMsg = tradingProState.chartData
+    //         ? "Chart image is not ready. Please wait for the chart to render fully."
+    //         : "Chart data not loaded. Cannot generate analysis.";
+    //     setTradingProState(prev => ({ ...prev, analysisError: errorMsg }));
+    //     return;
+    // }
     
-    setTradingProState(prev => ({ 
-      ...prev, 
-      isLoadingAnalysis: true, 
-      analysisError: null, 
-      analysisText: null, 
+    setTradingProState(prev => ({
+      ...prev,
+      isLoadingAnalysis: true,
+      analysisError: null,
+      analysisText: null,
       trendPredictions: null,
       groundingSources: undefined,
-      chartImageUrl: currentChartImage // Ensure the image used for analysis is stored if freshly captured
+      chartImageUrl: currentChartImage
     }));
-    await handleAnalysis(currentSelectedPairObject, currentChartImage);
+    await handleAnalysis(currentSelectedPairObject, currentChartImage); // Call the prop handleAnalysis
   };
 
-  const isAnalyzeButtonDisabled = 
-    !settings.selectedPair || 
+  // This defines disable state for a button *within* TradingProView (if one exists there)
+  const isAnalyzeButtonDisabledInternal =
+    !settings.selectedPair ||
     !tradingProState.disclaimerAgreed ||
-    tradingProState.isLoadingChart || 
-    tradingProState.isLoadingAnalysis ||
-    (!tradingProState.chartData && !tradingProState.chartImageUrl); 
+    tradingProState.isLoadingChart ||
+    tradingProState.isLoadingAnalysis;
+    // Removed: (!tradingProState.chartData && !tradingProState.chartImageUrl)
 
 
   if (showDisclaimer) {
@@ -186,16 +185,17 @@ const TradingProView: React.FC<TradingProViewProps> = ({
             />
           </div>
           
-          <button
-            onClick={onAnalyzeClick}
-            disabled={isAnalyzeButtonDisabled}
-            className="w-full sm:w-auto px-6 py-2.5 bg-accent hover:bg-accent-dark text-white rounded-md text-base font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center"
-            aria-label="Analyze market for selected pair"
-            aria-disabled={isAnalyzeButtonDisabled}
-          >
-            <PresentationChartLineIcon className="w-5 h-5 mr-2" />
-            {tradingProState.isLoadingAnalysis ? "Analyzing..." : "Analyze Market"}
-          </button>
+          {/* The main "Analyze Market" button is typically rendered by ChatPage.tsx, which calls handleAnalysis via onAnalyzeTradingProClick.
+              If TradingProView were to have its own button, it would use onAnalyzeClickInternal and isAnalyzeButtonDisabledInternal.
+              Example:
+              <button
+                onClick={onAnalyzeClickInternal}
+                disabled={isAnalyzeButtonDisabledInternal}
+                // ... classes ...
+              >
+                Analyze Market (Internal Button)
+              </button>
+          */}
 
           {tradingProState.analysisError && (
             <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-600 rounded-md text-red-700 dark:text-red-300 text-sm" role="alert">

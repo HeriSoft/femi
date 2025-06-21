@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState, useContext } from 'react';
 import hljs from 'https://esm.sh/highlight.js@11.9.0'; 
 import { ChatMessage, ThemeContextType, Model, GroundingSource, TradingPairValue } from '../types.ts';
-import { RobotIcon, UserIcon, LinkIcon, PhotoIcon, ArrowPathIcon, ClipboardIcon, CheckIcon, SpeakerWaveIcon, StopCircleIcon, ArrowDownTrayIcon, FilmIcon, DocumentPlusIcon, PresentationChartLineIcon } from './Icons.tsx'; // Added PresentationChartLineIcon
+import { RobotIcon, UserIcon, LinkIcon, PhotoIcon, ArrowPathIcon, ClipboardIcon, CheckIcon, SpeakerWaveIcon, StopCircleIcon, ArrowDownTrayIcon, FilmIcon, DocumentPlusIcon, PresentationChartLineIcon, MapPinIcon, ChatBubbleOvalLeftEllipsisIcon } from './Icons.tsx'; // Added MapPinIcon, ChatBubbleOvalLeftEllipsisIcon
 import { useNotification } from '../contexts/NotificationContext.tsx'; 
 import { ThemeContext } from '../App.tsx';
 
@@ -230,6 +230,52 @@ const formatTime = (timestamp: number): string => {
   });
 };
 
+type AASMessagePart = 
+  | { type: 'aas-system'; text: string }
+  | { type: 'aas-place-detail'; label: string; value: string }
+  | { type: 'aas-button'; label: string; actionId: string }
+  | { type: 'regular'; text: string };
+
+const parseAASMessageContent = (text: string): AASMessagePart[] => {
+  const parts: AASMessagePart[] = [];
+  const lines = text.split('\n');
+  let currentRegularBlock = "";
+
+  const systemMessageRegex = /^\(\( System: (.*?)\)\)$/;
+  const placeDetailRegex = /^(ĐỊA ĐIỂM|ĐỊA CHỈ|GIÁ|KM|ĐÁNH GIÁ):\s*(.*)/;
+  const buttonRegex = /^\[BUTTON:(.*?):(.*?)\]$/;
+
+  const finalizeRegularBlock = () => {
+    if (currentRegularBlock.trim()) {
+      parts.push({ type: 'regular', text: currentRegularBlock.trimEnd() });
+    }
+    currentRegularBlock = "";
+  };
+
+  lines.forEach(line => {
+    const systemMatch = line.match(systemMessageRegex);
+    const placeDetailMatch = line.match(placeDetailRegex);
+    const buttonMatch = line.match(buttonRegex);
+
+    if (systemMatch) {
+      finalizeRegularBlock();
+      parts.push({ type: 'aas-system', text: systemMatch[1] });
+    } else if (placeDetailMatch) {
+      finalizeRegularBlock();
+      parts.push({ type: 'aas-place-detail', label: placeDetailMatch[1], value: placeDetailMatch[2] });
+    } else if (buttonMatch) {
+      finalizeRegularBlock();
+      parts.push({ type: 'aas-button', label: buttonMatch[1], actionId: buttonMatch[2] });
+    } else {
+      currentRegularBlock += line + '\n';
+    }
+  });
+
+  finalizeRegularBlock(); // Add any remaining regular text
+  return parts;
+};
+
+
 export const MessageBubble: React.FC<MessageBubbleProps> = ({ 
   message, 
   showAvatar,
@@ -253,40 +299,45 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   let audioButtonClasses = ''; 
   let timestampColor = '';
   let specialBorderClass = '';
+  let aasButtonClasses = '';
 
   if (currentTheme === 'light') {
     if (isUser) {
-      bubbleBackgroundColor = message.isTaskGoal ? '#e0f2fe' : (message.model === Model.PRIVATE ? '#e2e8f0' : '#dcfce7'); // User messages light green/blue
+      bubbleBackgroundColor = message.isTaskGoal ? '#e0f2fe' : (message.model === Model.PRIVATE ? '#e2e8f0' : '#dcfce7'); 
       bubbleTextColor = '#374151';    
       audioButtonClasses = 'bg-black/10 hover:bg-black/20 text-neutral-700'; 
       timestampColor = 'rgba(75, 85, 99, 0.7)'; 
       if (message.isTaskGoal) specialBorderClass = 'border-l-4 border-blue-400';
       else if (message.model === Model.PRIVATE) specialBorderClass = 'border-l-4 border-slate-400';
-    } else { // AI in light theme
-      bubbleBackgroundColor = message.isTaskPlan ? '#d1fae5' : (message.model === Model.KLING_VIDEO && message.videoUrl ? '#e0e7ff' : (message.model === Model.TRADING_PRO && message.tradingAnalysis ? '#eef2ff' : '#ffffff'));
+    } else { 
+      bubbleBackgroundColor = message.isTaskPlan ? '#d1fae5' : (message.model === Model.KLING_VIDEO && message.videoUrl ? '#e0e7ff' : (message.model === Model.TRADING_PRO && message.tradingAnalysis ? '#eef2ff' : (message.model === Model.AI_AGENT_SMART ? '#e0f2f7' : '#ffffff')));
       bubbleTextColor = '#374151';    
       audioButtonClasses = 'bg-gray-200 hover:bg-gray-300 text-neutral-700'; 
       timestampColor = 'rgba(107, 114, 128, 0.9)'; 
+      aasButtonClasses = 'bg-accent hover:bg-accent-dark text-white';
       if (message.isTaskPlan) specialBorderClass = 'border-l-4 border-green-400';
       else if (message.model === Model.KLING_VIDEO && message.videoUrl) specialBorderClass = 'border-l-4 border-indigo-400';
       else if (message.model === Model.TRADING_PRO && message.tradingAnalysis) specialBorderClass = 'border-l-4 border-purple-400';
+      else if (message.model === Model.AI_AGENT_SMART) specialBorderClass = 'border-l-4 border-cyan-400';
     }
-  } else { // Dark theme
+  } else { 
     if (isUser) {
-      bubbleBackgroundColor = message.isTaskGoal ? '#1e3a8a' : (message.model === Model.PRIVATE ? '#374151' : '#1e40af'); // User messages dark blueish
+      bubbleBackgroundColor = message.isTaskGoal ? '#1e3a8a' : (message.model === Model.PRIVATE ? '#374151' : '#1e40af'); 
       bubbleTextColor = '#FFFFFF';    
       audioButtonClasses = 'bg-white/20 hover:bg-white/30 text-white'; 
       timestampColor = 'rgba(209, 213, 219, 0.7)'; 
       if (message.isTaskGoal) specialBorderClass = 'border-l-4 border-blue-500';
       else if (message.model === Model.PRIVATE) specialBorderClass = 'border-l-4 border-slate-500';
-    } else { // AI in dark theme
-      bubbleBackgroundColor = message.isTaskPlan ? '#065f46' : (message.model === Model.KLING_VIDEO && message.videoUrl ? '#312e81' : (message.model === Model.TRADING_PRO && message.tradingAnalysis ? '#3730a3' : '#182533'));
+    } else { 
+      bubbleBackgroundColor = message.isTaskPlan ? '#065f46' : (message.model === Model.KLING_VIDEO && message.videoUrl ? '#312e81' : (message.model === Model.TRADING_PRO && message.tradingAnalysis ? '#3730a3' : (message.model === Model.AI_AGENT_SMART ? '#0e7490' : '#182533')));
       bubbleTextColor = '#FFFFFF';    
       audioButtonClasses = 'bg-white/20 hover:bg-white/30 text-white'; 
       timestampColor = 'rgba(156, 163, 175, 0.8)'; 
+      aasButtonClasses = 'bg-accent-light hover:bg-accent text-neutral-darker';
       if (message.isTaskPlan) specialBorderClass = 'border-l-4 border-green-500';
       else if (message.model === Model.KLING_VIDEO && message.videoUrl) specialBorderClass = 'border-l-4 border-indigo-500';
       else if (message.model === Model.TRADING_PRO && message.tradingAnalysis) specialBorderClass = 'border-l-4 border-purple-500';
+      else if (message.model === Model.AI_AGENT_SMART) specialBorderClass = 'border-l-4 border-cyan-500';
     }
   }
   tailColor = bubbleBackgroundColor;
@@ -315,10 +366,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const displayText = message.text;
   const taskGoalPrefix = message.isTaskGoal ? "🎯 **Goal:** " : "";
-  const taskPlanPrefix = message.isTaskPlan ? "📝 **Agent Response:** " : ""; 
+  const taskPlanPrefix = message.isTaskPlan && message.model !== Model.AI_AGENT_SMART ? "📝 **Agent Response:** " : ""; 
   const privateNotePrefix = message.isNote && message.model === Model.PRIVATE ? "📝 **Note:** ": "";
   const tradingProPrefix = message.model === Model.TRADING_PRO && message.tradingAnalysis ? `📊 **Trading Analysis (${message.tradingAnalysis.pair}):** ` : "";
-  const finalDisplayText = `${taskGoalPrefix}${taskPlanPrefix}${privateNotePrefix}${tradingProPrefix}${displayText}`;
+  let finalDisplayText = `${taskGoalPrefix}${taskPlanPrefix}${privateNotePrefix}${tradingProPrefix}${displayText}`;
+
+  if (message.model === Model.AI_AGENT_SMART && message.sender === 'ai') {
+      finalDisplayText = displayText; 
+  }
+
 
   const handleCopyText = () => {
     if (!finalDisplayText.trim()) return;
@@ -393,6 +449,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     addNotification("Kling AI video download started.", "success");
   };
 
+  const handleAASButtonClick = (actionId: string, label: string) => {
+    addNotification(`Action button "${label}" clicked (Action ID: ${actionId}). Feature coming soon!`, 'info');
+  };
+
 
   const ActionButton: React.FC<{
     onClick?: () => void;
@@ -425,6 +485,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       {children}
     </button>
   );
+  
+  const parsedContent = (message.model === Model.AI_AGENT_SMART && !isUser) 
+    ? parseAASMessageContent(finalDisplayText) 
+    : [{ type: 'regular' as const, text: finalDisplayText }];
 
 
   return (
@@ -434,13 +498,16 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           <div className={`w-full h-full rounded-full flex items-center justify-center ${
             isUser 
               ? (message.model === Model.PRIVATE ? 'bg-slate-200 dark:bg-slate-700' : 'bg-blue-100 dark:bg-blue-900')
-              : (message.model === Model.KLING_VIDEO ? 'bg-indigo-200 dark:bg-indigo-700' : (message.model === Model.TRADING_PRO ? 'bg-purple-200 dark:bg-purple-700' : 'bg-gray-200 dark:bg-gray-700'))
+              : (message.model === Model.KLING_VIDEO ? 'bg-indigo-200 dark:bg-indigo-700' 
+                  : (message.model === Model.TRADING_PRO ? 'bg-purple-200 dark:bg-purple-700' 
+                  : (message.model === Model.AI_AGENT_SMART ? 'bg-cyan-200 dark:bg-cyan-700' : 'bg-gray-200 dark:bg-gray-700')))
             } shadow-sm`}
             title={isUser ? 'User' : (message.model || 'AI Assistant')}
           >
             {isUser ? <UserIcon className={`w-5 h-5 ${message.model === Model.PRIVATE ? 'text-slate-600 dark:text-slate-300' : 'text-blue-600 dark:text-blue-300'}`} /> 
                      : (message.model === Model.KLING_VIDEO ? <FilmIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-300" /> 
-                     : (message.model === Model.TRADING_PRO ? <PresentationChartLineIcon className="w-5 h-5 text-purple-600 dark:text-purple-300" /> : <RobotIcon className="w-5 h-5 text-gray-600 dark:text-gray-300" />))}
+                     : (message.model === Model.TRADING_PRO ? <PresentationChartLineIcon className="w-5 h-5 text-purple-600 dark:text-purple-300" /> 
+                     : (message.model === Model.AI_AGENT_SMART ? <MapPinIcon className="w-5 h-5 text-cyan-600 dark:text-cyan-300" /> : <RobotIcon className="w-5 h-5 text-gray-600 dark:text-gray-300" />)))}
           </div>
         )}
       </div>
@@ -455,7 +522,33 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
            {showAvatar && <div className={tailClasses} style={tailStyle}></div>}
           
           <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-            <EnhancedMessageContent text={finalDisplayText} searchQuery={searchQuery} />
+             {parsedContent.map((part, index) => {
+                if (part.type === 'aas-system') {
+                    return <p key={index} className="text-xs italic text-neutral-500 dark:text-neutral-400 my-1">{part.text}</p>;
+                }
+                if (part.type === 'aas-place-detail') {
+                    return (
+                        <div key={index} className="my-0.5 flex items-start">
+                            <strong className="mr-1.5 flex-shrink-0">{part.label}:</strong>
+                            <span>{part.value}</span>
+                        </div>
+                    );
+                }
+                if (part.type === 'aas-button') {
+                    return (
+                        <button
+                            key={index}
+                            onClick={() => handleAASButtonClick(part.actionId, part.label)}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors my-1.5 inline-block shadow-sm hover:shadow-md ${aasButtonClasses}`}
+                            aria-label={part.label}
+                        >
+                           <MapPinIcon className="w-3.5 h-3.5 inline mr-1 align-text-bottom" /> {part.label}
+                        </button>
+                    );
+                }
+                // part.type === 'regular'
+                return <EnhancedMessageContent key={index} text={part.text} searchQuery={searchQuery} />;
+            })}
           </div>
           
           {message.imagePreview && isUser && (
@@ -520,16 +613,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
            {message.tradingAnalysis && (
             <div className="mt-3 p-3 border-t border-black/10 dark:border-white/10">
-              {/* This is a simplified view if a tradingAnalysis message appears in main chat. 
-                  TradingProView is the primary, richer display for this data. */}
               {message.tradingAnalysis.chartImageUrl && (
                 <img src={message.tradingAnalysis.chartImageUrl} alt={`Chart for ${message.tradingAnalysis.pair}`} className="max-w-full h-auto rounded-md mb-2 shadow" />
               )}
               {message.tradingAnalysis.trendPredictions && (
                 <div className="text-xs mb-1">
-                  Prediction: UP {message.tradingAnalysis.trendPredictions.up}% | 
-                  DOWN {message.tradingAnalysis.trendPredictions.down}% | 
-                  SIDEWAYS {message.tradingAnalysis.trendPredictions.sideways}%
+                  Prediction: UP {message.tradingAnalysis.trendPredictions.up_percentage}% | 
+                  DOWN {message.tradingAnalysis.trendPredictions.down_percentage}% | 
+                  SIDEWAYS {message.tradingAnalysis.trendPredictions.sideways_percentage}%
                 </div>
               )}
             </div>
@@ -575,12 +666,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   {isTextCopied ? <CheckIcon className="w-3.5 h-3.5" /> : <ClipboardIcon className="w-3.5 h-3.5" />}
                 </ActionButton>
               )}
-              {!isUser && onRegenerate && message.promptedByMessageId && !message.isImageQuery && !message.audioUrl && !message.isTaskPlan && !message.videoUrl && !message.tradingAnalysis && (
+              {!isUser && onRegenerate && message.promptedByMessageId && !message.isImageQuery && !message.audioUrl && !message.isTaskPlan && message.model !== Model.AI_AGENT_SMART && !message.videoUrl && !message.tradingAnalysis && (
                 <ActionButton onClick={() => onRegenerate(message.id, message.promptedByMessageId!)} disabled={isLoading} title="Regenerate Response" ariaLabel="Regenerate AI response">
                   <ArrowPathIcon className="w-3.5 h-3.5" />
                 </ActionButton>
               )}
-              {message.isTaskPlan && message.text.trim() && (
+              {message.isTaskPlan && message.model !== Model.AI_AGENT_SMART && message.text.trim() && (
                  <ActionButton onClick={handleDownloadAgentResponse} title="Download Agent Response" ariaLabel="Download AI Agent response as text file">
                    <ArrowDownTrayIcon className="w-3.5 h-3.5" />
                  </ActionButton>

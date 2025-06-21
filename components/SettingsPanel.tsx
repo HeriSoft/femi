@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Model, ModelSettings, SettingsPanelProps, ApiKeyStatus, getActualModelIdentifier, ImagenSettings, Persona, OpenAITtsSettings, OpenAiTtsVoice, RealTimeTranslationSettings, AiAgentSettings, FluxKontexSettings, FluxKontexAspectRatio, FluxUltraSettings, FluxUltraAspectRatio, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, PrivateModeSettings, AnyModelSettings, TradingProSettings } from '../types.ts'; 
+import { Model, ModelSettings, SettingsPanelProps, ApiKeyStatus, getActualModelIdentifier, ImagenSettings, Persona, OpenAITtsSettings, OpenAiTtsVoice, RealTimeTranslationSettings, AiAgentSmartSettings, FluxKontexSettings, FluxKontexAspectRatio, FluxUltraSettings, FluxUltraAspectRatio, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, PrivateModeSettings, AnyModelSettings, TradingProSettings } from '../types.ts'; 
 import { ArrowUpTrayIcon, PhotoIcon, XMarkIcon, MagnifyingGlassIcon, KeyIcon, InformationCircleIcon, UserCircleIcon, PlusCircleIcon, TrashIcon, PencilSquareIcon, SpeakerWaveIcon, LanguageIcon, PencilIcon as EditIcon, ArrowPathIcon, FilmIcon, PresentationChartLineIcon } from './Icons.tsx'; // Added PresentationChartLineIcon
 import { TRANSLATION_TARGET_LANGUAGES, DEFAULT_FLUX_KONTEX_SETTINGS, DEFAULT_FLUX_ULTRA_SETTINGS, FLUX_ULTRA_ASPECT_RATIOS, DEFAULT_KLING_AI_SETTINGS, KLING_AI_DURATIONS, KLING_AI_ASPECT_RATIOS, ALL_MODEL_DEFAULT_SETTINGS, TRADING_PRO_PAIRS } from '../constants.ts'; 
 
@@ -30,7 +30,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const isImagenModel = selectedModel === Model.IMAGEN3 || currentApiKeyStatus?.isImageGeneration;
   const isTextToSpeechModel = selectedModel === Model.OPENAI_TTS || currentApiKeyStatus?.isTextToSpeech;
   const isRealTimeTranslationModel = selectedModel === Model.REAL_TIME_TRANSLATION || currentApiKeyStatus?.isRealTimeTranslation;
-  const isAiAgentModel = selectedModel === Model.AI_AGENT || currentApiKeyStatus?.isAiAgent;
+  const isAiAgentSmartModel = selectedModel === Model.AI_AGENT_SMART || currentApiKeyStatus?.isAiAgentSmart; // Updated
   const isPrivateModel = selectedModel === Model.PRIVATE || currentApiKeyStatus?.isPrivateMode;
   const isFluxKontexModel = selectedModel === Model.FLUX_KONTEX || selectedModel === Model.FLUX_KONTEX_MAX_MULTI;
   const isFluxUltraImageGenModel = selectedModel === Model.FLUX_ULTRA || currentApiKeyStatus?.isFluxUltraImageGeneration;
@@ -38,9 +38,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const isTradingProModel = selectedModel === Model.TRADING_PRO || currentApiKeyStatus?.isTradingPro;
 
 
-  const showPersonaSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isPrivateModel && !isFluxKontexModel && !isFluxUltraImageGenModel && !isKlingVideoModel && !isTradingProModel && selectedModel !== Model.CLAUDE;
-  const showChatModelSettingsSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isFluxKontexModel && !isFluxUltraImageGenModel && !isPrivateModel && !isKlingVideoModel && !isTradingProModel && selectedModel !== Model.CLAUDE;
-  const showWebSearchToggle = currentApiKeyStatus?.isGeminiPlatform && !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentModel && !isPrivateModel && !isFluxKontexModel && !isFluxUltraImageGenModel && !isKlingVideoModel && !isTradingProModel;
+  const showPersonaSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentSmartModel && !isPrivateModel && !isFluxKontexModel && !isFluxUltraImageGenModel && !isKlingVideoModel && !isTradingProModel && selectedModel !== Model.CLAUDE; // Updated
+  const showChatModelSettingsSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentSmartModel && !isFluxKontexModel && !isFluxUltraImageGenModel && !isPrivateModel && !isKlingVideoModel && !isTradingProModel && selectedModel !== Model.CLAUDE; // Updated
+  const showWebSearchToggle = currentApiKeyStatus?.isGeminiPlatform && !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentSmartModel && !isPrivateModel && !isFluxKontexModel && !isFluxUltraImageGenModel && !isKlingVideoModel && !isTradingProModel; // Updated
 
 
   const handlePersonaEdit = (persona: Persona) => {
@@ -92,7 +92,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                          !currentApiKeyStatus?.isImageGeneration && 
                                          !currentApiKeyStatus?.isTextToSpeech &&
                                          !currentApiKeyStatus?.isRealTimeTranslation &&
-                                         !currentApiKeyStatus?.isAiAgent &&
+                                         !currentApiKeyStatus?.isAiAgentSmart && // Updated
                                          !currentApiKeyStatus?.isImageEditing &&
                                          !currentApiKeyStatus?.isMultiImageEditing &&
                                          !currentApiKeyStatus?.isFluxUltraImageGeneration &&
@@ -148,7 +148,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     if (currentApiKeyStatus.isMock) apiKeyTypeString = "Mock";
     else if (currentApiKeyStatus.isTextToSpeech) apiKeyTypeString = "TTS API";
     else if (currentApiKeyStatus.isRealTimeTranslation) apiKeyTypeString = "Translation API";
-    else if (currentApiKeyStatus.isAiAgent) apiKeyTypeString = "AI Agent API";
+    else if (currentApiKeyStatus.isAiAgentSmart) apiKeyTypeString = "AI Agent Smart API"; // Updated
     else if (currentApiKeyStatus.isImageEditing || currentApiKeyStatus.isMultiImageEditing) apiKeyTypeString = "Image Editing API";
     else if (currentApiKeyStatus.isFluxUltraImageGeneration) apiKeyTypeString = "Image Gen API (Flux Ultra)";
     else if (currentApiKeyStatus.isKlingVideoGeneration) apiKeyTypeString = "Video Gen API (Kling)";
@@ -385,72 +385,72 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
         </div>
       )}
 
-      {isAiAgentModel && (
+      {isAiAgentSmartModel && ( // Updated condition
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
           <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
               <UserCircleIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" />
-              AI Agent Settings
+              AI Agent Smart Settings {/* Updated heading */}
           </h3>
           <p className="text-xs text-neutral-500 dark:text-neutral-400">
-            The AI Agent uses a specific system instruction to guide its planning and execution capabilities.
-            You can adjust temperature, Top K, and Top P for its responses. Personas are disabled for AI Agent.
+            The AI Agent Smart uses a specific system instruction to guide its planning and execution capabilities.
+            You can adjust temperature, Top K, and Top P for its responses. Personas are disabled for AI Agent Smart.
           </p>
           <div>
-            <label htmlFor="ai-agent-system-instruction" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              System Instruction (AI Agent - Read Only)
+            <label htmlFor="ai-agent-smart-system-instruction" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              System Instruction (AI Agent Smart - Read Only) {/* Updated label */}
             </label>
             <textarea
-              id="ai-agent-system-instruction"
-              rows={5}
-              value={(modelSettings as AiAgentSettings).systemInstruction}
+              id="ai-agent-smart-system-instruction" // Updated id
+              rows={8} // Increased rows for longer instruction
+              value={(modelSettings as AiAgentSmartSettings).systemInstruction} // Updated type cast
               readOnly
               className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light/70 dark:bg-neutral-dark/70 opacity-70 cursor-not-allowed text-xs"
             />
           </div>
            <div>
-            <label htmlFor="ai-agent-temperature" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              Temperature: {(modelSettings as AiAgentSettings).temperature.toFixed(2)}
+            <label htmlFor="ai-agent-smart-temperature" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Temperature: {(modelSettings as AiAgentSmartSettings).temperature.toFixed(2)} {/* Updated type cast */}
             </label>
             <input
               type="range"
-              id="ai-agent-temperature"
+              id="ai-agent-smart-temperature" // Updated id
               min="0"
               max="1" 
               step="0.01"
-              value={(modelSettings as AiAgentSettings).temperature}
-              onChange={(e) => onModelSettingsChange({ temperature: parseFloat(e.target.value) } as Partial<AiAgentSettings>)}
+              value={(modelSettings as AiAgentSmartSettings).temperature} // Updated type cast
+              onChange={(e) => onModelSettingsChange({ temperature: parseFloat(e.target.value) } as Partial<AiAgentSmartSettings>)} // Updated type cast
               disabled={disabled}
               className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
             />
           </div>
           <div>
-            <label htmlFor="ai-agent-top-k" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              Top K: {(modelSettings as AiAgentSettings).topK}
+            <label htmlFor="ai-agent-smart-top-k" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Top K: {(modelSettings as AiAgentSmartSettings).topK} {/* Updated type cast */}
             </label>
             <input
               type="range"
-              id="ai-agent-top-k"
+              id="ai-agent-smart-top-k" // Updated id
               min="1"
               max="100" 
               step="1"
-              value={(modelSettings as AiAgentSettings).topK}
-              onChange={(e) => onModelSettingsChange({ topK: parseInt(e.target.value, 10) } as Partial<AiAgentSettings>)}
+              value={(modelSettings as AiAgentSmartSettings).topK} // Updated type cast
+              onChange={(e) => onModelSettingsChange({ topK: parseInt(e.target.value, 10) } as Partial<AiAgentSmartSettings>)} // Updated type cast
               disabled={disabled}
               className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
             />
           </div>
           <div> 
-            <label htmlFor="ai-agent-top-p" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              Top P: {(modelSettings as AiAgentSettings).topP.toFixed(2)}
+            <label htmlFor="ai-agent-smart-top-p" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Top P: {(modelSettings as AiAgentSmartSettings).topP.toFixed(2)} {/* Updated type cast */}
             </label>
             <input
               type="range"
-              id="ai-agent-top-p"
+              id="ai-agent-smart-top-p" // Updated id
               min="0"
               max="1"
               step="0.01"
-              value={(modelSettings as AiAgentSettings).topP}
-              onChange={(e) => onModelSettingsChange({ topP: parseFloat(e.target.value) } as Partial<AiAgentSettings>)}
+              value={(modelSettings as AiAgentSmartSettings).topP} // Updated type cast
+              onChange={(e) => onModelSettingsChange({ topP: parseFloat(e.target.value) } as Partial<AiAgentSmartSettings>)} // Updated type cast
               disabled={disabled}
               className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
             />
