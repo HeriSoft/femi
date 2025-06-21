@@ -397,6 +397,46 @@ app.post('/api/auth/verify-code', async (req, res) => {
     }
 });
 
+app.post('/api/auth/validate-trading-code', async (req, res) => {
+    const { demoUserToken, tradingCode } = req.body;
+
+    if (!demoUserToken || !tradingCode) {
+        return res.status(400).json({ success: false, message: "Missing demo user token or trading code." });
+    }
+    if (!pool) {
+        return res.status(503).json({ success: false, message: "Database service unavailable." });
+    }
+
+    try {
+        const [users] = await pool.execute(
+            'SELECT code_trading, status FROM users WHERE username = ? AND user_type = "DEMO"', // Added code_trading to SELECT
+            [demoUserToken]
+        );
+
+        if (users.length === 0) {
+            return res.status(404).json({ success: false, message: "Demo user not found." });
+        }
+
+        const user = users[0];
+
+        if (user.status !== 'active') {
+            return res.status(403).json({ success: false, message: "Demo user account is not active." });
+        }
+
+        // Compare the provided tradingCode with the one from the database
+        if (user.code_trading && user.code_trading === tradingCode) {
+            console.log(`[Trading Code Validation] SUCCESS: Demo user ${demoUserToken} validated trading code.`);
+            return res.json({ success: true });
+        } else {
+            console.log(`[Trading Code Validation] FAILED: Demo user ${demoUserToken} provided invalid trading code. Expected: '${user.code_trading}', Got: '${tradingCode}'`);
+            return res.status(401).json({ success: false, message: "Invalid trading access code." });
+        }
+    } catch (dbError) {
+        console.error("[DB Trading Code Validation Error]", dbError);
+        return res.status(500).json({ success: false, message: "Database error during trading code validation." });
+    }
+});
+
 
 const GEMINI_API_KEY_PROXY = process.env.GEMINI_API_KEY;
 const GOOGLE_MAPS_API_KEY_PROXY = process.env.GOOGLE_MAPS_API_KEY;
@@ -1060,7 +1100,13 @@ app.post('/api/gemini/trading-analysis', async (req, res) => {
 
     if (isActualAdmin) console.log(`[Trading Analysis] Admin access validated (IP: ${getClientIp(req)}).`);
     else if (req.isPaidUser) console.log(`[Trading Analysis] Paid user ${req.paidUser.username} validated.`);
-    else if (req.isDemoUser) console.log(`[Trading Analysis] Demo user ${req.demoUser.username} validated.`);
+    else if (req.isDemoUser) {
+        if (!req.body.demoTradingProAccessGranted) { // A flag indicating client-side code validation was successful
+            console.log(`[Trading Analysis] DEMO User ${req.demoUser.username} attempted Trading Pro without access code. IP: ${getClientIp(req)}`);
+            return res.status(403).json({ error: "Trading Pro access for DEMO users requires a valid access code."});
+        }
+        console.log(`[Trading Analysis] Demo user ${req.demoUser.username} validated (with access code).`);
+    }
 
 
     if (!ai) return res.status(500).json({ error: "Google GenAI SDK not initialized for Trading Analysis." });
