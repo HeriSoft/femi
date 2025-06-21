@@ -992,7 +992,7 @@ app.post('/api/fal/image/edit/status', async (req, res) => {
                 responsePayload.error = "Fal.ai Kling result did not contain expected video URL. Raw result logged on proxy.";
                 console.warn(`[Fal Status] COMPLETED_NO_VIDEO for ${modelIdentifier}, reqId ${requestId}. Raw result:`, JSON.stringify(jobResult, null, 2));
             }
-        } else {
+        } else { // Assume image model
             let imageUrlsResult = [];
             if (jobResult?.images && Array.isArray(jobResult.images)) {
                 imageUrlsResult = jobResult.images.map(img => img?.url).filter(Boolean);
@@ -1038,131 +1038,7 @@ app.post('/api/fal/image/edit/status', async (req, res) => {
   }
 });
 
-// --- Trading Pro Endpoints ---
-const ALPHA_VANTAGE_API_KEY_PROXY = process.env.ALPHA_VANTAGE_API_KEY || 'N9STQCJB0YIWCCV1'; // Fallback to user-provided key if not in .env
-if (!process.env.ALPHA_VANTAGE_API_KEY) {
-    console.warn("PROXY WARNING: ALPHA_VANTAGE_API_KEY not found in .env, using fallback N9STQCJB0YIWCCV1. This key has usage limits.");
-} else {
-    console.log("Alpha Vantage API Key (ALPHA_VANTAGE_API_KEY) found in .env.");
-}
-
-app.post('/api/alphavantage/chart-data', async (req, res) => {
-  const { symbol, market, interval, outputsize, avFunction, from_symbol, to_symbol } = req.body;
-
-  if (avFunction === 'FX_INTRADAY' || avFunction === 'FX_DAILY' || avFunction === 'TIME_SERIES_DAILY') {
-    console.log(`[AlphaVantage Proxy] ${avFunction} request. Symbol: ${symbol}, From: ${from_symbol}, To: ${to_symbol}, Interval: ${interval}, Outputsize: ${outputsize}`);
-  }
-
-  if (!avFunction) {
-    return res.status(400).json({ error: 'Missing required parameter: avFunction.' });
-  }
-  if (!['FX_INTRADAY', 'FX_DAILY'].includes(avFunction) && !symbol) {
-      return res.status(400).json({ error: 'Missing required parameter: symbol (for non-FX functions).' });
-  }
-  if (['DIGITAL_CURRENCY_INTRADAY', 'DIGITAL_CURRENCY_DAILY'].includes(avFunction) && !market) {
-    return res.status(400).json({ error: "Missing 'market' parameter for digital currency." });
-  }
-  if (['FX_INTRADAY', 'FX_DAILY'].includes(avFunction) && (!from_symbol || !to_symbol)) {
-      return res.status(400).json({ error: "Missing 'from_symbol' or 'to_symbol' for FX functions."});
-  }
-
-  let apiUrl = '';
-  let dataKey = '';
-  let queryParams = new URLSearchParams({ apikey: ALPHA_VANTAGE_API_KEY_PROXY });
-
-  switch (avFunction) {
-    case 'TIME_SERIES_INTRADAY':
-      queryParams.set('function', 'TIME_SERIES_INTRADAY');
-      queryParams.set('symbol', symbol);
-      if (interval) queryParams.set('interval', interval);
-      if (outputsize) queryParams.set('outputsize', outputsize);
-      dataKey = `Time Series (${interval || 'Default Interval'})`; // Use a consistent key format
-      break;
-    case 'TIME_SERIES_DAILY': // Added case for TIME_SERIES_DAILY
-      queryParams.set('function', 'TIME_SERIES_DAILY');
-      queryParams.set('symbol', symbol);
-      if (outputsize) queryParams.set('outputsize', outputsize);
-      dataKey = 'Time Series (Daily)';
-      break;
-    case 'DIGITAL_CURRENCY_INTRADAY':
-      queryParams.set('function', 'DIGITAL_CURRENCY_INTRADAY');
-      queryParams.set('symbol', symbol);
-      queryParams.set('market', market);
-      if (interval) queryParams.set('interval', interval);
-      if (outputsize) queryParams.set('outputsize', outputsize);
-      dataKey = `Time Series Crypto (${interval || 'Default Interval'})`;
-      break;
-    case 'FX_INTRADAY':
-      queryParams.set('function', 'FX_INTRADAY');
-      queryParams.set('from_symbol', from_symbol);
-      queryParams.set('to_symbol', to_symbol);
-      if (interval) queryParams.set('interval', interval);
-      if (outputsize) queryParams.set('outputsize', outputsize);
-      dataKey = `Time Series FX (${interval || 'Default Interval'})`;
-      break;
-    case 'FX_DAILY':
-      queryParams.set('function', 'FX_DAILY');
-      queryParams.set('from_symbol', from_symbol);
-      queryParams.set('to_symbol', to_symbol);
-      if (outputsize) queryParams.set('outputsize', outputsize);
-      dataKey = 'Time Series FX (Daily)';
-      break;
-    case 'DIGITAL_CURRENCY_DAILY':
-      queryParams.set('function', 'DIGITAL_CURRENCY_DAILY');
-      queryParams.set('symbol', symbol);
-      queryParams.set('market', market);
-      if (outputsize) queryParams.set('outputsize', outputsize); // Add outputsize for digital daily too
-      dataKey = 'Time Series (Digital Currency Daily)';
-      break;
-    default:
-      return res.status(400).json({ error: 'Invalid avFunction specified.' });
-  }
-
-  apiUrl = `https://www.alphavantage.co/query?${queryParams.toString()}`;
-  console.log(`[AlphaVantage Proxy] Fetching URL: ${apiUrl}`);
-
-  try {
-    const alphaResponse = await fetch(apiUrl);
-
-    if (!alphaResponse.ok) {
-        const errorText = await alphaResponse.text().catch(() => "Could not retrieve error text from Alpha Vantage.");
-        console.error(`[AlphaVantage Proxy] Alpha Vantage HTTP Error: ${alphaResponse.status} ${alphaResponse.statusText}. Response: ${errorText.substring(0, 200)}`);
-        return res.status(alphaResponse.status).json({ error: `Alpha Vantage request failed: ${alphaResponse.statusText}. Details: ${errorText.substring(0,100)}...` });
-    }
-
-    const contentType = alphaResponse.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-        const responseText = await alphaResponse.text().catch(() => "Could not retrieve non-JSON response text from Alpha Vantage.");
-        console.warn(`[AlphaVantage Proxy] Unexpected content-type from Alpha Vantage: ${contentType}. Response (first 200 chars): ${responseText.substring(0, 200)}`);
-        return res.status(502).json({ error: `Alpha Vantage returned non-JSON response. Content-Type: ${contentType}. Ensure API key is valid and has not exceeded limits.` });
-    }
-
-    const alphaData = await alphaResponse.json();
-
-    if (alphaData['Error Message']) {
-      console.warn(`[AlphaVantage Proxy] Error Message from Alpha Vantage: ${alphaData['Error Message']}`);
-      return res.status(500).json({ error: `Alpha Vantage Error: ${alphaData['Error Message']}` });
-    }
-    if (alphaData['Note'] && alphaData['Note'].includes('API call frequency')) {
-        console.warn(`[AlphaVantage Proxy] API Limit Note from Alpha Vantage: ${alphaData['Note']}`);
-        return res.status(429).json({ error: `Alpha Vantage API limit reached: ${alphaData['Note']}` });
-    }
-
-    const timeSeries = alphaData[dataKey];
-    if (!timeSeries) {
-      console.warn(`[AlphaVantage Proxy] No time series data found for ${symbol || (from_symbol+'/'+to_symbol)} with key '${dataKey}'. Raw response keys: ${Object.keys(alphaData).join(', ')}. Full response: ${JSON.stringify(alphaData).substring(0, 300)}`);
-      return res.status(404).json({ error: `No time series data found for ${symbol || (from_symbol+'/'+to_symbol)} using key '${dataKey}'. Ensure API key is valid. Response (partial): ${JSON.stringify(alphaData).substring(0,100)}...` });
-    }
-    res.json({ data: timeSeries });
-  } catch (error) {
-    console.error("[Alpha Vantage Proxy Error] Catch block:", error);
-    if (!res.headersSent) {
-        res.status(500).json({ error: `Proxy error fetching chart data: ${error.message}` });
-    } else {
-        console.error("[Alpha Vantage Proxy Error] Headers already sent, cannot send JSON error response.");
-    }
-  }
-});
+// AlphaVantage endpoint removed.
 
 app.post('/api/gemini/trading-analysis', async (req, res) => {
     if (req.authDbError) {
@@ -1188,25 +1064,49 @@ app.post('/api/gemini/trading-analysis', async (req, res) => {
 
 
     if (!ai) return res.status(500).json({ error: "Google GenAI SDK not initialized for Trading Analysis." });
-    const { prompt: userProvidedPrompt, chartImageBase64, pairLabel } = req.body; // chartImageBase64 can be null
+    const { chartImageBase64, pairLabel } = req.body; // Text prompt is now generated on proxy
 
-    if (!userProvidedPrompt || !pairLabel) { 
-        return res.status(400).json({ error: "Missing fields: prompt or pairLabel required for trading analysis." });
+    if (!pairLabel) {
+        return res.status(400).json({ error: "Missing required field: pairLabel." });
     }
 
-    let analysisPrompt;
+    const today = new Date().toISOString().split('T')[0];
 
-    if (chartImageBase64) {
-      analysisPrompt = `You are an expert financial market analyst for ${pairLabel}.
-Analyze the provided trading chart image. The chart shows recent price action (OHLC, trends) on the H4 timeframe.
-Simultaneously, research current market conditions for ${pairLabel}, including:
-- Recent news and their impact on the H4 timeframe.
-- For Gold (XAUUSD): Federal Reserve (FED) policies, interest rate announcements/expectations, geopolitical events affecting gold.
-- For Bitcoin (BTCUSD): Crypto market news, institutional adoption, regulatory news, major economic indicators affecting Bitcoin.
-- Other potential upcoming factors.
+    // Construct the detailed prompt for the AI
+    let analysisPrompt = `You are an expert financial market analyst for ${pairLabel}.
+Current date is ${today}.
 
-Based on your analysis of the chart image AND the researched market information, provide a detailed and accurate market analysis for the H4 timeframe.
-Conclude with a price prediction for the near future (next 1-7 days, considering H4 trends) in the following JSON format, embedded within your text response using a JSON code block:
+USER UPLOADED IMAGE HANDLING:
+${chartImageBase64 ? 
+`An image has been provided. First, carefully determine if this image is a relevant TradingView chart screenshot that clearly displays price action (candlesticks/bars), and ideally indicators like RSI or MA for ${pairLabel}. The image must be legible and directly related to financial chart analysis.
+- IF THE IMAGE IS INVALID (e.g., not a TradingView chart, a picture of a cat, unreadable, completely irrelevant content for financial analysis of ${pairLabel}):
+  Your response MUST START with the exact phrase: "IMAGE_INVALID_TRADING_CHART".
+  After this phrase, on a new line, proceed with the full market analysis based ON WEB RESEARCH ONLY as detailed below, completely ignoring the invalid image.
+- IF THE IMAGE IS VALID (a clear, relevant TradingView chart for ${pairLabel}):
+  Use the information from this valid TradingView chart in conjunction with your web research for the analysis detailed below. Do NOT include the "IMAGE_INVALID_TRADING_CHART" phrase in this case.` 
+: 
+"No image has been provided. Proceed with web research only."
+}
+
+MARKET ANALYSIS TASK (Based on valid image + web research, or web research only if no/invalid image):
+You MUST research and include the following information. Be thorough and precise:
+1.  Today's Date: (Confirm ${today})
+2.  H4 Chart Analysis (TradingView): Describe current H4 chart patterns (e.g., head and shoulders, triangles, flags), current price action relative to key levels, and any visible trendlines or channels. If a valid image was provided, integrate its visual information. If no image or an invalid image was provided, you MUST research this information from TradingView or similar reputable financial charting sites.
+3.  H1 Chart Analysis (TradingView): Describe current H1 chart patterns, price action, and key short-term levels. Research this from TradingView or similar.
+4.  Technical Indicators:
+    *   RSI (Relative Strength Index): Current values on H4 and H1, and whether they indicate overbought/oversold conditions or divergence.
+    *   MA20 (20-period Moving Average): Current values on H4 and H1. Is the price above or below the MA20? Is the MA20 acting as support/resistance?
+    *   Buy/Sell Pressure: Summarize overall buy/sell pressure or market sentiment if discernible from web research or volume indicators (if you can find this info).
+5.  News Impact (Next 1-7 Days): Identify significant upcoming economic news, announcements (e.g., FOMC for XAUUSD, major crypto news for BTCUSD), or geopolitical events scheduled for the next 1 to 7 days that could directly impact ${pairLabel}. Explain the potential direction of impact.
+6.  Support & Resistance (H4): Identify key support and resistance levels on the H4 timeframe based on your chart analysis (from valid image or web research). List at least 2 support and 2 resistance levels.
+7.  Trading Recommendations: Based on ALL the above information, provide specific, actionable recommendations:
+    *   Recommended entry price range(s) for buying.
+    *   Recommended entry price range(s) for selling (shorting).
+    *   Suggested take profit levels for both buy and sell recommendations.
+    *   Suggested stop-loss levels for both buy and sell recommendations.
+    *   Provide a brief rationale for these recommendations, linking them to your chart analysis, indicators, and news.
+
+Conclude your entire response with a price prediction for the near future (next 1-7 days, considering H4 trends) in the following JSON format, embedded within your text response using a JSON code block. Ensure this JSON block is the LAST part of your textual response before any sources.
 \`\`\`json
 {
   "trend_prediction": {
@@ -1214,53 +1114,28 @@ Conclude with a price prediction for the near future (next 1-7 days, considering
     "down_percentage": <integer between 0-100>,
     "sideways_percentage": <integer between 0-100>
   },
-  "detailed_analysis": "<Your detailed textual analysis here, explaining your reasoning based on chart and news. This detailed_analysis should be part of the JSON structure but will also be displayed as the main text content.>"
+  "detailed_analysis": "<Your complete, detailed textual analysis here, incorporating all 7 points above. This should be a comprehensive report.>"
 }
 \`\`\`
 Ensure the sum of percentages for up, down, and sideways is 100.
-List any web sources used for your research clearly. Use the term "Sources:" followed by a list.`;
-    } else {
-        analysisPrompt = `You are an expert financial market analyst for ${pairLabel}.
-No chart image is provided for this analysis.
-Your task is to provide an analysis for the H4 (4-hour) timeframe based on current market conditions and data.
-Research current market information for ${pairLabel}, including:
-- Recent news and their impact on the H4 timeframe.
-- For Gold (XAUUSD): Federal Reserve (FED) policies, interest rate announcements/expectations, geopolitical events.
-- For Bitcoin (BTCUSD): Crypto market news, institutional adoption, regulatory news, major economic indicators.
-- Other potential upcoming factors relevant to the H4 chart.
-- You MUST prioritize and synthesize information from TradingView (or similar reputable financial data sources) to understand the current H4 chart patterns, price action, and key technical indicators for ${pairLabel} on the H4 timeframe. Describe your interpretation of this H4 chart data as part of your analysis.
-
-Based on your research of current H4 data and market information, provide a detailed market analysis.
-Conclude with a price prediction for the near future (next 1-7 days, considering H4 trends) in the following JSON format, embedded within your text response using a JSON code block:
-\`\`\`json
-{
-  "trend_prediction": {
-    "up_percentage": <integer between 0-100>,
-    "down_percentage": <integer between 0-100>,
-    "sideways_percentage": <integer between 0-100>
-  },
-  "detailed_analysis": "<Your detailed textual analysis here, explaining your reasoning based on researched H4 data and news. This detailed_analysis should be part of the JSON structure but will also be displayed as the main text content.>"
-}
-\`\`\`
-Ensure the sum of percentages for up, down, and sideways is 100.
-List any web sources used for your research clearly. Use the term "Sources:" followed by a list.`;
-    }
+If you list web sources, use the term "Sources:" followed by a list. Do NOT list 'vertexaisearch.cloud.google.com' as a source.
+The "detailed_analysis" field in the JSON should be a complete summary of your findings. The text part of your response leading up to the JSON block should also contain this full analysis.
+`;
 
     try {
-        const textPart = { text: analysisPrompt }; // Use the constructed analysisPrompt
+        const textPart = { text: analysisPrompt };
         let geminiContents;
 
         if (chartImageBase64) {
             const imagePart = {
-                inlineData: { mimeType: 'image/png', data: chartImageBase64 },
+                inlineData: { mimeType: 'image/png', data: chartImageBase64 }, // Assuming PNG, client should ensure
             };
             geminiContents = { parts: [textPart, imagePart] };
-            console.log(`[Trading Analysis Proxy] Performing analysis for ${pairLabel} with chart image.`);
+            console.log(`[Trading Analysis Proxy] Performing analysis for ${pairLabel} WITH UPLOADED chart image.`);
         } else {
             geminiContents = { parts: [textPart] };
-            console.log(`[Trading Analysis Proxy] Performing analysis for ${pairLabel} without chart image.`);
+            console.log(`[Trading Analysis Proxy] Performing analysis for ${pairLabel} WITHOUT chart image (web research only).`);
         }
-
 
         const geminiResponse = await ai.models.generateContent({
             model: 'gemini-2.5-flash-preview-04-17',
@@ -1273,32 +1148,42 @@ List any web sources used for your research clearly. Use the term "Sources:" fol
         let analysisText = "Analysis text not available.";
         let trendPredictions = null;
         let groundingSources = [];
+        let imageValidationError = null;
 
         const responseTextFromGemini = geminiResponse.text;
 
         if (responseTextFromGemini) {
             let rawText = responseTextFromGemini.trim();
+            
+            // Check for image invalidation marker
+            if (rawText.startsWith("IMAGE_INVALID_TRADING_CHART")) {
+                imageValidationError = "IMAGE_INVALID_TRADING_CHART";
+                console.log(`[Trading Analysis Proxy] Gemini flagged uploaded image as invalid for ${pairLabel}.`);
+                // Remove the marker and the newline following it for further processing
+                const newlineIndex = rawText.indexOf('\n');
+                rawText = newlineIndex !== -1 ? rawText.substring(newlineIndex + 1).trim() : "";
+                 // Return the error to the client immediately if the image is invalid, along with any subsequent analysis.
+                 // The client will then decide how to display this.
+            }
+
             let jsonContentString = "";
-            let textBeforeJson = "";
-            let textAfterJson = "";
+            let textBeforeJson = ""; // This will be the main analysis text
+            // The AI is instructed to put the JSON at the end.
 
             const jsonStartMarker = "```json";
             const jsonEndMarker = "```";
+            const lastJsonStartIndex = rawText.lastIndexOf(jsonStartMarker);
 
-            const startIndex = rawText.indexOf(jsonStartMarker);
+            if (lastJsonStartIndex !== -1) {
+                const jsonBlockStartIndex = lastJsonStartIndex + jsonStartMarker.length;
+                const jsonBlockEndIndex = rawText.indexOf(jsonEndMarker, jsonBlockStartIndex);
 
-            if (startIndex !== -1) {
-                const jsonBlockStartIndex = startIndex + jsonStartMarker.length;
-                const endIndex = rawText.indexOf(jsonEndMarker, jsonBlockStartIndex);
-
-                if (endIndex !== -1) {
-                    jsonContentString = rawText.substring(jsonBlockStartIndex, endIndex).trim();
-                    textBeforeJson = rawText.substring(0, startIndex).trim();
-                    textAfterJson = rawText.substring(endIndex + jsonEndMarker.length).trim();
+                if (jsonBlockEndIndex !== -1) {
+                    jsonContentString = rawText.substring(jsonBlockStartIndex, jsonBlockEndIndex).trim();
+                    analysisText = rawText.substring(0, lastJsonStartIndex).trim(); // Text before the JSON block is the main analysis
 
                     try {
                         const parsedData = JSON.parse(jsonContentString);
-
                         if (parsedData.trend_prediction) {
                             const { up_percentage, down_percentage, sideways_percentage } = parsedData.trend_prediction;
                             if (typeof up_percentage === 'number' && typeof down_percentage === 'number' && typeof sideways_percentage === 'number') {
@@ -1320,51 +1205,41 @@ List any web sources used for your research clearly. Use the term "Sources:" fol
                                 trendPredictions = null;
                             }
                         } else {
-                             trendPredictions = null; // Ensure it's null if not present
+                             trendPredictions = null;
                         }
-
-                        let detailedAnalysisFromJson = parsedData.detailed_analysis || "";
-
-                        // Construct analysisText from parts, preferring detailed_analysis from JSON if present
-                        let combinedAnalysisText = textBeforeJson;
-                        if (detailedAnalysisFromJson) {
-                            if (combinedAnalysisText.trim()) combinedAnalysisText += "\n\n"; // Add separator if textBeforeJson exists
-                            combinedAnalysisText += detailedAnalysisFromJson.trim();
-                        }
-                        if (textAfterJson) {
-                            if (combinedAnalysisText.trim()) combinedAnalysisText += "\n\n"; // Add separator if text exists before textAfterJson
-                            combinedAnalysisText += textAfterJson.trim();
-                        }
-                        // If detailed_analysis was empty and other parts were also empty, use the full rawText
-                        analysisText = combinedAnalysisText.trim() || rawText; 
-
+                        // The detailed_analysis in JSON is a repeat, the main text is `analysisText`
                     } catch (e) {
                         console.error("[Trading Analysis Proxy] Failed to parse extracted JSON:", e, "Extracted JSON string:", jsonContentString, "Full raw text (first 500 chars):", rawText.substring(0, 500));
-                        analysisText = rawText; // Fallback to full raw text
+                        // analysisText is already set to text before JSON block, or full rawText if no JSON
                         trendPredictions = null;
                     }
                 } else {
-                    // JSON start marker found, but no end marker. Treat as plain text.
                     console.warn("[Trading Analysis Proxy] Found JSON start marker but no end marker. Treating entire response as text.");
                     analysisText = rawText;
                 }
             } else {
-                // No JSON block found. Treat as plain text.
                 console.warn("[Trading Analysis Proxy] No JSON block (```json ... ```) found in Gemini response. Treating entire response as text.");
                 analysisText = rawText;
             }
         }
 
+
         if (geminiResponse.candidates?.[0]?.groundingMetadata?.groundingChunks) {
             groundingSources = geminiResponse.candidates[0].groundingMetadata.groundingChunks
-                .filter(gc => gc.web?.uri && !gc.web.uri.includes('vertexaisearch.cloud.google.com')) // Updated filter
+                .filter(gc => gc.web?.uri && !gc.web.uri.includes('vertexaisearch.cloud.google.com'))
                 .map(gc => ({
                     uri: gc.web.uri,
                     title: gc.web.title || gc.web.uri
                 }));
         }
-
-        res.json({ analysisText, trendPredictions, groundingSources });
+        // If imageValidationError is set, it means the AI indicated the image was invalid.
+        // The client will handle displaying this error. The analysisText should be the web-researched part.
+        res.json({ 
+            analysisText: analysisText || "No textual analysis provided.", 
+            trendPredictions, 
+            groundingSources,
+            error: imageValidationError // Send "IMAGE_INVALID_TRADING_CHART" or null
+        });
 
     } catch (error) {
         console.error("[Gemini Trading Analysis Proxy Error]", error);
