@@ -385,72 +385,81 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
         </div>
       )}
 
-      {isAiAgentSmartModel && ( // Updated condition
+      {isAiAgentSmartModel && (
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
           <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
               <UserCircleIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" />
-              AI Agent Smart Settings {/* Updated heading */}
+              AI Agent Smart Settings
           </h3>
-          <p className="text-xs text-neutral-500 dark:text-neutral-400">
-            The AI Agent Smart uses a specific system instruction to guide its planning and execution capabilities.
-            You can adjust temperature, Top K, and Top P for its responses. Personas are disabled for AI Agent Smart.
-          </p>
-          <div>
-            <label htmlFor="ai-agent-smart-system-instruction" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              System Instruction (AI Agent Smart - Read Only) {/* Updated label */}
-            </label>
-            <textarea
-              id="ai-agent-smart-system-instruction" // Updated id
-              rows={8} // Increased rows for longer instruction
-              value={(modelSettings as AiAgentSmartSettings).systemInstruction} // Updated type cast
-              readOnly
-              className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light/70 dark:bg-neutral-dark/70 opacity-70 cursor-not-allowed text-xs"
-            />
-          </div>
+          {isAdminUser ? (
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                As an Admin, you can view and edit the core system instruction for AI Agent Smart. Personas are disabled for this model.
+            </p>
+          ) : (
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                The AI Agent Smart uses a specific system instruction for its capabilities. Personas are disabled. Model parameters can be adjusted below.
+            </p>
+          )}
+
+          {isAdminUser && (
+            <div>
+              <label htmlFor="ai-agent-smart-system-instruction" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+                System Instruction (AI Agent Smart)
+              </label>
+              <textarea
+                id="ai-agent-smart-system-instruction"
+                rows={8}
+                value={(modelSettings as AiAgentSmartSettings).systemInstruction}
+                onChange={(e) => onModelSettingsChange({ systemInstruction: e.target.value } as Partial<AiAgentSmartSettings>)}
+                disabled={disabled}
+                className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none text-xs"
+              />
+            </div>
+          )}
            <div>
             <label htmlFor="ai-agent-smart-temperature" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              Temperature: {(modelSettings as AiAgentSmartSettings).temperature.toFixed(2)} {/* Updated type cast */}
+              Temperature: {(modelSettings as AiAgentSmartSettings).temperature.toFixed(2)}
             </label>
             <input
               type="range"
-              id="ai-agent-smart-temperature" // Updated id
+              id="ai-agent-smart-temperature"
               min="0"
               max="1" 
               step="0.01"
-              value={(modelSettings as AiAgentSmartSettings).temperature} // Updated type cast
-              onChange={(e) => onModelSettingsChange({ temperature: parseFloat(e.target.value) } as Partial<AiAgentSmartSettings>)} // Updated type cast
+              value={(modelSettings as AiAgentSmartSettings).temperature}
+              onChange={(e) => onModelSettingsChange({ temperature: parseFloat(e.target.value) } as Partial<AiAgentSmartSettings>)}
               disabled={disabled}
               className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
             />
           </div>
           <div>
             <label htmlFor="ai-agent-smart-top-k" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              Top K: {(modelSettings as AiAgentSmartSettings).topK} {/* Updated type cast */}
+              Top K: {(modelSettings as AiAgentSmartSettings).topK}
             </label>
             <input
               type="range"
-              id="ai-agent-smart-top-k" // Updated id
+              id="ai-agent-smart-top-k"
               min="1"
               max="100" 
               step="1"
-              value={(modelSettings as AiAgentSmartSettings).topK} // Updated type cast
-              onChange={(e) => onModelSettingsChange({ topK: parseInt(e.target.value, 10) } as Partial<AiAgentSmartSettings>)} // Updated type cast
+              value={(modelSettings as AiAgentSmartSettings).topK}
+              onChange={(e) => onModelSettingsChange({ topK: parseInt(e.target.value, 10) } as Partial<AiAgentSmartSettings>)}
               disabled={disabled}
               className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
             />
           </div>
           <div> 
             <label htmlFor="ai-agent-smart-top-p" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              Top P: {(modelSettings as AiAgentSmartSettings).topP.toFixed(2)} {/* Updated type cast */}
+              Top P: {(modelSettings as AiAgentSmartSettings).topP.toFixed(2)}
             </label>
             <input
               type="range"
-              id="ai-agent-smart-top-p" // Updated id
+              id="ai-agent-smart-top-p"
               min="0"
               max="1"
               step="0.01"
-              value={(modelSettings as AiAgentSmartSettings).topP} // Updated type cast
-              onChange={(e) => onModelSettingsChange({ topP: parseFloat(e.target.value) } as Partial<AiAgentSmartSettings>)} // Updated type cast
+              value={(modelSettings as AiAgentSmartSettings).topP}
+              onChange={(e) => onModelSettingsChange({ topP: parseFloat(e.target.value) } as Partial<AiAgentSmartSettings>)}
               disabled={disabled}
               className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
             />
