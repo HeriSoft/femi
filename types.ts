@@ -135,7 +135,7 @@ export type TradingPairValue = 'XAUUSD' | 'BTCUSD';
 export interface TradingPair {
   value: TradingPairValue;
   label: string; 
-  alphaVantageFunction: 'TIME_SERIES_INTRADAY' | 'DIGITAL_CURRENCY_INTRADAY' | 'FX_INTRADAY' | 'FX_DAILY' | 'DIGITAL_CURRENCY_DAILY';
+  alphaVantageFunction: 'TIME_SERIES_INTRADAY' | 'DIGITAL_CURRENCY_INTRADAY' | 'FX_INTRADAY' | 'FX_DAILY' | 'DIGITAL_CURRENCY_DAILY' | 'TIME_SERIES_DAILY';
   alphaVantageSymbol?: string; 
   alphaVantageMarket?: string; 
   from_symbol?: string; 
