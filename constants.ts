@@ -391,21 +391,8 @@ export const KLING_AI_ASPECT_RATIOS: { value: KlingAiAspectRatio; label: string 
 export const TRADING_PRO_DISCLAIMER = `Mô hình này dựa trên kiến thức, kinh nghiệm, kỹ năng phân tích của AI để mang lại cái nhìn tổng quan chính xác và thực tế của thị trường giao dịch Crypto hoặc Vàng thế giới.\n\nĐây KHÔNG phải lời khuyên đầu tư. Chúng tôi KHÔNG đảm bảo mang lại lợi nhuận cho nhà đầu tư. Bạn phải thực sự cẩn trọng trong mọi quyết định đầu tư và quản lý vốn hiệu quả nếu bạn có ý định tham gia thị trường.\n\nChúng tôi sẽ KHÔNG chịu mọi trách nhiệm về tổn thất nếu bạn thua lỗ hoặc gặp rủi ro.`;
 
 export const TRADING_PRO_PAIRS: TradingPair[] = [
-  {
-    value: 'XAUUSD',
-    label: 'XAU/USD (Gold)',
-    alphaVantageFunction: 'TIME_SERIES_DAILY', // Changed from FX_DAILY
-    alphaVantageSymbol: 'GOLD', // Using a common symbol for Gold, actual might vary for AV
-    outputsize: 'compact' // Added outputsize for daily functions
-  },
-  {
-    value: 'BTCUSD',
-    label: 'BTC/USD (Bitcoin)',
-    alphaVantageSymbol: 'BTC',
-    alphaVantageMarket: 'USD',
-    alphaVantageFunction: 'DIGITAL_CURRENCY_DAILY',
-    outputsize: 'compact' // Added outputsize for daily functions
-  },
+  { value: 'XAUUSD', label: 'XAU/USD (Gold)' },
+  { value: 'BTCUSD', label: 'BTC/USD (Bitcoin)' },
 ];
 
-export const ALPHA_VANTAGE_API_KEY = 'N9STQCJB0YIWCCV1';
+// ALPHA_VANTAGE_API_KEY removed

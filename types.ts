@@ -1,5 +1,4 @@
 
-
 import { Chat } from '@google/genai'; // Updated import
 import React from 'react'; // Added for React.DetailedHTMLProps
 
@@ -56,7 +55,7 @@ export interface ChatMessage {
     pair: TradingPairValue;
     analysisText: string;
     trendPredictions: { up_percentage: number; down_percentage: number; sideways_percentage: number };
-    chartImageUrl?: string; 
+    chartImageUrl?: string; // This can now be the user-uploaded image for AI consideration or if AI references one
   };
 }
 
@@ -135,46 +134,21 @@ export type TradingPairValue = 'XAUUSD' | 'BTCUSD';
 export interface TradingPair {
   value: TradingPairValue;
   label: string; 
-  alphaVantageFunction: 'TIME_SERIES_INTRADAY' | 'DIGITAL_CURRENCY_INTRADAY' | 'FX_INTRADAY' | 'FX_DAILY' | 'DIGITAL_CURRENCY_DAILY' | 'TIME_SERIES_DAILY';
-  alphaVantageSymbol?: string; 
-  alphaVantageMarket?: string; 
-  from_symbol?: string; 
-  to_symbol?: string; 
-  interval?: '1min' | '5min' | '15min' | '30min' | '60min'; 
-  outputsize?: 'compact' | 'full'; 
+  // Alpha Vantage specific fields removed
 }
 
-export interface AlphaVantageCandle {
-  '1. open': string;
-  '2. high': string;
-  '3. low': string;
-  '4. close': string;
-  '5. volume': string;
-}
-export interface AlphaVantageTimeSeries {
-  [dateTime: string]: AlphaVantageCandle;
-}
-
-export interface CandlestickPoint {
-  x: number; 
-  o: number; 
-  h: number; 
-  l: number; 
-  c: number; 
-}
-
+// AlphaVantageCandle, AlphaVantageTimeSeries, CandlestickPoint types removed
 
 export interface TradingProState {
   disclaimerAgreed: boolean;
-  isLoadingChart: boolean;
-  chartData: AlphaVantageTimeSeries | null;
-  chartImageUrl: string | null; 
+  chartImageUrl: string | null; // Will hold user-uploaded image if provided, or null
   isLoadingAnalysis: boolean;
   analysisText: string | null;
   trendPredictions: { up_percentage: number; down_percentage: number; sideways_percentage: number } | null;
   analysisError: string | null;
   groundingSources?: GroundingSource[];
   selectedPair: TradingPairValue | null; 
+  uploadedImageValidationError: string | null; // For "ảnh không hợp lệ"
 }
 
 export interface TradingProSettings {
@@ -724,10 +698,7 @@ export interface FalStatusProxyResponse {
   rawResult?: any; 
 }
 
-export interface AlphaVantageProxyResponse {
-  data?: AlphaVantageTimeSeries;
-  error?: string;
-}
+// AlphaVantageProxyResponse removed
 
 export interface GeminiTradingAnalysisResponse {
   analysisText?: string;
