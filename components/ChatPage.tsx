@@ -684,6 +684,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         const newModel = selectedModel;
         const oldModel = prevSelectedModelRef.current;
         let shouldClearGeneralAttachments = false;
+        let shouldClearTextFileAttachments = false;
 
         if (
             newModel === Model.IMAGEN3 ||
@@ -709,6 +710,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                  shouldClearGeneralAttachments = true;
              }
         }
+        
+        // AAS now only supports images, so clear text files if switching to it
+        if (newModel === Model.AI_AGENT_SMART) {
+            shouldClearTextFileAttachments = true;
+        }
+
 
         if (oldModel &&
             ((newModel === Model.FLUX_KONTEX && oldModel === Model.FLUX_KONTEX_MAX_MULTI) ||
@@ -728,10 +735,17 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                  setUploadedTextFileName(null);
                  addNotification("Cleared previous file attachment for the new model.", "info");
             }
+        } else if (shouldClearTextFileAttachments) { // Specific for AAS
+             if (uploadedTextFileContent || uploadedTextFileName) {
+                 setUploadedTextFileContent(null);
+                 setUploadedTextFileName(null);
+                 addNotification("Cleared previous file attachment as AI Agent Smart only supports images.", "info");
+            }
         }
 
+
         // Clear personas if new model doesn't support them
-        if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || getIsFluxKontexModel(newModel) || isClaudeModelSelected || getIsFluxUltraModel(newModel) || getIsKlingVideoModel(newModel) || getIsTradingProModel(newModel)) {
+        if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || getIsFluxKontexModel(newModel) || isClaudeModelSelected || getIsFluxUltraModel(newModel) || getIsKlingVideoModel(newModel) || getIsTradingProModel(newModel) || isAiAgentSmartMode) { // Added isAiAgentSmartMode
           if (activePersonaId) {
             setActivePersonaId(null);
           }
@@ -1874,15 +1888,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     let userDisplayedText = currentInputText.trim();
     let textForApi = currentInputText.trim();
 
-    const fileContextNote = `(System Note: User uploaded a file named '${currentUploadedTextFileName}'. Its content is not directly available to you. Please refer to your system instructions on how to handle this situation.)`;
+    // Removed fileContextNote and related logic for AAS, as it no longer supports text files.
+    // const fileContextNote = `(System Note: User uploaded a file named '${currentUploadedTextFileName}'. Its content is not directly available to you. Please refer to your system instructions on how to handle this situation.)`;
 
     if (isAiAgentSmartMode) {
-        if (currentUploadedTextFileName && currentUploadedTextContent) {
-            textForApi = `Content from uploaded file "${currentUploadedTextFileName}":\n${currentUploadedTextContent}\n\n---\n\nUser's goal: ${textForApi}`;
-        } else if (currentUploadedTextFileName && !currentUploadedTextContent && currentUploadedImagePreviews.length === 0) {
-            textForApi = `${fileContextNote}\n\nUser's goal: ${textForApi}`;
-        }
-    } else if (currentUploadedTextFileName && currentUploadedTextContent) {
+        // AAS now only handles text and image (via description from system).
+        // No special textForApi construction for text files.
+    } else if (currentUploadedTextFileName && currentUploadedTextContent) { // For other models that might support text files
         textForApi = `The user has uploaded a file named "${currentUploadedTextFileName}".\nThe content of this file is:\n${currentUploadedTextContent}\n\n---\n\n${textForApi}`;
     }
 
@@ -1892,7 +1904,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         selectedModel === Model.GPT4O ||
         selectedModel === Model.GPT4O_MINI ||
         selectedModel === Model.DEEPSEEK ||
-        selectedModel === Model.AI_AGENT_SMART ||
+        selectedModel === Model.AI_AGENT_SMART || // AAS can have an image preview
         selectedModel === Model.PRIVATE ||
         selectedModel === Model.FLUX_KONTEX ||
         selectedModel === Model.KLING_VIDEO;
@@ -1905,8 +1917,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         imagePreview: canHaveSingleImagePreview && currentUploadedImagePreviews.length > 0 ? currentUploadedImagePreviews[0] : undefined,
         imagePreviews: (selectedModel === Model.FLUX_KONTEX_MAX_MULTI || getIsFluxUltraModel(selectedModel)) ? currentUploadedImagePreviews : undefined,
         imageMimeTypes: (selectedModel === Model.FLUX_KONTEX_MAX_MULTI || getIsFluxUltraModel(selectedModel)) ? currentUploadedImageFiles.map(f => f.type) : undefined,
-        fileName: currentUploadedTextFileName || undefined,
-        isImageQuery: isImagenModelSelected || getIsFluxKontexModel(selectedModel) || getIsFluxUltraModel(selectedModel),
+        fileName: (selectedModel !== Model.AI_AGENT_SMART && currentUploadedTextFileName) ? currentUploadedTextFileName : undefined, // No filename for AAS if it's image only
+        isImageQuery: isImagenModelSelected || getIsFluxKontexModel(selectedModel) || getIsFluxUltraModel(selectedModel) || isAiAgentSmartMode, // AAS can be an image query
         isVideoQuery: getIsKlingVideoModel(selectedModel),
         isTaskGoal: isAiAgentSmartMode,
         isNote: isPrivateModeSelected && (currentUploadedImagePreviews.length === 0 && !currentUploadedTextFileName),
@@ -2256,9 +2268,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         if (textForApi.trim()) {
             currentUserParts.push({ text: textForApi.trim() });
         }
-        if (!isAiAgentSmartMode && currentUploadedTextFileName && !currentUploadedTextContent && currentUploadedImageFiles.length === 0) {
-            currentUserParts.push({ text: fileContextNote });
-        }
+        // Removed fileContextNote for AAS
+        // if (!isAiAgentSmartMode && currentUploadedTextFileName && !currentUploadedTextContent && currentUploadedImageFiles.length === 0) {
+        //     currentUserParts.push({ text: fileContextNote });
+        // }
         if (currentUploadedImageFiles.length > 0 && currentUploadedImagePreviews.length > 0) {
             const base64Image = currentUploadedImagePreviews[0].split(',')[1];
             if (base64Image) {
@@ -2317,9 +2330,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             else if (msg.sender === 'ai') history.push({ role: 'assistant', content: msgContent });
         });
         let currentTurnTextForDeepseek = textForApi.trim();
-        if (currentUploadedTextFileName && !currentUploadedTextContent && currentUploadedImageFiles.length === 0) {
-            currentTurnTextForDeepseek = `${currentTurnTextForDeepseek}\n\n${fileContextNote}`;
-        }
+        // Removed fileContextNote for Deepseek as well, assuming image handling is primary now if multimodal
+        // if (currentUploadedTextFileName && !currentUploadedTextContent && currentUploadedImageFiles.length === 0) {
+        //     currentTurnTextForDeepseek = `${currentTurnTextForDeepseek}\n\n${fileContextNote}`;
+        // }
         history.push({ role: 'user', content: currentTurnTextForDeepseek || " " });
 
         const stream = sendDeepseekMessageStream({ modelIdentifier: actualModelIdentifier, history, modelSettings: currentModelSpecificSettingsForApiCall as ModelSettings, userSession: userSession });
@@ -2334,9 +2348,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       } else if (currentModelStatus?.isMock && !isRealTimeTranslationMode && !isAiAgentSmartMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxUltraModel(selectedModel) && !getIsKlingVideoModel(selectedModel)) {
         const mockParts: Part[] = [];
         if (textForApi.trim()) mockParts.push({ text: textForApi.trim() });
-        if (currentUploadedTextFileName && !currentUploadedTextContent && currentUploadedImageFiles.length === 0) {
-            mockParts.push({ text: fileContextNote });
-        }
+        // Removed fileContextNote for Mock
+        // if (currentUploadedTextFileName && !currentUploadedTextContent && currentUploadedImageFiles.length === 0) {
+        //     mockParts.push({ text: fileContextNote });
+        // }
         if (currentUploadedImageFiles.length > 0 && currentUploadedImagePreviews.length > 0) {
             mockParts.push({ inlineData: { mimeType: currentUploadedImageFiles[0].type as 'image/jpeg' | 'image/png', data: currentUploadedImagePreviews[0].split(',')[1] } });
         }
@@ -2374,8 +2389,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             setUploadedImages([]);
             setImagePreviews([]);
         }
-        setUploadedTextFileContent(null);
-        setUploadedTextFileName(null);
+        // AAS no longer uses text files, so don't clear them based on AAS specific logic here, general clearing is fine
+        if (selectedModel !== Model.AI_AGENT_SMART) {
+            setUploadedTextFileContent(null);
+            setUploadedTextFileName(null);
+        }
     }
     clearSearch();
   };
@@ -2429,9 +2447,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         addNotification(`TTS input too long. Max ${determinedTtsMaxLength} chars.`, "error");
         return;
     }
-    if (isAiAgentSmartMode && !input.trim() && uploadedImages.length === 0 && !uploadedTextFileName) {
-        setError("Please enter a goal or upload a file for the AI Agent Smart.");
-        addNotification("Please enter a goal or upload a file for the AI Agent Smart.", "info");
+    if (isAiAgentSmartMode && !input.trim() && uploadedImages.length === 0) { // Removed !uploadedTextFileName
+        setError("Please enter a goal or upload an image for the AI Agent Smart.");
+        addNotification("Please enter a goal or upload an image for the AI Agent Smart.", "info");
         return;
     }
      if (isPrivateModeSelected && !input.trim() && uploadedImages.length === 0 && !uploadedTextFileName) {
@@ -2474,7 +2492,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       const regenUploadedImageFiles: File[] = [];
 
       let currentRegenUploadedTextContent: string | null = null;
-      let currentRegenUploadedTextFileName: string | null = userMessageForRegen.fileName || null;
+      // AAS does not use text files, so filename won't be used for it in regeneration
+      let currentRegenUploadedTextFileName: string | null = (selectedModel !== Model.AI_AGENT_SMART && userMessageForRegen.fileName) ? userMessageForRegen.fileName : null;
+
 
       setMessages(prev => prev.map(msg => {
           if (msg.id === aiMessageIdToRegenerate) {
@@ -2496,6 +2516,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
   const imageUploadLimit = useMemo(() => {
       if (selectedModel === Model.FLUX_KONTEX_MAX_MULTI) return 4;
+      // AI Agent Smart now supports 1 image
       if (getIsKlingVideoModel(selectedModel) || selectedModel === Model.FLUX_KONTEX || selectedModel === Model.GEMINI || selectedModel === Model.GPT4O || selectedModel === Model.GPT4O_MINI || selectedModel === Model.PRIVATE || selectedModel === Model.AI_AGENT_SMART) return 1;
       if (selectedModel === Model.DEEPSEEK || getIsFluxUltraModel(selectedModel) || getIsTradingProModel(selectedModel)) return 0;
       return 0;
@@ -2575,6 +2596,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
 
   const handleFileUpload = (file: File | null) => {
+    if (isAiAgentSmartMode) { // AAS does not support general file uploads
+        addNotification("AI Agent Smart only supports image uploads.", "info");
+        return;
+    }
     if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || getIsFluxKontexModel(selectedModel) || isClaudeModelSelected || getIsFluxUltraModel(selectedModel) || getIsKlingVideoModel(selectedModel) || getIsTradingProModel(selectedModel)) return;
 
     setUploadedImages([]);
@@ -2596,9 +2621,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         reader.readAsText(file);
       } else {
         setUploadedTextFileContent(null);
-        if (isAiAgentSmartMode) {
-            addNotification(`File "${file.name}" content cannot be displayed/embedded. AI Agent Smart will be notified of the filename.`, "info");
-        } else if (isPrivateModeSelected) {
+        if (isPrivateModeSelected) { // Private mode can still log non-readable files by name
             addNotification(`File "${file.name}" logged. Content not displayed for this type.`, "info");
         } else {
             addNotification(`File "${file.name}" content cannot be displayed/embedded. This model might not process it.`, "warning" as NotificationType);
@@ -2752,11 +2775,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
            !isTextToSpeechModelSelected &&
            !isRealTimeTranslationMode &&
            !isImagenModelSelected &&
-           !isAiAgentSmartMode &&
+           // Removed !isAiAgentSmartMode to allow image upload for AAS
            !isClaudeModelSelected &&
            !getIsKlingVideoModel(selectedModel) &&
            !getIsTradingProModel(selectedModel);
-  }, [imageUploadLimit, selectedModel, isTextToSpeechModelSelected, isRealTimeTranslationMode, isImagenModelSelected, isAiAgentSmartMode, isClaudeModelSelected]);
+  }, [imageUploadLimit, selectedModel, isTextToSpeechModelSelected, isRealTimeTranslationMode, isImagenModelSelected, isClaudeModelSelected]);
 
   const showFileUploadInChatBar = useMemo(() => {
     return !isImagenModelSelected &&
@@ -2766,8 +2789,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
            !getIsFluxUltraModel(selectedModel) &&
            !getIsKlingVideoModel(selectedModel) &&
            !getIsTradingProModel(selectedModel) &&
+           !isAiAgentSmartMode && // AAS no longer supports general file uploads
            !isClaudeModelSelected;
-  }, [selectedModel, isImagenModelSelected, isTextToSpeechModelSelected, isRealTimeTranslationMode, isClaudeModelSelected]);
+  }, [selectedModel, isImagenModelSelected, isTextToSpeechModelSelected, isRealTimeTranslationMode, isAiAgentSmartMode, isClaudeModelSelected]);
 
 
   const currentPromptPlaceholder = () => {
@@ -2778,7 +2802,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     if (getIsKlingVideoModel(selectedModel)) return "Enter prompt for video generation (image required)...";
     if (isTextToSpeechModelSelected) return "Enter text to synthesize speech...";
     if (isRealTimeTranslationMode) return "Real-Time Translation Active. Use Microphone.";
-    if (isAiAgentSmartMode) return "Enter goal for AI Agent Smart, or upload file...";
+    if (isAiAgentSmartMode) return "Enter goal for AI Agent Smart, or upload image..."; // Updated placeholder
     if (isPrivateModeSelected) return "Enter text or upload image/file to log locally...";
     if (isClaudeModelSelected) return "Chat with Claude (Mock)...";
     if (getIsTradingProModel(selectedModel)) return "Select a pair and click 'Analyze Market' in Trading Pro view.";
@@ -2786,13 +2810,15 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
     let placeholder = "Type your message";
     if (uploadedImages.length === 0 && imagePreviews.length === 0 && !uploadedTextFileName) {
-        const canUploadImage = showImageUploadInChatBar || getIsKlingVideoModel(selectedModel);
-        const canUploadFile = showFileUploadInChatBar;
-        if (canUploadImage && canUploadFile) {
+        // For AAS, it's now only image upload
+        const canUploadImage = showImageUploadInChatBar || getIsKlingVideoModel(selectedModel) || isAiAgentSmartMode;
+        const canUploadFile = showFileUploadInChatBar; // Will be false for AAS
+
+        if (canUploadImage && canUploadFile) { // General case
             placeholder += " or upload image/file";
-        } else if (canUploadImage) {
+        } else if (canUploadImage) { // AAS falls here or Kling
             placeholder += " or upload image";
-        } else if (canUploadFile) {
+        } else if (canUploadFile) { // Other models that only support file
             placeholder += " or upload file";
         }
     }
@@ -2916,8 +2942,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     currentInputTextForApi: string,
     currentActiveImageFile: File | null,
     currentActiveImagePreview: string | null,
-    currentUploadedTextFileName: string | null,
-    currentUploadedTextContent: string | null,
+    currentUploadedTextFileNameForOpenAI: string | null, // Renamed to avoid conflict
+    currentUploadedTextContentForOpenAI: string | null, // Renamed
     isRegeneration: boolean,
     isRegenerationOfAiMsgId?: string
   ): ApiChatMessage[] => {
@@ -2963,13 +2989,16 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         const currentTurnContentParts: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; detail?: "auto" | "low" | "high" } }> = [];
         let textForCurrentTurn = currentInputTextForApi.trim();
 
-        if (currentUploadedTextFileName) {
-            if (currentUploadedTextContent) {
-                textForCurrentTurn = `The user has uploaded a file named "${currentUploadedTextFileName}".\nThe content of this file is:\n${currentUploadedTextContent}\n\n---\n\n${textForCurrentTurn}`;
-            } else if (!currentActiveImageFile) {
-                textForCurrentTurn = `${textForCurrentTurn}\n\n(System Note: User uploaded a file named '${currentUploadedTextFileName}'. Its content is not directly available to you.)`;
+        // For OpenAI, if text files are relevant, they are already part of `currentInputTextForApi` via `textForApi`
+        // This was the original logic for text files, which might still apply if currentUploadedTextContentForOpenAI is passed.
+        if (currentUploadedTextFileNameForOpenAI) {
+            if (currentUploadedTextContentForOpenAI) {
+                textForCurrentTurn = `The user has uploaded a file named "${currentUploadedTextFileNameForOpenAI}".\nThe content of this file is:\n${currentUploadedTextContentForOpenAI}\n\n---\n\n${textForCurrentTurn}`;
+            } else if (!currentActiveImageFile) { // If only filename and no content (and no image), append system note.
+                textForCurrentTurn = `${textForCurrentTurn}\n\n(System Note: User uploaded a file named '${currentUploadedTextFileNameForOpenAI}'. Its content is not directly available to you.)`;
             }
         }
+
 
         if (textForCurrentTurn) {
             currentTurnContentParts.push({ type: 'text', text: textForCurrentTurn });
@@ -2981,6 +3010,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         if (currentTurnContentParts.length > 0) {
             history.push({ role: 'user', content: currentTurnContentParts.length === 1 && currentTurnContentParts[0].type === 'text' ? currentTurnContentParts[0].text : currentTurnContentParts });
         } else if (history.length === 1 && !isRegeneration) {
+            // Avoid sending empty user message if history only has system prompt and no user input/image
         }
     }
 
@@ -3362,7 +3392,7 @@ List any web sources used for your research clearly. Use the term "Sources:" fol
             )}
           {error && !getIsTradingProModel(selectedModel) && <p className="p-4 text-red-500 dark:text-red-400 bg-red-100 dark:bg-red-900/30 border-t border-red-200 dark:border-red-700 text-sm">{error}</p>}
 
-          {showGenericAttachmentPreview && !getIsTradingProModel(selectedModel) && (imagePreviews.length > 0 || uploadedTextFileName) && (
+          {showGenericAttachmentPreview && !getIsTradingProModel(selectedModel) && (imagePreviews.length > 0 || (uploadedTextFileName && selectedModel !== Model.AI_AGENT_SMART) ) && (
             <div className="p-2 border-t border-b border-secondary dark:border-neutral-darkest bg-neutral-light dark:bg-neutral-darker flex-shrink-0">
                 <div className="flex flex-wrap items-center gap-2 max-h-24 overflow-y-auto">
                     {imagePreviews.map((previewUrl, index) => (
@@ -3383,7 +3413,7 @@ List any web sources used for your research clearly. Use the term "Sources:" fol
                             </button>
                         </div>
                     ))}
-                    {uploadedTextFileName && (
+                    {uploadedTextFileName && selectedModel !== Model.AI_AGENT_SMART && ( // Do not show text file preview for AAS
                         <div className="flex items-center p-2 bg-secondary/50 dark:bg-neutral-dark/50 rounded-md text-xs text-neutral-700 dark:text-neutral-300">
                             <DocumentTextIcon className="w-4 h-4 mr-1.5 flex-shrink-0 text-primary dark:text-primary-light" />
                             <span className="truncate max-w-[150px] sm:max-w-[200px]" title={uploadedTextFileName}>
