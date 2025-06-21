@@ -3,7 +3,7 @@
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo, useContext } from 'react';
 // Update to .ts/.tsx extensions
-import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType, UserGlobalProfile, AiAgentSmartSettings, PrivateModeSettings, FluxKontexSettings, NotificationType, UserSessionState, DemoUserLimits, PaidUserLimits, SingleImageData, MultiImageData, FluxKontexAspectRatio, EditImageWithFluxKontexParams, FluxUltraSettings, GenerateImageWithFluxUltraParams, FluxUltraAspectRatio, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, GenerateVideoWithKlingParams, AnyModelSettings, ModelSpecificSettingsMap, TradingProSettings, TradingProState, TradingPair, AlphaVantageProxyResponse, GeminiTradingAnalysisResponse } from '../types.ts'; // Updated AiAgentSettings to AiAgentSmartSettings
+import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType, UserGlobalProfile, AiAgentSmartSettings, PrivateModeSettings, FluxKontexSettings, NotificationType, UserSessionState, DemoUserLimits, PaidUserLimits, SingleImageData, MultiImageData, FluxKontexAspectRatio, EditImageWithFluxKontexParams, FluxUltraSettings, GenerateImageWithFluxUltraParams, FluxUltraAspectRatio, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, GenerateVideoWithKlingParams, AnyModelSettings, ModelSpecificSettingsMap, TradingProSettings, TradingProState, TradingPair, GeminiTradingAnalysisResponse } from '../types.ts'; // Removed AlphaVantageProxyResponse
 import type { Content } from '@google/genai'; // For constructing Gemini history
 import { ALL_MODEL_DEFAULT_SETTINGS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY, TRANSLATION_TARGET_LANGUAGES, MAX_SAVED_CHAT_SESSIONS, OPENAI_TTS_MAX_INPUT_LENGTH, PAID_USER_LIMITS_CONFIG, DEFAULT_FLUX_KONTEX_SETTINGS, DEFAULT_FLUX_ULTRA_SETTINGS, FLUX_ULTRA_ASPECT_RATIOS, DEFAULT_KLING_AI_SETTINGS, KLING_AI_DURATIONS, KLING_AI_ASPECT_RATIOS, TRADING_PRO_PAIRS, DEFAULT_TRADING_PRO_SETTINGS, DEFAULT_MODEL_SETTINGS } from '../constants.ts';
 import { MessageBubble } from './MessageBubble.tsx';
@@ -285,7 +285,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     } catch (error: any) {
       console.error("Error loading settings from localStorage:", error);
       // Fallback to a deep copy of defaults
-      return JSON.parse(JSON.stringify(ALL_MODEL_DEFAULT_SETTINGS));
+      return JSON.parse(JSON.stringify(ALL_MODEL_DEFAULT_SETTINGS)) as ModelSpecificSettingsMap;
     }
   });
 
@@ -378,14 +378,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
   const [tradingProState, setTradingProState] = useState<TradingProState>({
     disclaimerAgreed: false,
-    isLoadingChart: false,
-    chartData: null,
-    chartImageUrl: null,
+    chartImageUrl: null, // User-uploaded image for Trading Pro
     isLoadingAnalysis: false,
     analysisText: null,
     trendPredictions: null,
     analysisError: null,
+    groundingSources: undefined,
     selectedPair: (allSettings[Model.TRADING_PRO] as TradingProSettings | undefined)?.selectedPair || null,
+    uploadedImageValidationError: null,
   });
 
 
@@ -578,7 +578,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       },
       [Model.TRADING_PRO]: {
         isSet: isProxyExpectedToHaveKey,
-        envVarName: 'GEMINI_API_KEY & ALPHA_VANTAGE_API_KEY (on proxy)',
+        envVarName: 'GEMINI_API_KEY (on proxy)', // Alpha Vantage key removed
         modelName: 'Trading Pro Analysis',
         isMock: false,
         isGeminiPlatform: true,
@@ -694,8 +694,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             newModel === Model.CLAUDE ||
             getIsFluxKontexModel(newModel) ||
             getIsFluxUltraModel(newModel) ||
-            getIsKlingVideoModel(newModel) ||
-            getIsTradingProModel(newModel)
+            getIsKlingVideoModel(newModel)
+            // Trading Pro now handles its own image (user-uploaded)
+            // So if switching TO Trading Pro, general attachments might be cleared.
+            // If switching FROM Trading Pro, its specific image should be cleared.
         ) {
             shouldClearGeneralAttachments = true;
         } else if (oldModel) {
@@ -703,9 +705,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                 getIsFluxKontexModel(oldModel) ||
                 getIsFluxUltraModel(oldModel) ||
                 getIsKlingVideoModel(oldModel) ||
-                getIsTradingProModel(oldModel) ||
                 oldModel === Model.IMAGEN3 ||
-                oldModel === Model.OPENAI_TTS
+                oldModel === Model.OPENAI_TTS ||
+                getIsTradingProModel(oldModel) // Clear attachments if switching FROM Trading Pro
              ) {
                  shouldClearGeneralAttachments = true;
              }
@@ -745,7 +747,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
 
         // Clear personas if new model doesn't support them
-        if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || getIsFluxKontexModel(newModel) || isClaudeModelSelected || getIsFluxUltraModel(newModel) || getIsKlingVideoModel(newModel) || getIsTradingProModel(newModel) || isAiAgentSmartMode) { // Added isAiAgentSmartMode
+        if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || getIsFluxKontexModel(newModel) || isClaudeModelSelected || getIsFluxUltraModel(newModel) || getIsKlingVideoModel(newModel) || getIsTradingProModel(newModel) || isAiAgentSmartMode) {
           if (activePersonaId) {
             setActivePersonaId(null);
           }
@@ -800,18 +802,19 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           if (isGpt41AccessModalOpen) setIsGpt41AccessModalOpen(false);
         }
 
-        // Reset Trading Pro state if switching away from it
+        // Reset Trading Pro state if switching away from it or to it with different pair
         if (oldModel === Model.TRADING_PRO && newModel !== Model.TRADING_PRO) {
             setTradingProState(prev => ({
-                ...prev,
-                isLoadingChart: false,
-                chartData: null,
-                chartImageUrl: null,
-                isLoadingAnalysis: false,
-                analysisText: null,
-                trendPredictions: null,
-                analysisError: null,
-                groundingSources: undefined,
+                ...DEFAULT_TRADING_PRO_SETTINGS, // Reset to defaults
+                disclaimerAgreed: prev.disclaimerAgreed, // Keep disclaimer status
+                selectedPair: (allSettings[Model.TRADING_PRO] as TradingProSettings | undefined)?.selectedPair || null, // Persist selected pair from settings
+            }));
+        } else if (newModel === Model.TRADING_PRO && oldModel !== Model.TRADING_PRO) {
+            // If switching TO Trading Pro, ensure its state is initialized correctly based on current settings
+            setTradingProState(prev => ({
+                ...DEFAULT_TRADING_PRO_SETTINGS,
+                disclaimerAgreed: prev.disclaimerAgreed,
+                selectedPair: (allSettings[Model.TRADING_PRO] as TradingProSettings | undefined)?.selectedPair || null,
             }));
         }
 
@@ -821,7 +824,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
     prevSelectedModelRef.current = selectedModel;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedModel, addNotification, clearSearch, isGpt41Unlocked, isListening, isSpeakingLiveTranslation]);
+  }, [selectedModel, addNotification, clearSearch, isGpt41Unlocked, isListening, isSpeakingLiveTranslation, allSettings]);
 
 
   const translateLiveSegment = useCallback(async (text: string, targetLangCode: string) => {
@@ -1119,12 +1122,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       }
 
       try {
-        setIsListening(true);
+        setIsListening(true); // Set before start() to avoid race condition with onend/onerror
         recognitionRef.current.start();
       } catch (e: any) {
         console.error("Error starting speech recognition:", e);
         addNotification("Could not start voice input. Please try again.", "error", e.message);
-        setIsListening(false);
+        setIsListening(false); // Reset if start fails
       }
     }
   };
@@ -1382,15 +1385,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     }
     if (getIsTradingProModel(selectedModel)) {
         setTradingProState(prev => ({
-            ...prev,
-            chartData: null,
-            chartImageUrl: null,
-            isLoadingAnalysis: false,
-            analysisText: null,
-            trendPredictions: null,
-            analysisError: null,
-            groundingSources: undefined,
+            ...DEFAULT_TRADING_PRO_SETTINGS,
+            disclaimerAgreed: prev.disclaimerAgreed, // Persist disclaimer agreement
             selectedPair: (allSettings[Model.TRADING_PRO] as TradingProSettings | undefined)?.selectedPair || null,
+            chartImageUrl: null, // Reset user uploaded image
+            uploadedImageValidationError: null,
         }));
     }
 
@@ -1888,12 +1887,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     let userDisplayedText = currentInputText.trim();
     let textForApi = currentInputText.trim();
 
-    // Removed fileContextNote and related logic for AAS, as it no longer supports text files.
-    // const fileContextNote = `(System Note: User uploaded a file named '${currentUploadedTextFileName}'. Its content is not directly available to you. Please refer to your system instructions on how to handle this situation.)`;
-
     if (isAiAgentSmartMode) {
-        // AAS now only handles text and image (via description from system).
-        // No special textForApi construction for text files.
+        // AAS handles image via description from system. Text file content is not sent.
     } else if (currentUploadedTextFileName && currentUploadedTextContent) { // For other models that might support text files
         textForApi = `The user has uploaded a file named "${currentUploadedTextFileName}".\nThe content of this file is:\n${currentUploadedTextContent}\n\n---\n\n${textForApi}`;
     }
@@ -1904,10 +1899,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         selectedModel === Model.GPT4O ||
         selectedModel === Model.GPT4O_MINI ||
         selectedModel === Model.DEEPSEEK ||
-        selectedModel === Model.AI_AGENT_SMART || // AAS can have an image preview
+        selectedModel === Model.AI_AGENT_SMART ||
         selectedModel === Model.PRIVATE ||
         selectedModel === Model.FLUX_KONTEX ||
-        selectedModel === Model.KLING_VIDEO;
+        selectedModel === Model.KLING_VIDEO ||
+        selectedModel === Model.TRADING_PRO; // Trading Pro now can have a user-uploaded image preview
 
     const newUserMessage: ChatMessage = {
         id: userMessageId,
@@ -1917,8 +1913,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         imagePreview: canHaveSingleImagePreview && currentUploadedImagePreviews.length > 0 ? currentUploadedImagePreviews[0] : undefined,
         imagePreviews: (selectedModel === Model.FLUX_KONTEX_MAX_MULTI || getIsFluxUltraModel(selectedModel)) ? currentUploadedImagePreviews : undefined,
         imageMimeTypes: (selectedModel === Model.FLUX_KONTEX_MAX_MULTI || getIsFluxUltraModel(selectedModel)) ? currentUploadedImageFiles.map(f => f.type) : undefined,
-        fileName: (selectedModel !== Model.AI_AGENT_SMART && currentUploadedTextFileName) ? currentUploadedTextFileName : undefined, // No filename for AAS if it's image only
-        isImageQuery: isImagenModelSelected || getIsFluxKontexModel(selectedModel) || getIsFluxUltraModel(selectedModel) || isAiAgentSmartMode, // AAS can be an image query
+        fileName: (selectedModel !== Model.AI_AGENT_SMART && currentUploadedTextFileName) ? currentUploadedTextFileName : undefined,
+        isImageQuery: isImagenModelSelected || getIsFluxKontexModel(selectedModel) || getIsFluxUltraModel(selectedModel) || isAiAgentSmartMode || getIsTradingProModel(selectedModel),
         isVideoQuery: getIsKlingVideoModel(selectedModel),
         isTaskGoal: isAiAgentSmartMode,
         isNote: isPrivateModeSelected && (currentUploadedImagePreviews.length === 0 && !currentUploadedTextFileName),
@@ -1950,6 +1946,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       return;
     }
     if (getIsTradingProModel(selectedModel)) {
+      // This case should be handled by onAnalyzeTradingProClick, not general sendMessage
+      // For safety, if somehow called:
       addNotification("Trading Pro interactions are handled in its dedicated view.", "info");
       setIsLoading(false);
       return;
@@ -2268,10 +2266,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         if (textForApi.trim()) {
             currentUserParts.push({ text: textForApi.trim() });
         }
-        // Removed fileContextNote for AAS
-        // if (!isAiAgentSmartMode && currentUploadedTextFileName && !currentUploadedTextContent && currentUploadedImageFiles.length === 0) {
-        //     currentUserParts.push({ text: fileContextNote });
-        // }
+
         if (currentUploadedImageFiles.length > 0 && currentUploadedImagePreviews.length > 0) {
             const base64Image = currentUploadedImagePreviews[0].split(',')[1];
             if (base64Image) {
@@ -2330,10 +2325,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             else if (msg.sender === 'ai') history.push({ role: 'assistant', content: msgContent });
         });
         let currentTurnTextForDeepseek = textForApi.trim();
-        // Removed fileContextNote for Deepseek as well, assuming image handling is primary now if multimodal
-        // if (currentUploadedTextFileName && !currentUploadedTextContent && currentUploadedImageFiles.length === 0) {
-        //     currentTurnTextForDeepseek = `${currentTurnTextForDeepseek}\n\n${fileContextNote}`;
-        // }
+
         history.push({ role: 'user', content: currentTurnTextForDeepseek || " " });
 
         const stream = sendDeepseekMessageStream({ modelIdentifier: actualModelIdentifier, history, modelSettings: currentModelSpecificSettingsForApiCall as ModelSettings, userSession: userSession });
@@ -2348,10 +2340,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       } else if (currentModelStatus?.isMock && !isRealTimeTranslationMode && !isAiAgentSmartMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxUltraModel(selectedModel) && !getIsKlingVideoModel(selectedModel)) {
         const mockParts: Part[] = [];
         if (textForApi.trim()) mockParts.push({ text: textForApi.trim() });
-        // Removed fileContextNote for Mock
-        // if (currentUploadedTextFileName && !currentUploadedTextContent && currentUploadedImageFiles.length === 0) {
-        //     mockParts.push({ text: fileContextNote });
-        // }
+
         if (currentUploadedImageFiles.length > 0 && currentUploadedImagePreviews.length > 0) {
             mockParts.push({ inlineData: { mimeType: currentUploadedImageFiles[0].type as 'image/jpeg' | 'image/png', data: currentUploadedImagePreviews[0].split(',')[1] } });
         }
@@ -2385,12 +2374,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
     if (!isRegenerationOfAiMsgId && !isRealTimeTranslationMode && !isPrivateModeSelected) {
         setInput('');
-        if (!getIsFluxKontexModel(selectedModel) && !getIsFluxUltraModel(selectedModel) && !getIsKlingVideoModel(selectedModel)) {
+        if (!getIsFluxKontexModel(selectedModel) && !getIsFluxUltraModel(selectedModel) && !getIsKlingVideoModel(selectedModel) && !getIsTradingProModel(selectedModel)) { // Don't clear for trading pro image
             setUploadedImages([]);
             setImagePreviews([]);
         }
-        // AAS no longer uses text files, so don't clear them based on AAS specific logic here, general clearing is fine
-        if (selectedModel !== Model.AI_AGENT_SMART) {
+        if (selectedModel !== Model.AI_AGENT_SMART && selectedModel !== Model.TRADING_PRO) {
             setUploadedTextFileContent(null);
             setUploadedTextFileName(null);
         }
@@ -2447,7 +2435,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         addNotification(`TTS input too long. Max ${determinedTtsMaxLength} chars.`, "error");
         return;
     }
-    if (isAiAgentSmartMode && !input.trim() && uploadedImages.length === 0) { // Removed !uploadedTextFileName
+    if (isAiAgentSmartMode && !input.trim() && uploadedImages.length === 0) {
         setError("Please enter a goal or upload an image for the AI Agent Smart.");
         addNotification("Please enter a goal or upload an image for the AI Agent Smart.", "info");
         return;
@@ -2492,7 +2480,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       const regenUploadedImageFiles: File[] = [];
 
       let currentRegenUploadedTextContent: string | null = null;
-      // AAS does not use text files, so filename won't be used for it in regeneration
       let currentRegenUploadedTextFileName: string | null = (selectedModel !== Model.AI_AGENT_SMART && userMessageForRegen.fileName) ? userMessageForRegen.fileName : null;
 
 
@@ -2515,39 +2502,65 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   };
 
   const imageUploadLimit = useMemo(() => {
-      if (selectedModel === Model.FLUX_KONTEX_MAX_MULTI) return 4;
-      // AI Agent Smart now supports 1 image
-      if (getIsKlingVideoModel(selectedModel) || selectedModel === Model.FLUX_KONTEX || selectedModel === Model.GEMINI || selectedModel === Model.GPT4O || selectedModel === Model.GPT4O_MINI || selectedModel === Model.PRIVATE || selectedModel === Model.AI_AGENT_SMART) return 1;
-      if (selectedModel === Model.DEEPSEEK || getIsFluxUltraModel(selectedModel) || getIsTradingProModel(selectedModel)) return 0;
-      return 0;
-  }, [selectedModel]);
+    if (selectedModel === Model.FLUX_KONTEX_MAX_MULTI) return 4;
+    if (
+        getIsKlingVideoModel(selectedModel) ||
+        selectedModel === Model.FLUX_KONTEX ||
+        selectedModel === Model.GEMINI ||
+        selectedModel === Model.GPT4O ||
+        selectedModel === Model.GPT4O_MINI ||
+        selectedModel === Model.PRIVATE ||
+        selectedModel === Model.AI_AGENT_SMART ||
+        selectedModel === Model.TRADING_PRO // Added TRADING_PRO here
+    ) return 1;
+    // Models that explicitly do not support image uploads or have different handling
+    if (selectedModel === Model.DEEPSEEK || getIsFluxUltraModel(selectedModel) || isTextToSpeechModelSelected || isRealTimeTranslationMode || isImagenModelSelected || isClaudeModelSelected) return 0;
+    return 0; // Default to 0 for any other unhandled model
+  }, [selectedModel, isTextToSpeechModelSelected, isRealTimeTranslationMode, isImagenModelSelected, isClaudeModelSelected]);
 
 
   const handleSetUploadedImages = (newFiles: File[]) => {
-    if (isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || getIsKlingVideoModel(selectedModel) || getIsTradingProModel(selectedModel)) {
-        if (getIsKlingVideoModel(selectedModel)) {
-            if (newFiles.length > 0) {
-                const firstFile = newFiles[0];
-                setUploadedImages([firstFile]);
-                const reader = new FileReader();
-                reader.onloadend = () => setImagePreviews([reader.result as string]);
-                reader.onerror = (error) => {
-                    console.error("Error reading image file for Kling preview:", error);
-                    addNotification("Error creating image preview.", "error");
-                    setImagePreviews([]);
-                };
-                reader.readAsDataURL(firstFile);
-                 setUploadedTextFileContent(null);
-                 setUploadedTextFileName(null);
-            } else {
-                setUploadedImages([]);
-                setImagePreviews([]);
-            }
-            clearSearch();
-            return;
-        }
+    if (isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected ) { // Simplified, Kling and Trading Pro handled below
         return;
     }
+    
+    if (getIsKlingVideoModel(selectedModel) || getIsTradingProModel(selectedModel)) {
+        if (newFiles.length > 0) {
+            const firstFile = newFiles[0];
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64Preview = reader.result as string;
+                if (getIsKlingVideoModel(selectedModel)) {
+                    setUploadedImages([firstFile]); // Still store the file for Kling
+                    setImagePreviews([base64Preview]); // Generic preview
+                } else if (getIsTradingProModel(selectedModel)) {
+                    setTradingProState(prev => ({...prev, chartImageUrl: base64Preview, uploadedImageValidationError: null}));
+                     // For Trading Pro, we don't use the general `uploadedImages` or `imagePreviews` state
+                    setUploadedImages([]);
+                    setImagePreviews([]);
+                }
+            };
+            reader.onerror = (error) => {
+                console.error("Error reading image file for preview:", error);
+                addNotification("Error creating image preview.", "error");
+                if (getIsKlingVideoModel(selectedModel)) setImagePreviews([]);
+                else if (getIsTradingProModel(selectedModel)) setTradingProState(prev => ({...prev, chartImageUrl: null}));
+            };
+            reader.readAsDataURL(firstFile);
+            setUploadedTextFileContent(null);
+            setUploadedTextFileName(null);
+        } else {
+            if (getIsKlingVideoModel(selectedModel)) {
+                 setUploadedImages([]);
+                 setImagePreviews([]);
+            } else if (getIsTradingProModel(selectedModel)) {
+                 setTradingProState(prev => ({...prev, chartImageUrl: null}));
+            }
+        }
+        clearSearch();
+        return;
+    }
+
 
     let currentFiles: File[] = [];
 
@@ -2558,7 +2571,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       if (combinedFiles.length > imageUploadLimit) {
         addNotification(`Cannot upload more than ${imageUploadLimit} images for Flux Kontext Max. Only the first ${imageUploadLimit} were kept.`, "warning");
       }
-    } else {
+    } else { // For models that take a single general image (Gemini, GPT, AAS, Flux Kontext Pro)
       currentFiles = newFiles.slice(0, 1);
     }
 
@@ -2581,6 +2594,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       Promise.all(filePromises)
         .then(newPreviewsArray => {
           setImagePreviews(newPreviewsArray);
+          if (selectedModel === Model.AI_AGENT_SMART && newPreviewsArray.length > 0) { // If AAS and image uploaded, clear validation error
+              setTradingProState(prev => ({...prev, uploadedImageValidationError: null})); // Assuming AAS uses TradingProState for this, need to check types.ts
+          }
         })
         .catch(error => {
           console.error("Error reading image files for preview:", error);
@@ -2596,11 +2612,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
 
   const handleFileUpload = (file: File | null) => {
-    if (isAiAgentSmartMode) { // AAS does not support general file uploads
-        addNotification("AI Agent Smart only supports image uploads.", "info");
+    if (isAiAgentSmartMode || getIsTradingProModel(selectedModel)) { 
+        addNotification(`This model only supports direct image uploads.`, "info");
         return;
     }
-    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || getIsFluxKontexModel(selectedModel) || isClaudeModelSelected || getIsFluxUltraModel(selectedModel) || getIsKlingVideoModel(selectedModel) || getIsTradingProModel(selectedModel)) return;
+    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || getIsFluxKontexModel(selectedModel) || isClaudeModelSelected || getIsFluxUltraModel(selectedModel) || getIsKlingVideoModel(selectedModel)) return;
 
     setUploadedImages([]);
     setImagePreviews([]);
@@ -2621,7 +2637,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         reader.readAsText(file);
       } else {
         setUploadedTextFileContent(null);
-        if (isPrivateModeSelected) { // Private mode can still log non-readable files by name
+        if (isPrivateModeSelected) { 
             addNotification(`File "${file.name}" logged. Content not displayed for this type.`, "info");
         } else {
             addNotification(`File "${file.name}" content cannot be displayed/embedded. This model might not process it.`, "warning" as NotificationType);
@@ -2632,8 +2648,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   };
 
   const handleRemoveUploadedImage = (indexToRemove: number) => {
-    setUploadedImages(prevFiles => prevFiles.filter((_, index) => index !== indexToRemove));
-    setImagePreviews(prevPreviews => prevPreviews.filter((_, index) => index !== indexToRemove));
+    if (getIsTradingProModel(selectedModel)) {
+        setTradingProState(prev => ({...prev, chartImageUrl: null, uploadedImageValidationError: null}));
+    } else {
+        setUploadedImages(prevFiles => prevFiles.filter((_, index) => index !== indexToRemove));
+        setImagePreviews(prevPreviews => prevPreviews.filter((_, index) => index !== indexToRemove));
+    }
   };
 
   const handleRemoveTextFilePreview = () => {
@@ -2771,15 +2791,17 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   }, [isSpeechRecognitionSupported, selectedModel, isTextToSpeechModelSelected, isImagenModelSelected, isClaudeModelSelected]);
 
   const showImageUploadInChatBar = useMemo(() => {
-    return imageUploadLimit > 0 &&
-           !isTextToSpeechModelSelected &&
-           !isRealTimeTranslationMode &&
-           !isImagenModelSelected &&
-           // Removed !isAiAgentSmartMode to allow image upload for AAS
-           !isClaudeModelSelected &&
-           !getIsKlingVideoModel(selectedModel) &&
-           !getIsTradingProModel(selectedModel);
+    return (
+        imageUploadLimit > 0 &&
+        !isTextToSpeechModelSelected &&
+        !isRealTimeTranslationMode &&
+        !isImagenModelSelected && // Already 0 limit
+        !isClaudeModelSelected && // Already 0 limit
+        !getIsKlingVideoModel(selectedModel) // Kling handles its own upload button
+        // Trading Pro will use this button, so no !getIsTradingProModel(selectedModel)
+    );
   }, [imageUploadLimit, selectedModel, isTextToSpeechModelSelected, isRealTimeTranslationMode, isImagenModelSelected, isClaudeModelSelected]);
+
 
   const showFileUploadInChatBar = useMemo(() => {
     return !isImagenModelSelected &&
@@ -2789,7 +2811,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
            !getIsFluxUltraModel(selectedModel) &&
            !getIsKlingVideoModel(selectedModel) &&
            !getIsTradingProModel(selectedModel) &&
-           !isAiAgentSmartMode && // AAS no longer supports general file uploads
+           !isAiAgentSmartMode &&
            !isClaudeModelSelected;
   }, [selectedModel, isImagenModelSelected, isTextToSpeechModelSelected, isRealTimeTranslationMode, isAiAgentSmartMode, isClaudeModelSelected]);
 
@@ -2802,23 +2824,23 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     if (getIsKlingVideoModel(selectedModel)) return "Enter prompt for video generation (image required)...";
     if (isTextToSpeechModelSelected) return "Enter text to synthesize speech...";
     if (isRealTimeTranslationMode) return "Real-Time Translation Active. Use Microphone.";
-    if (isAiAgentSmartMode) return "Enter goal for AI Agent Smart, or upload image..."; // Updated placeholder
+    if (isAiAgentSmartMode) return "Enter goal for AI Agent Smart, or upload image...";
     if (isPrivateModeSelected) return "Enter text or upload image/file to log locally...";
     if (isClaudeModelSelected) return "Chat with Claude (Mock)...";
-    if (getIsTradingProModel(selectedModel)) return "Select a pair and click 'Analyze Market' in Trading Pro view.";
+    if (getIsTradingProModel(selectedModel)) return "Upload chart (optional) & click Analyze Market.";
 
 
     let placeholder = "Type your message";
-    if (uploadedImages.length === 0 && imagePreviews.length === 0 && !uploadedTextFileName) {
-        // For AAS, it's now only image upload
-        const canUploadImage = showImageUploadInChatBar || getIsKlingVideoModel(selectedModel) || isAiAgentSmartMode;
-        const canUploadFile = showFileUploadInChatBar; // Will be false for AAS
+    
+    const canUploadImage = showImageUploadInChatBar || getIsKlingVideoModel(selectedModel) || isAiAgentSmartMode || getIsTradingProModel(selectedModel);
+    const canUploadFile = showFileUploadInChatBar; 
 
-        if (canUploadImage && canUploadFile) { // General case
+    if (uploadedImages.length === 0 && imagePreviews.length === 0 && !uploadedTextFileName && !tradingProState.chartImageUrl) {
+        if (canUploadImage && canUploadFile) { 
             placeholder += " or upload image/file";
-        } else if (canUploadImage) { // AAS falls here or Kling
+        } else if (canUploadImage) { 
             placeholder += " or upload image";
-        } else if (canUploadFile) { // Other models that only support file
+        } else if (canUploadFile) { 
             placeholder += " or upload file";
         }
     }
@@ -2833,7 +2855,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     if (isTextToSpeechModelSelected) return "Synthesize Speech";
     if (isAiAgentSmartMode) return "Set Goal";
     if (isPrivateModeSelected) return "Log Entry";
-    if (getIsTradingProModel(selectedModel)) return "Analyze";
+    if (getIsTradingProModel(selectedModel)) return "Analyze Market";
     return "Send message";
   }
 
@@ -2942,8 +2964,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     currentInputTextForApi: string,
     currentActiveImageFile: File | null,
     currentActiveImagePreview: string | null,
-    currentUploadedTextFileNameForOpenAI: string | null, // Renamed to avoid conflict
-    currentUploadedTextContentForOpenAI: string | null, // Renamed
+    currentUploadedTextFileNameForOpenAI: string | null, 
+    currentUploadedTextContentForOpenAI: string | null, 
     isRegeneration: boolean,
     isRegenerationOfAiMsgId?: string
   ): ApiChatMessage[] => {
@@ -2989,12 +3011,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         const currentTurnContentParts: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; detail?: "auto" | "low" | "high" } }> = [];
         let textForCurrentTurn = currentInputTextForApi.trim();
 
-        // For OpenAI, if text files are relevant, they are already part of `currentInputTextForApi` via `textForApi`
-        // This was the original logic for text files, which might still apply if currentUploadedTextContentForOpenAI is passed.
         if (currentUploadedTextFileNameForOpenAI) {
             if (currentUploadedTextContentForOpenAI) {
                 textForCurrentTurn = `The user has uploaded a file named "${currentUploadedTextFileNameForOpenAI}".\nThe content of this file is:\n${currentUploadedTextContentForOpenAI}\n\n---\n\n${textForCurrentTurn}`;
-            } else if (!currentActiveImageFile) { // If only filename and no content (and no image), append system note.
+            } else if (!currentActiveImageFile) { 
                 textForCurrentTurn = `${textForCurrentTurn}\n\n(System Note: User uploaded a file named '${currentUploadedTextFileNameForOpenAI}'. Its content is not directly available to you.)`;
             }
         }
@@ -3056,106 +3076,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     return false;
   }, [imagePreviews, uploadedTextFileName, isTextToSpeechModelSelected, isRealTimeTranslationMode, isImagenModelSelected, isClaudeModelSelected, selectedModel]);
 
-  const fetchTradingChartData = useCallback(async (pair: TradingPair) => {
-    setTradingProState(prev => ({ ...prev, isLoadingChart: true, chartData: null, chartImageUrl: null, analysisError: null, analysisText: null, trendPredictions: null, groundingSources: undefined }));
-    try {
-      const requestBody: any = {
-        avFunction: pair.alphaVantageFunction,
-      };
+  // `fetchTradingChartData` removed as Trading Pro no longer fetches chart data via Alpha Vantage
 
-      if (pair.alphaVantageFunction === 'FX_INTRADAY' || pair.alphaVantageFunction === 'FX_DAILY') {
-        requestBody.from_symbol = pair.from_symbol;
-        requestBody.to_symbol = pair.to_symbol;
-      } else if (pair.alphaVantageFunction === 'DIGITAL_CURRENCY_INTRADAY' || pair.alphaVantageFunction === 'DIGITAL_CURRENCY_DAILY') {
-        requestBody.symbol = pair.alphaVantageSymbol;
-        requestBody.market = pair.alphaVantageMarket;
-      } else {
-        requestBody.symbol = pair.alphaVantageSymbol;
-      }
-
-      if (pair.interval && (pair.alphaVantageFunction === 'FX_INTRADAY' || pair.alphaVantageFunction === 'DIGITAL_CURRENCY_INTRADAY' || pair.alphaVantageFunction === 'TIME_SERIES_INTRADAY')) {
-        requestBody.interval = pair.interval;
-      }
-      if (pair.outputsize && (pair.alphaVantageFunction === 'FX_INTRADAY' || pair.alphaVantageFunction === 'DIGITAL_CURRENCY_INTRADAY' || pair.alphaVantageFunction === 'TIME_SERIES_INTRADAY' || pair.alphaVantageFunction === 'FX_DAILY')) {
-        requestBody.outputsize = pair.outputsize;
-      }
-
-      const response = await fetch('/api/alphavantage/chart-data', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-      });
-      const result: AlphaVantageProxyResponse = await response.json();
-      if (result.error || !result.data) {
-        throw new Error(result.error || "No chart data returned from proxy.");
-      }
-      setTradingProState(prev => ({ ...prev, isLoadingChart: false, chartData: result.data, analysisError: null }));
-    } catch (error: any) {
-      console.error("[ChatPage] Error fetching chart data:", error);
-      addNotification(`Chart Data Error: ${error.message}`, "error");
-      setTradingProState(prev => ({ ...prev, isLoadingChart: false, chartData: null, analysisError: `Chart Data Error: ${error.message}` }));
-    }
-  }, [addNotification]);
-
-  // If "fetchChartData is not defined" occurs, it implies something is trying to call fetchChartData.
-  // We assume it's an accidental reference to fetchTradingChartData.
-  // This alias makes fetchChartData available in ChatPage's scope, pointing to the correct function.
-  const fetchChartData = fetchTradingChartData;
-
+  // fetchChartData alias removed
 
   const handleTradingAnalysis = useCallback(async (pair: TradingPair, chartImageBase64: string | null) => {
-    setTradingProState(prev => ({ ...prev, isLoadingAnalysis: true, analysisError: null, analysisText: null, trendPredictions: null, groundingSources: undefined }));
-
-    let analysisPrompt = "";
-    if (chartImageBase64) {
-      analysisPrompt = `You are an expert financial market analyst for ${pair.label}.
-Analyze the provided trading chart image. The chart shows recent price action (OHLC, trends) on the H4 timeframe.
-Simultaneously, research current market conditions for ${pair.label}, including:
-- Recent news and their impact on the H4 timeframe.
-- For Gold (XAUUSD): Federal Reserve (FED) policies, interest rate announcements/expectations, geopolitical events affecting gold.
-- For Bitcoin (BTCUSD): Crypto market news, institutional adoption, regulatory news, major economic indicators affecting Bitcoin.
-- Other potential upcoming factors.
-
-Based on your analysis of the chart image AND the researched market information, provide a detailed and accurate market analysis for the H4 timeframe.
-Conclude with a price prediction for the near future (next 1-7 days, considering H4 trends) in the following JSON format, embedded within your text response using a JSON code block:
-\`\`\`json
-{
-  "trend_prediction": {
-    "up_percentage": <integer between 0-100>,
-    "down_percentage": <integer between 0-100>,
-    "sideways_percentage": <integer between 0-100>
-  },
-  "detailed_analysis": "<Your detailed textual analysis here, explaining your reasoning based on chart and news. This detailed_analysis should be part of the JSON structure but will also be displayed as the main text content.>"
-}
-\`\`\`
-Ensure the sum of percentages for up, down, and sideways is 100.
-List any web sources used for your research clearly. Use the term "Sources:" followed by a list.`;
-    } else {
-        analysisPrompt = `You are an expert financial market analyst for ${pair.label}.
-No chart image is provided for this analysis.
-Your task is to provide an analysis for the H4 (4-hour) timeframe based on current market conditions and data.
-Research current market information for ${pair.label}, including:
-- Recent news and their impact on the H4 timeframe.
-- For Gold (XAUUSD): Federal Reserve (FED) policies, interest rate announcements/expectations, geopolitical events.
-- For Bitcoin (BTCUSD): Crypto market news, institutional adoption, regulatory news, major economic indicators.
-- Other potential upcoming factors relevant to the H4 chart.
-- You MUST consult sources like TradingView or other financial news sites for recent price action and technical indicators on the H4 timeframe.
-
-Based on your research of current H4 data and market information, provide a detailed market analysis.
-Conclude with a price prediction for the near future (next 1-7 days, considering H4 trends) in the following JSON format, embedded within your text response using a JSON code block:
-\`\`\`json
-{
-  "trend_prediction": {
-    "up_percentage": <integer between 0-100>,
-    "down_percentage": <integer between 0-100>,
-    "sideways_percentage": <integer between 0-100>
-  },
-  "detailed_analysis": "<Your detailed textual analysis here, explaining your reasoning based on researched H4 data and news. This detailed_analysis should be part of the JSON structure but will also be displayed as the main text content.>"
-}
-\`\`\`
-Ensure the sum of percentages for up, down, and sideways is 100.
-List any web sources used for your research clearly. Use the term "Sources:" followed by a list.`;
-    }
+    setTradingProState(prev => ({ ...prev, isLoadingAnalysis: true, analysisError: null, analysisText: null, trendPredictions: null, groundingSources: undefined, uploadedImageValidationError: null }));
 
     try {
       const response = await fetch('/api/gemini/trading-analysis', {
@@ -3166,30 +3092,46 @@ List any web sources used for your research clearly. Use the term "Sources:" fol
           ...(userSession.isDemoUser && userSession.demoUserToken && { 'X-Demo-Token': userSession.demoUserToken }),
         },
         body: JSON.stringify({
-          prompt: analysisPrompt,
+          // The detailed prompt is now constructed on the proxy server.
+          // We only send the pair label and optional image.
           chartImageBase64: chartImageBase64 ? chartImageBase64.split(',')[1] : null,
           pairLabel: pair.label,
         }),
       });
-      const result: GeminiTradingAnalysisResponse = await response.json();
+      const result: GeminiTradingAnalysisResponse & { error?: string } = await response.json(); // Ensure result can have an error field
 
-      if (result.error || (!result.analysisText && !result.trendPredictions)) {
-        throw new Error(result.error || "No analysis data returned from proxy.");
+      if (result.error === "IMAGE_INVALID_TRADING_CHART") {
+        addNotification("Ảnh không hợp lệ. Phân tích sẽ dựa trên dữ liệu web.", "warning");
+        setTradingProState(prev => ({
+          ...prev,
+          isLoadingAnalysis: false,
+          analysisText: result.analysisText || "Phân tích dựa trên dữ liệu web do ảnh không hợp lệ.",
+          trendPredictions: result.trendPredictions || null,
+          groundingSources: result.groundingSources || [],
+          analysisError: null,
+          uploadedImageValidationError: "ảnh không hợp lệ",
+          chartImageUrl: null, // Clear the invalid image
+        }));
+      } else if (result.error) {
+        throw new Error(result.error);
+      } else if (!result.analysisText && !result.trendPredictions) {
+        throw new Error("No analysis data returned from proxy.");
+      } else {
+        setTradingProState(prev => ({
+          ...prev,
+          isLoadingAnalysis: false,
+          analysisText: result.analysisText || "Analysis text not available.",
+          trendPredictions: result.trendPredictions || null,
+          groundingSources: result.groundingSources || [],
+          analysisError: null,
+          uploadedImageValidationError: null, // Clear any previous validation error
+        }));
       }
-
-      setTradingProState(prev => ({
-        ...prev,
-        isLoadingAnalysis: false,
-        analysisText: result.analysisText || "Analysis text not available.",
-        trendPredictions: result.trendPredictions || null,
-        groundingSources: result.groundingSources || [],
-        analysisError: null,
-      }));
 
     } catch (error: any) {
       console.error("[ChatPage] Error performing trading analysis:", error);
       addNotification(`Trading Analysis Error: ${error.message}`, "error");
-      setTradingProState(prev => ({ ...prev, isLoadingAnalysis: false, analysisText: null, trendPredictions: null, analysisError: `Trading Analysis Error: ${error.message}` }));
+      setTradingProState(prev => ({ ...prev, isLoadingAnalysis: false, analysisText: null, trendPredictions: null, analysisError: `Trading Analysis Error: ${error.message}`, uploadedImageValidationError: null }));
     }
   }, [addNotification, userSession]);
 
@@ -3200,19 +3142,20 @@ List any web sources used for your research clearly. Use the term "Sources:" fol
 
     if (!currentSelectedPairObject) {
       setTradingProState(prev => ({ ...prev, analysisError: "Please select a trading pair first." }));
+      addNotification("Please select a trading pair first.", "info");
       return;
     }
     if (!tradingProState.disclaimerAgreed) {
       addNotification("Please agree to the disclaimer in the Trading Pro view first.", "info");
       return;
     }
-    if (tradingProState.isLoadingAnalysis) { // Removed isLoadingChart from here
+    if (tradingProState.isLoadingAnalysis) {
         return;
     }
-
-    let currentChartImage = tradingProState.chartImageUrl;
-    // Note: If chartImageUrl is null, handleAnalysis will proceed with web research.
     
+    // User-uploaded image is in tradingProState.chartImageUrl
+    const userUploadedImageBase64 = tradingProState.chartImageUrl;
+
     setTradingProState(prev => ({
       ...prev,
       isLoadingAnalysis: true,
@@ -3220,17 +3163,16 @@ List any web sources used for your research clearly. Use the term "Sources:" fol
       analysisText: null,
       trendPredictions: null,
       groundingSources: undefined,
-      chartImageUrl: currentChartImage 
+      uploadedImageValidationError: null, // Clear previous validation error on new analysis
     }));
-    await handleTradingAnalysis(currentSelectedPairObject, currentChartImage);
+    await handleTradingAnalysis(currentSelectedPairObject, userUploadedImageBase64);
   };
 
   const isAnalyzeButtonDisabled = useMemo(() => {
-    if (selectedModel !== Model.TRADING_PRO) return false; 
+    if (selectedModel !== Model.TRADING_PRO) return true; // Button is only for Trading Pro mode send
     const typedTradingSettings = currentModelSettings as TradingProSettings;
     return !typedTradingSettings.selectedPair ||
            !tradingProState.disclaimerAgreed ||
-           // tradingProState.isLoadingChart, // Removed this condition
            tradingProState.isLoadingAnalysis;
   }, [selectedModel, currentModelSettings, tradingProState.disclaimerAgreed, tradingProState.isLoadingAnalysis]);
 
@@ -3356,8 +3298,8 @@ List any web sources used for your research clearly. Use the term "Sources:" fol
                         onSettingsChange={(newSettings) => handleModelSettingsChange(newSettings)}
                         tradingProState={tradingProState}
                         setTradingProState={setTradingProState}
-                        fetchChartData={fetchTradingChartData}
-                        handleAnalysis={handleTradingAnalysis}
+                        // fetchChartData prop removed
+                        handleAnalysis={handleTradingAnalysis} // Pass handleTradingAnalysis
                         userSession={userSession}
                     />
                 </ErrorBoundary>
@@ -3413,7 +3355,7 @@ List any web sources used for your research clearly. Use the term "Sources:" fol
                             </button>
                         </div>
                     ))}
-                    {uploadedTextFileName && selectedModel !== Model.AI_AGENT_SMART && ( // Do not show text file preview for AAS
+                    {uploadedTextFileName && selectedModel !== Model.AI_AGENT_SMART && ( 
                         <div className="flex items-center p-2 bg-secondary/50 dark:bg-neutral-dark/50 rounded-md text-xs text-neutral-700 dark:text-neutral-300">
                             <DocumentTextIcon className="w-4 h-4 mr-1.5 flex-shrink-0 text-primary dark:text-primary-light" />
                             <span className="truncate max-w-[150px] sm:max-w-[200px]" title={uploadedTextFileName}>
@@ -3436,22 +3378,9 @@ List any web sources used for your research clearly. Use the term "Sources:" fol
 
           <input type="file" id="image-upload-chatbar" className="hidden" onChange={handleChatBarImageUpload} accept={imageFileAcceptTypes} multiple={selectedModel === Model.FLUX_KONTEX_MAX_MULTI} />
           <input type="file" id="image-upload-chatbar-kling" className="hidden" onChange={handleChatBarImageUpload} accept={imageFileAcceptTypes} multiple={false} />
+          {/* Input for Trading Pro will also use 'image-upload-chatbar' as limit is 1 */}
           <input type="file" id="file-upload-chatbar" className="hidden" onChange={handleChatBarGeneralFileUpload} accept={generalFileAcceptTypes} />
 
-        {getIsTradingProModel(selectedModel) ? (
-            <div className="p-3 border-t border-secondary dark:border-neutral-darkest bg-neutral-light dark:bg-neutral-darker flex items-center flex-shrink-0">
-                 <button
-                    onClick={onAnalyzeTradingProClick}
-                    disabled={isAnalyzeButtonDisabled}
-                    className={`flex-grow px-4 py-2.5 rounded-md text-white dark:text-neutral-darker font-medium transition-colors flex items-center justify-center
-                                ${isAnalyzeButtonDisabled ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed' : 'bg-primary hover:bg-primary-dark dark:bg-primary-light dark:hover:bg-primary'}`}
-                    aria-label="Analyze Market"
-                >
-                    <PresentationChartLineIcon className="w-5 h-5 mr-2" />
-                    {tradingProState.isLoadingAnalysis ? 'Analyzing...' : 'Analyze Market'}
-                </button>
-            </div>
-        ) : (
           <div className="p-3 border-t border-secondary dark:border-neutral-darkest bg-neutral-light dark:bg-neutral-darker flex items-end flex-shrink-0">
             {showMicrophoneButton && (
                 <button onClick={handleToggleListen} disabled={microphoneButtonDisabled}
@@ -3467,30 +3396,19 @@ List any web sources used for your research clearly. Use the term "Sources:" fol
 
             {!isRealTimeTranslationMode && showImageUploadInChatBar && (
               <button
-                onClick={() => document.getElementById('image-upload-chatbar')?.click()}
-                disabled={generalChatBarInteractionDisabled || uploadedImages.length >= imageUploadLimit }
+                onClick={() => document.getElementById(getIsKlingVideoModel(selectedModel) ? 'image-upload-chatbar-kling' : 'image-upload-chatbar')?.click()}
+                disabled={generalChatBarInteractionDisabled || (getIsTradingProModel(selectedModel) ? (tradingProState.chartImageUrl !== null) : (uploadedImages.length >= imageUploadLimit)) }
                 className={`p-2.5 rounded-full transition-colors flex-shrink-0 mr-2
-                            bg-secondary dark:bg-neutral-darkest hover:bg-secondary-dark dark:hover:bg-neutral-dark text-neutral-darker dark:text-secondary-light
+                            ${getIsKlingVideoModel(selectedModel) ? 'bg-accent dark:bg-accent-light hover:bg-accent-dark text-white' : 
+                             (getIsTradingProModel(selectedModel) && tradingProState.chartImageUrl ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-secondary dark:bg-neutral-darkest hover:bg-secondary-dark dark:hover:bg-neutral-dark text-neutral-darker dark:text-secondary-light')}
                             disabled:opacity-50`}
-                aria-label="Upload image"
-                title="Upload Image"
+                aria-label={getIsTradingProModel(selectedModel) && tradingProState.chartImageUrl ? "Clear Uploaded Chart" : "Upload image"}
+                title={getIsTradingProModel(selectedModel) && tradingProState.chartImageUrl ? "Clear Uploaded Chart" : "Upload Image"}
               >
-                <PhotoIcon className="w-5 h-5"/>
+                {getIsTradingProModel(selectedModel) && tradingProState.chartImageUrl ? <XMarkIcon className="w-5 h-5"/> : <PhotoIcon className="w-5 h-5"/>}
               </button>
             )}
-            {!isRealTimeTranslationMode && getIsKlingVideoModel(selectedModel) && (
-              <button
-                onClick={() => document.getElementById('image-upload-chatbar-kling')?.click()}
-                disabled={generalChatBarInteractionDisabled || uploadedImages.length >= imageUploadLimit }
-                className={`p-2.5 rounded-full transition-colors flex-shrink-0 mr-2
-                            bg-accent dark:bg-accent-light hover:bg-accent-dark text-white
-                            disabled:opacity-50`}
-                aria-label="Upload Image for Kling Video"
-                title="Upload Image for Kling Video"
-              >
-                <PhotoIcon className="w-5 h-5"/>
-              </button>
-            )}
+            
             {!isRealTimeTranslationMode && showFileUploadInChatBar && (
                <button
                 onClick={() => document.getElementById('file-upload-chatbar')?.click()}
@@ -3509,16 +3427,16 @@ List any web sources used for your research clearly. Use the term "Sources:" fol
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+              onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey && !getIsTradingProModel(selectedModel)) { e.preventDefault(); handleSendMessage(); } }}
               placeholder={currentPromptPlaceholder()}
               rows={calculateTextareaRows()}
               className="flex-grow p-2.5 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-1 focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none resize-none text-sm"
-              disabled={generalChatBarInteractionDisabled || isRealTimeTranslationMode}
+              disabled={generalChatBarInteractionDisabled || isRealTimeTranslationMode || getIsTradingProModel(selectedModel)} // Disable textarea for Trading Pro, use button
               aria-label="Chat input message"
             />
             <button
-              onClick={isRealTimeTranslationMode ? handleSpeakLiveTranslation : handleSendMessage}
-              disabled={generalChatBarInteractionDisabled || (isRealTimeTranslationMode && (isListening || !liveTranslationDisplay.trim() || isSpeakingLiveTranslation || (userSession.isDemoUser && !userSession.isPaidUser)))}
+              onClick={isRealTimeTranslationMode ? handleSpeakLiveTranslation : (getIsTradingProModel(selectedModel) ? onAnalyzeTradingProClick : handleSendMessage)}
+              disabled={generalChatBarInteractionDisabled || (isRealTimeTranslationMode && (isListening || !liveTranslationDisplay.trim() || isSpeakingLiveTranslation || (userSession.isDemoUser && !userSession.isPaidUser))) || (getIsTradingProModel(selectedModel) && isAnalyzeButtonDisabled) }
               className={`ml-2 p-2.5 rounded-full transition-colors flex-shrink-0
                           ${isRealTimeTranslationMode
                             ? (isSpeakingLiveTranslation ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse' : 'bg-accent hover:bg-accent-dark text-white disabled:bg-accent/50')
@@ -3533,7 +3451,6 @@ List any web sources used for your research clearly. Use the term "Sources:" fol
               }
             </button>
           </div>
-        )}
         </div>
       </div>
       <ImageModal isOpen={isImageModalOpen} onClose={() => setIsImageModalOpen(false)} imageBase64={modalImage || ''} prompt={modalPrompt} mimeType={modalMimeType} />

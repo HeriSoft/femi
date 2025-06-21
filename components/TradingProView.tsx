@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { TradingProSettings, TradingProState, TradingPair, AlphaVantageTimeSeries, UserSessionState, GroundingSource } from '../types.ts';
+import { TradingProSettings, TradingProState, TradingPair, UserSessionState, GroundingSource } from '../types.ts'; // Removed AlphaVantageTimeSeries
 import { TRADING_PRO_PAIRS, TRADING_PRO_DISCLAIMER } from '../constants.ts';
-import TradingChart, { TradingChartRef } from './TradingChart.tsx';
-import { InformationCircleIcon, PresentationChartLineIcon, XMarkIcon, LinkIcon } from './Icons.tsx';
+// TradingChart import removed
+import { InformationCircleIcon, PresentationChartLineIcon, XMarkIcon, LinkIcon, PhotoIcon } from './Icons.tsx';
 import { EnhancedMessageContent } from './MessageBubble.tsx';
 
 interface TradingProViewProps {
@@ -11,7 +11,7 @@ interface TradingProViewProps {
   onSettingsChange: (newSettings: Partial<TradingProSettings>) => void;
   tradingProState: TradingProState;
   setTradingProState: React.Dispatch<React.SetStateAction<TradingProState>>;
-  fetchChartData: (pair: TradingPair) => Promise<void>;
+  // fetchChartData prop removed
   handleAnalysis: (pair: TradingPair, chartImageBase64: string | null) => Promise<void>;
   userSession: UserSessionState;
 }
@@ -21,24 +21,18 @@ const TradingProView: React.FC<TradingProViewProps> = ({
   onSettingsChange,
   tradingProState,
   setTradingProState,
-  fetchChartData,
-  handleAnalysis,
+  // fetchChartData removed
+  handleAnalysis, // This prop is called by ChatPage when main send button is clicked for TradingPro
   userSession
 }) => {
   const [showDisclaimer, setShowDisclaimer] = useState(!tradingProState.disclaimerAgreed);
-  const chartComponentRef = useRef<TradingChartRef>(null);
-
-  const fetchChartDataCb = useCallback(fetchChartData, []); // Memoize fetchChartData
-
-  useEffect(() => {
-    if (settings.selectedPair && tradingProState.disclaimerAgreed && !tradingProState.chartData && !tradingProState.isLoadingChart && !tradingProState.analysisError?.includes('Chart Data Error')) {
-      fetchChartDataCb(TRADING_PRO_PAIRS.find(p => p.value === settings.selectedPair)!);
-    }
-  }, [settings.selectedPair, tradingProState.disclaimerAgreed, fetchChartDataCb, tradingProState.chartData, tradingProState.isLoadingChart, tradingProState.analysisError]);
+  // chartComponentRef removed
 
   useEffect(() => {
     setShowDisclaimer(!tradingProState.disclaimerAgreed);
   }, [tradingProState.disclaimerAgreed]);
+
+  // useEffect for fetching chart data removed
 
   const handlePairChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const newPairValue = event.target.value as TradingPair['value'] | "";
@@ -48,18 +42,16 @@ const TradingProView: React.FC<TradingProViewProps> = ({
     setTradingProState(prev => ({
       ...prev,
       selectedPair: newSelectedPairObject ? newSelectedPairObject.value : null,
-      chartData: null,
-      chartImageUrl: null,
+      chartImageUrl: null, // Clear user uploaded image on pair change
       analysisText: null,
       trendPredictions: null,
       analysisError: null,
       groundingSources: undefined,
-      isLoadingChart: newSelectedPairObject !== null && prev.disclaimerAgreed,
+      uploadedImageValidationError: null, // Clear validation error on pair change
+      isLoadingAnalysis: false, // Ensure loading analysis is false on pair change
     }));
 
-    if (newSelectedPairObject !== null && tradingProState.disclaimerAgreed) {
-      fetchChartDataCb(newSelectedPairObject);
-    } else if (newSelectedPairObject !== null && !tradingProState.disclaimerAgreed) {
+    if (newSelectedPairObject === null && !tradingProState.disclaimerAgreed) {
         setShowDisclaimer(true);
     }
   };
@@ -67,74 +59,9 @@ const TradingProView: React.FC<TradingProViewProps> = ({
   const handleDisclaimerAgree = () => {
     setTradingProState(prev => ({ ...prev, disclaimerAgreed: true }));
     setShowDisclaimer(false);
-    const currentSelectedPairObject = TRADING_PRO_PAIRS.find(p => p.value === settings.selectedPair);
-    if (currentSelectedPairObject && !tradingProState.chartData && !tradingProState.isLoadingChart) {
-      fetchChartDataCb(currentSelectedPairObject);
-    }
   };
 
-  const memoizedOnChartRendered = useCallback((base64Image: string | null) => {
-    if (base64Image) {
-        setTradingProState(prev => {
-            if (prev.chartImageUrl !== base64Image) {
-                return {...prev, chartImageUrl: base64Image};
-            }
-            return prev; // No change needed
-        });
-    }
-  }, [setTradingProState]);
-
-
-  // This onAnalyzeClick is for the button INSIDE TradingProView, if it were used.
-  // The main "Analyze Market" button is typically in ChatPage.tsx and calls handleAnalysis prop directly.
-  const onAnalyzeClickInternal = async () => {
-    const currentSelectedPairObject = TRADING_PRO_PAIRS.find(p => p.value === settings.selectedPair);
-    if (!currentSelectedPairObject) {
-      setTradingProState(prev => ({ ...prev, analysisError: "Please select a trading pair first." }));
-      return;
-    }
-    if (!tradingProState.disclaimerAgreed) {
-      setShowDisclaimer(true); // This component should manage its own disclaimer pop-up if button is here
-      return;
-    }
-    if (tradingProState.isLoadingChart || tradingProState.isLoadingAnalysis) {
-        return;
-    }
-
-    let currentChartImage = tradingProState.chartImageUrl;
-    if (!currentChartImage && chartComponentRef.current) {
-        currentChartImage = chartComponentRef.current.getChartAsBase64();
-    }
-    
-    // No longer blocking analysis if chart image is missing
-    // if (!currentChartImage && (settings.selectedPair !== 'XAUUSD' && settings.selectedPair !== 'BTCUSD') ) {
-    //     const errorMsg = tradingProState.chartData
-    //         ? "Chart image is not ready. Please wait for the chart to render fully."
-    //         : "Chart data not loaded. Cannot generate analysis.";
-    //     setTradingProState(prev => ({ ...prev, analysisError: errorMsg }));
-    //     return;
-    // }
-    
-    setTradingProState(prev => ({
-      ...prev,
-      isLoadingAnalysis: true,
-      analysisError: null,
-      analysisText: null,
-      trendPredictions: null,
-      groundingSources: undefined,
-      chartImageUrl: currentChartImage
-    }));
-    await handleAnalysis(currentSelectedPairObject, currentChartImage); // Call the prop handleAnalysis
-  };
-
-  // This defines disable state for a button *within* TradingProView (if one exists there)
-  const isAnalyzeButtonDisabledInternal =
-    !settings.selectedPair ||
-    !tradingProState.disclaimerAgreed ||
-    tradingProState.isLoadingChart ||
-    tradingProState.isLoadingAnalysis;
-    // Removed: (!tradingProState.chartData && !tradingProState.chartImageUrl)
-
+  // memoizedOnChartRendered removed
 
   if (showDisclaimer) {
     return (
@@ -175,29 +102,29 @@ const TradingProView: React.FC<TradingProViewProps> = ({
 
       {settings.selectedPair && (
         <>
-          <div className="h-64 md:h-80 lg:h-96 bg-secondary/30 dark:bg-neutral-dark/20 p-1 sm:p-2 rounded-md shadow-inner">
-            <TradingChart
-              ref={chartComponentRef}
-              chartData={tradingProState.chartData}
-              isLoading={tradingProState.isLoadingChart}
-              pairLabel={TRADING_PRO_PAIRS.find(p => p.value === settings.selectedPair)?.label || settings.selectedPair}
-              onChartRendered={memoizedOnChartRendered}
-            />
+          <div className="min-h-[150px] md:min-h-[200px] bg-secondary/30 dark:bg-neutral-dark/20 p-1 sm:p-2 rounded-md shadow-inner flex items-center justify-center">
+            {tradingProState.uploadedImageValidationError ? (
+              <div className="text-center text-red-500 dark:text-red-400 p-4">
+                <XMarkIcon className="w-8 h-8 mx-auto mb-2" />
+                <p className="font-semibold">{tradingProState.uploadedImageValidationError}</p>
+                <p className="text-xs">Analysis will proceed using web research.</p>
+              </div>
+            ) : tradingProState.chartImageUrl ? (
+              <img 
+                src={tradingProState.chartImageUrl} 
+                alt={`Uploaded chart for ${settings.selectedPair}`} 
+                className="max-w-full max-h-64 md:max-h-80 object-contain rounded-md"
+              />
+            ) : (
+              <div className="text-center text-neutral-500 dark:text-neutral-400 p-4">
+                 <PhotoIcon className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                <p>No chart image uploaded by user.</p>
+                <p className="text-xs">AI will rely on web research for chart patterns.</p>
+              </div>
+            )}
           </div>
           
-          {/* The main "Analyze Market" button is typically rendered by ChatPage.tsx, which calls handleAnalysis via onAnalyzeTradingProClick.
-              If TradingProView were to have its own button, it would use onAnalyzeClickInternal and isAnalyzeButtonDisabledInternal.
-              Example:
-              <button
-                onClick={onAnalyzeClickInternal}
-                disabled={isAnalyzeButtonDisabledInternal}
-                // ... classes ...
-              >
-                Analyze Market (Internal Button)
-              </button>
-          */}
-
-          {tradingProState.analysisError && (
+          {tradingProState.analysisError && tradingProState.analysisError !== "IMAGE_INVALID_TRADING_CHART" && (
             <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-600 rounded-md text-red-700 dark:text-red-300 text-sm" role="alert">
               <XMarkIcon className="w-5 h-5 inline mr-1.5 align-text-bottom" />
               {tradingProState.analysisError}
