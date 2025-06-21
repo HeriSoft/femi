@@ -8,7 +8,7 @@
 ## ✨ Core Features - Version 1.7 (latest)
 
 *   Chat with Gemini, GPT-4.1, Deepseek, Imagen3 (Generate super-real images), OpenAI TTS.
-*   Image & text file uploads for chat.
+*   Image & file uploads for chat.
 *   Web search grounding (Gemini).
 *   Chat history, personas, and theme customization.
 *   Secure API key management using a backend proxy.
