@@ -4,65 +4,59 @@ import { Chat } from '@google/genai'; // Updated import
 import React from 'react'; // Added for React.DetailedHTMLProps
 
 export enum Model {
-  GEMINI = 'Gemini (gemini-2.5-flash-preview-05-20)', // Updated model identifier
+  GEMINI = 'Gemini (gemini-2.5-flash-preview-05-20)', 
   DEEPSEEK = 'Deepseek (deepseek-chat)', 
-  GPT4O = 'ChatGPT (gpt-4.1)', // Changed display name and underlying model
-  GPT4O_MINI = 'ChatGPT (gpt-4.1-mini)', // Updated to gpt-4.1-mini
+  GPT4O = 'ChatGPT (gpt-4.1)', 
+  GPT4O_MINI = 'ChatGPT (gpt-4.1-mini)', 
   CLAUDE = 'Claude (Mock)',
   GEMINI_ADVANCED = 'Gemini Advanced (gemini-1.5-pro-latest)',
   IMAGEN3 = 'Imagen3 (imagen-3.0-generate-002)',
-  OPENAI_TTS = 'OpenAI (TTS)', // New TTS Model
-  REAL_TIME_TRANSLATION = 'Real-Time Translation (Gemini)', // New Real-Time Translation Model
-  AI_AGENT = 'AI Agent (gemini-2.5-flash-preview-04-17)', // Renamed from AI_TASK_ORCHESTRATOR and updated model ID
-  PRIVATE = 'Private (Local Data Storage)', // New Private Mode
+  OPENAI_TTS = 'OpenAI (TTS)', 
+  REAL_TIME_TRANSLATION = 'Real-Time Translation (Gemini)', 
+  AI_AGENT_SMART = 'AI Agent Smart (gemini-2.5-flash-preview-04-17)', // Renamed from AI_AGENT and updated
+  PRIVATE = 'Private (Local Data Storage)', 
   FLUX_KONTEX = 'Flux Kontext Image Edit (fal-ai/flux-pro/kontext)', 
   FLUX_KONTEX_MAX_MULTI = 'Flux Kontext Max Multi-Image (fal-ai/flux-pro/kontext/max/multi)',
-  FLUX_ULTRA = 'Flux1.1 [Ultra] (fal-ai/flux-pro/v1.1-ultra)', // Renamed from FLUX_DEV_IMAGE_GEN
-  KLING_VIDEO = 'Kling AI Video Gen (fal-ai/kling-video/v2.1/standard/image-to-video)', // New Kling AI Video Model - Updated path
-  TRADING_PRO = 'Trading Pro (Gemini Analysis)', // New Trading Pro Model
+  FLUX_ULTRA = 'Flux1.1 [Ultra] (fal-ai/flux-pro/v1.1-ultra)', 
+  KLING_VIDEO = 'Kling AI Video Gen (fal-ai/kling-video/v2.1/standard/image-to-video)', 
+  TRADING_PRO = 'Trading Pro (Gemini Analysis)', 
 }
 
 export interface ChatMessage {
   id: string;
-  text: string; // For user prompts or AI text responses
+  text: string; 
   sender: 'user' | 'ai';
-  timestamp: number; // Added to store the time of message creation
+  timestamp: number; 
   model?: Model;
-  imagePreview?: string; // For user messages with a single image (upload) - (e.g. Gemini, GPT-4, Kling)
-  imagePreviews?: string[]; // For AI generated/edited images OR for multi-image user uploads (Flux Max)
-  imageMimeType?: 'image/jpeg' | 'image/png'; // For AI generated images (single)
-  imageMimeTypes?: string[]; // For multi-image user uploads (Flux Max), corresponds to imagePreviews
-  originalPrompt?: string; // For AI generated/edited images/videos, to store the original user prompt
-  fileName?: string; // For user messages with files
-  fileContent?: string; // For storing text file content
+  imagePreview?: string; 
+  imagePreviews?: string[]; 
+  imageMimeType?: 'image/jpeg' | 'image/png'; 
+  imageMimeTypes?: string[]; 
+  originalPrompt?: string; 
+  fileName?: string; 
+  fileContent?: string; 
   groundingSources?: GroundingSource[];
-  isImageQuery?: boolean; // To flag user messages that are image generation/editing prompts
-  isRegenerating?: boolean; // Flag for AI messages that are being regenerated
-  // Stores the ID of the user message that led to this AI response, crucial for regeneration
+  isImageQuery?: boolean; 
+  isRegenerating?: boolean; 
   promptedByMessageId?: string; 
-  audioUrl?: string; // For AI messages with synthesized audio
-  // Fields for AI Agent (previously Task Orchestrator)
-  isTaskGoal?: boolean; // Flags if this user message defines a main task goal for the AI Agent
-  isTaskPlan?: boolean; // Flags if this AI message contains a task plan/response from the AI Agent
-  // Fields for Private Mode
-  videoFile?: File; // Transient: actual File object for current session for video
-  videoFileName?: string; // Persisted: name of the video
-  videoMimeType?: string; // Persisted: mime type of the video
-  isNote?: boolean; // For private mode text-only entries
-  // Field for Fal.ai polling (Flux Kontex, Flux Ultra, Kling)
-  fluxRequestId?: string; // Stores the request ID for polling Fal.ai results (generic name for Fal)
-  klingVideoRequestId?: string; // Stores the request ID for Kling video generation polling
-  fluxModelId?: string; // Stores the Fal model ID used for this request
-  isVideoQuery?: boolean; // To flag user messages that are video generation prompts (e.g., Kling)
-  videoUrl?: string; // For AI messages with generated video URL
-  // videoMimeType for ChatMessage is already defined above for private mode, can be reused for Kling.
+  audioUrl?: string; 
+  isTaskGoal?: boolean; 
+  isTaskPlan?: boolean; 
+  videoFile?: File; 
+  videoFileName?: string; 
+  videoMimeType?: string; 
+  isNote?: boolean; 
+  fluxRequestId?: string; 
+  klingVideoRequestId?: string; 
+  fluxModelId?: string; 
+  isVideoQuery?: boolean; 
+  videoUrl?: string; 
 
-  // Fields for Trading Pro (if we decide to log analysis as a message, unlikely given dedicated view)
   tradingAnalysis?: {
     pair: TradingPairValue;
     analysisText: string;
     trendPredictions: { up_percentage: number; down_percentage: number; sideways_percentage: number };
-    chartImageUrl?: string; // Chart used for this analysis
+    chartImageUrl?: string; 
   };
 }
 
@@ -79,32 +73,29 @@ export interface ModelSettings {
 }
 
 export interface ImagenSettings {
-  numberOfImages: number; // 1 to 4
+  numberOfImages: number; 
   outputMimeType: 'image/jpeg' | 'image/png';
-  aspectRatio?: '1:1' | '16:9' | '9:16' | '4:3' | '3:4' | string; // Allow common presets or custom strings
+  aspectRatio?: '1:1' | '16:9' | '9:16' | '4:3' | '3:4' | string; 
 }
 
 export type OpenAiTtsVoice = 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
 
 export interface OpenAITtsSettings {
   voice: OpenAiTtsVoice;
-  speed: number; // 0.25 to 4.0
-  modelIdentifier: 'tts-1' | 'tts-1-hd'; // Model for TTS
+  speed: number; 
+  modelIdentifier: 'tts-1' | 'tts-1-hd'; 
 }
 
 export interface RealTimeTranslationSettings {
-  targetLanguage: string; // language code e.g. 'vi', 'en'
+  targetLanguage: string; 
 }
 
-// Settings for AI Agent (previously Task Orchestrator)
-export interface AiAgentSettings extends ModelSettings {}
+// Settings for AI Agent Smart (renamed from AiAgentSettings)
+export interface AiAgentSmartSettings extends ModelSettings {}
 
-// Placeholder for Private mode settings, likely none needed.
-export interface PrivateModeSettings extends Pick<ModelSettings, 'systemInstruction'> { // Only systemInstruction is relevant from ModelSettings for display
-    // Private mode doesn't use temperature, topK, topP for generation
+export interface PrivateModeSettings extends Pick<ModelSettings, 'systemInstruction'> { 
 }
 
-// Updated FluxKontexAspectRatio to match Fal.ai permitted values and include 'default'
 export type FluxKontexAspectRatio = 'default' | '1:1' | '16:9' | '9:16' | '4:3' | '3:2' | '2:3' | '3:4' | '9:21' | '21:9';
 
 
@@ -114,51 +105,43 @@ export interface FluxKontexSettings {
   num_inference_steps?: number; 
   seed?: number | null; 
   num_images?: number; 
-  aspect_ratio?: FluxKontexAspectRatio; // Type updated
+  aspect_ratio?: FluxKontexAspectRatio; 
   output_format?: 'jpeg' | 'png'; 
-  // image_urls field is handled by the proxy when using Fal.ai JS client; client sends base64
 }
 
-// Aspect ratio options for Flux Ultra Image Gen (replaces FluxUltraImageSize)
-// Adding 'default' here for type compatibility with FluxKontexAspectRatio in shared settings structures,
-// but the actual API call for Flux Ultra will handle 'default' by mapping it to its real default (e.g., '16:9') or omitting it.
 export type FluxUltraAspectRatio = 'default' | '21:9' | '16:9' | '4:3' | '3:2' | '1:1' | '2:3' | '3:4' | '9:16' | '9:21';
 
-export interface FluxUltraSettings { // Renamed from FluxDevSettings
-  aspect_ratio?: FluxUltraAspectRatio; // Replaced image_size
+export interface FluxUltraSettings { 
+  aspect_ratio?: FluxUltraAspectRatio; 
   num_inference_steps?: number;
   seed?: number | null;
   guidance_scale?: number;
-  num_images?: number; // 1 to 4
+  num_images?: number; 
   enable_safety_checker?: boolean;
-  // Note: output_format is not explicitly listed as input for fal-ai/flux-pro/v1.1-ultra, but Fal.ai SDK defaults to jpeg
-  output_format?: 'jpeg' | 'png'; // Added output_format for consistency, proxy might use this
+  output_format?: 'jpeg' | 'png'; 
 }
 
-// Kling AI Video Generation Settings
 export type KlingAiDuration = "5" | "10";
 export type KlingAiAspectRatio = "16:9" | "9:16" | "1:1";
 
 export interface KlingAiSettings {
-  // prompt and image_url are main inputs, not part of these configurable settings for the UI panel
   duration: KlingAiDuration;
   aspect_ratio: KlingAiAspectRatio;
-  negative_prompt?: string; // Default: "blur, distort, and low quality"
-  cfg_scale?: number; // Default: 0.5
+  negative_prompt?: string; 
+  cfg_scale?: number; 
 }
 
-// --- Trading Pro Types ---
-export type TradingPairValue = 'XAUUSD' | 'BTCUSD'; // Add more like 'EURUSD', 'GBPUSD' etc.
+export type TradingPairValue = 'XAUUSD' | 'BTCUSD'; 
 export interface TradingPair {
   value: TradingPairValue;
-  label: string; // e.g., "XAU/USD (Gold)"
+  label: string; 
   alphaVantageFunction: 'TIME_SERIES_INTRADAY' | 'DIGITAL_CURRENCY_INTRADAY' | 'FX_INTRADAY' | 'FX_DAILY' | 'DIGITAL_CURRENCY_DAILY';
-  alphaVantageSymbol?: string; // For stocks (TIME_SERIES_INTRADAY) & crypto (DIGITAL_CURRENCY_INTRADAY/DAILY)
-  alphaVantageMarket?: string; // e.g., "USD" for crypto
-  from_symbol?: string; // For FX_INTRADAY / FX_DAILY
-  to_symbol?: string; // For FX_INTRADAY / FX_DAILY
-  interval?: '1min' | '5min' | '15min' | '30min' | '60min'; // Optional, not used for daily
-  outputsize?: 'compact' | 'full'; // Optional, default to compact if not specified or for daily
+  alphaVantageSymbol?: string; 
+  alphaVantageMarket?: string; 
+  from_symbol?: string; 
+  to_symbol?: string; 
+  interval?: '1min' | '5min' | '15min' | '30min' | '60min'; 
+  outputsize?: 'compact' | 'full'; 
 }
 
 export interface AlphaVantageCandle {
@@ -172,13 +155,12 @@ export interface AlphaVantageTimeSeries {
   [dateTime: string]: AlphaVantageCandle;
 }
 
-// CandlestickPoint for TradingChart
 export interface CandlestickPoint {
-  x: number; // Typically timestamp
-  o: number; // Open
-  h: number; // High
-  l: number; // Low
-  c: number; // Close
+  x: number; 
+  o: number; 
+  h: number; 
+  l: number; 
+  c: number; 
 }
 
 
@@ -186,20 +168,18 @@ export interface TradingProState {
   disclaimerAgreed: boolean;
   isLoadingChart: boolean;
   chartData: AlphaVantageTimeSeries | null;
-  chartImageUrl: string | null; // Base64 image of the chart
+  chartImageUrl: string | null; 
   isLoadingAnalysis: boolean;
   analysisText: string | null;
   trendPredictions: { up_percentage: number; down_percentage: number; sideways_percentage: number } | null;
   analysisError: string | null;
   groundingSources?: GroundingSource[];
-  selectedPair: TradingPairValue | null; // For internal state tracking if needed
+  selectedPair: TradingPairValue | null; 
 }
 
 export interface TradingProSettings {
   selectedPair: TradingPairValue | null;
-  // Add other Trading Pro specific settings here if needed in the future
 }
-// --- End Trading Pro Types ---
 
 export type ModelSpecificSettingsMap = {
   [Model.GEMINI]: ModelSettings;
@@ -211,7 +191,7 @@ export type ModelSpecificSettingsMap = {
   [Model.IMAGEN3]: ImagenSettings;
   [Model.OPENAI_TTS]: OpenAITtsSettings;
   [Model.REAL_TIME_TRANSLATION]: RealTimeTranslationSettings;
-  [Model.AI_AGENT]: AiAgentSettings;
+  [Model.AI_AGENT_SMART]: AiAgentSmartSettings; // Updated
   [Model.PRIVATE]: PrivateModeSettings;
   [Model.FLUX_KONTEX]: FluxKontexSettings;
   [Model.FLUX_KONTEX_MAX_MULTI]: FluxKontexSettings;
@@ -220,13 +200,12 @@ export type ModelSpecificSettingsMap = {
   [Model.TRADING_PRO]: TradingProSettings;
 };
 
-// Explicit union of all possible model-specific settings objects
 export type AnyModelSettings = 
   | ModelSettings
   | ImagenSettings
   | OpenAITtsSettings
   | RealTimeTranslationSettings
-  | AiAgentSettings
+  | AiAgentSmartSettings // Updated
   | PrivateModeSettings
   | FluxKontexSettings
   | FluxUltraSettings
@@ -259,7 +238,7 @@ export interface GeminiChatState {
   currentTemperature?: number;
   currentTopK?: number;
   currentTopP?: number;
-  currentEnableWebSearch?: boolean; // Added to track web search state for chat re-initialization
+  currentEnableWebSearch?: boolean; 
 }
 
 export interface ApiKeyStatus {
@@ -267,17 +246,17 @@ export interface ApiKeyStatus {
   envVarName: string; 
   modelName: string; 
   isMock: boolean;
-  isGeminiPlatform: boolean; // True if the model runs on Google's Gemini platform (AI Studio API Key)
-  isImageGeneration?: boolean; // Flag for image generation models (like Imagen3)
-  isTextToSpeech?: boolean; // Flag for TTS models
-  isRealTimeTranslation?: boolean; // Flag for real-time translation model
-  isAiAgent?: boolean; // Flag for AI Agent model (renamed from isTaskOrchestrator)
-  isPrivateMode?: boolean; // Flag for Private (Local Data Storage) mode
-  isImageEditing?: boolean; // Flag for image editing models like Flux Kontex (single image)
-  isMultiImageEditing?: boolean; // Flag for multi-image editing models like Flux Kontext Max
-  isFluxUltraImageGeneration?: boolean; // Renamed from isFluxDevImageGeneration
-  isKlingVideoGeneration?: boolean; // Flag for Kling AI video generation
-  isTradingPro?: boolean; // Flag for Trading Pro model
+  isGeminiPlatform: boolean; 
+  isImageGeneration?: boolean; 
+  isTextToSpeech?: boolean; 
+  isRealTimeTranslation?: boolean; 
+  isAiAgentSmart?: boolean; // Renamed from isAiAgent
+  isPrivateMode?: boolean; 
+  isImageEditing?: boolean; 
+  isMultiImageEditing?: boolean; 
+  isFluxUltraImageGeneration?: boolean; 
+  isKlingVideoGeneration?: boolean; 
+  isTradingPro?: boolean; 
 }
 
 export interface Persona {
@@ -289,8 +268,8 @@ export interface Persona {
 export interface SettingsPanelProps {
   selectedModel: Model;
   onModelChange: (model: Model) => void;
-  modelSettings: AnyModelSettings; // Changed from ModelSpecificSettingsMap[M] to AnyModelSettings
-  onModelSettingsChange: (settings: Partial<AnyModelSettings>) => void; // Changed to Partial<AnyModelSettings>
+  modelSettings: AnyModelSettings; 
+  onModelSettingsChange: (settings: Partial<AnyModelSettings>) => void; 
   isWebSearchEnabled: boolean;
   onWebSearchToggle: (enabled: boolean) => void;
   disabled: boolean;
@@ -325,33 +304,30 @@ export interface ChatSession {
   timestamp: number;
   model: Model;
   messages: ChatMessage[];
-  // Store a snapshot of the specific settings for the model used in this session
-  modelSettingsSnapshot: AnyModelSettings; // Changed from ModelSpecificSettingsMap[Model]
+  modelSettingsSnapshot: AnyModelSettings; 
   isPinned: boolean;
-  activePersonaIdSnapshot: string | null; // Save active persona with the session
+  activePersonaIdSnapshot: string | null; 
 }
 
 export interface ApiChatMessage {
   role: 'user' | 'assistant' | 'system' | 'function' | 'tool';
   content: string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; detail?: "auto" | "low" | "high" } }>;
-  name?: string; // Optional: For function/tool calls
-  tool_calls?: any[]; // For tool usage
-  tool_call_id?: string; // For tool responses
+  name?: string; 
+  tool_calls?: any[]; 
+  tool_call_id?: string; 
 }
 
 export interface ApiStreamChunk {
   textDelta?: string;
   isFinished?: boolean;
   error?: string;
-  // Potentially add other fields if the API stream sends more structured data
 }
 
 export interface GeneralApiSendMessageParams {
   modelIdentifier: string; 
   history: ApiChatMessage[];
   modelSettings: ModelSettings;
-  userSession: UserSessionState; // Added userSession
-  // apiKey?: string; // API Key will be handled by the proxy
+  userSession: UserSessionState; 
 }
 
 export interface NotificationMessage {
@@ -389,8 +365,7 @@ export interface AccountSettingsModalProps {
 export type AccountTabType = 'profile' | 'credits' | 'devices' | 'background' | 'avatar' | 'payment';
 
 
-// Language Learning Types
-export type LanguageOption = 'en' | 'ja' | 'ko' | 'zh' | 'vi'; // Add more as needed
+export type LanguageOption = 'en' | 'ja' | 'ko' | 'zh' | 'vi'; 
 export type LanguageLearningActivityType = 'listening' | 'speaking' | 'vocabulary' | 'quiz' | 'sentence-scramble' | 'handwriting';
 
 
@@ -433,7 +408,7 @@ export interface LanguageLearningModalProps {
   isOpen: boolean;
   onClose: () => void;
   userProfile: UserGlobalProfile | null;
-  userSession: UserSessionState; // Added userSession
+  userSession: UserSessionState; 
   onUpdateProfile: (profile: UserGlobalProfile) => void;
   onAddExp: (language: LanguageOption, expPoints: number) => void;
 }
@@ -442,16 +417,16 @@ export interface LearningContent {
     id: string;
     activityType: LanguageLearningActivityType;
     language: LanguageOption;
-    script?: string; // For listening
-    question?: string; // For listening, quiz
-    options?: string[]; // For listening, quiz
-    correctAnswerIndex?: number; // For listening, quiz
-    phraseToSpeak?: string; // For speaking
-    vocabularySet?: VocabularyItem[]; // For vocabulary
-    originalSentence?: string; // For sentence scramble
-    scrambledWords?: { word: string, id: number }[]; // For sentence scramble
-    targetText?: string; // For handwriting
-    instruction?: string; // General instruction if needed
+    script?: string; 
+    question?: string; 
+    options?: string[]; 
+    correctAnswerIndex?: number; 
+    phraseToSpeak?: string; 
+    vocabularySet?: VocabularyItem[]; 
+    originalSentence?: string; 
+    scrambledWords?: { word: string, id: number }[]; 
+    targetText?: string; 
+    instruction?: string; 
 }
 
 export interface VocabularyItem {
@@ -464,21 +439,20 @@ export interface LearningActivityState {
     isLoadingContent: boolean;
     content: LearningContent | null;
     error: string | null;
-    userAnswer: string | number | null; // string for speaking/scramble, number for quiz/listening index
-    userSelectedWordIds?: number[]; // For sentence scramble, stores IDs of selected words
+    userAnswer: string | number | null; 
+    userSelectedWordIds?: number[]; 
     isAnswerSubmitted: boolean;
     isAnswerCorrect: boolean | null;
-    audioUrl?: string; // For listening/speaking feedback
-    isAudioPlaying?: boolean; // For listening/speaking feedback
-    translatedUserSpeech?: string; // For speaking practice with translation
-    isLoadingTranslation?: boolean; // For speaking practice with translation
-    userHandwritingImage?: string; // base64 data URL for handwriting
-    accuracyScore?: number; // For handwriting
-    aiFeedback?: string; // For handwriting or speaking
-    handwritingInputMethod?: 'draw' | 'upload'; // For handwriting
+    audioUrl?: string; 
+    isAudioPlaying?: boolean; 
+    translatedUserSpeech?: string; 
+    isLoadingTranslation?: boolean; 
+    userHandwritingImage?: string; 
+    accuracyScore?: number; 
+    aiFeedback?: string; 
+    handwritingInputMethod?: 'draw' | 'upload'; 
 }
 
-// Games Modal Types
 export interface GamesModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -494,25 +468,24 @@ export interface WebGamePlayerModalProps {
   gameTitle: string;
 }
 
-// Tien Len Game Types
 export enum CardSuit {
-  SPADES = '♠',   // Bích
-  CLUBS = '♣',    // Chuồn (Tép)
-  DIAMONDS = '♦', // Rô
-  HEARTS = '♥'    // Cơ
+  SPADES = '♠',   
+  CLUBS = '♣',    
+  DIAMONDS = '♦', 
+  HEARTS = '♥'    
 }
 
-export enum CardRank { // Using English for ranks internally
+export enum CardRank { 
   THREE = '3', FOUR = '4', FIVE = '5', SIX = '6', SEVEN = '7',
   EIGHT = '8', NINE = '9', TEN = '10', JACK = 'J', QUEEN = 'Q',
   KING = 'K', ACE = 'A', TWO = '2'
 }
 
 export interface TienLenCard {
-  id: string; // e.g., "HEARTSA" or "SPADES2"
+  id: string; 
   rank: CardRank;
   suit: CardSuit;
-  value: number; // Numerical value for comparison (3=0, 2=12)
+  value: number; 
   isSelected: boolean;
 }
 
@@ -521,8 +494,8 @@ export type PlayerHand = TienLenCard[];
 export interface TienLenGameState {
   playerHand: PlayerHand;
   aiHand: PlayerHand;
-  table: TienLenCard[]; // Cards currently visible on the table from the last play
-  lastPlayedHand: ValidatedHand | null; // Structured info of the hand to beat
+  table: TienLenCard[]; 
+  lastPlayedHand: ValidatedHand | null; 
   currentPlayer: 'player' | 'ai';
   turnHistory: TurnHistoryEntry[];
   winner: 'player' | 'ai' | null;
@@ -532,13 +505,13 @@ export interface TienLenGameState {
   aiScore: number;
   turnTimer: number;
   isPaused: boolean;
-  firstPlayerOfTheGame: 'player' | 'ai' | null; // Who has the 3 of Spades
+  firstPlayerOfTheGame: 'player' | 'ai' | null; 
   isFirstTurnOfGame: boolean;
 }
 
 export interface TurnHistoryEntry {
   player: 'player' | 'ai';
-  playedCards: ValidatedHand | null; // The combination played
+  playedCards: ValidatedHand | null; 
   passed: boolean;
 }
 
@@ -546,19 +519,18 @@ export enum TienLenHandType {
   SINGLE = 'Single',
   PAIR = 'Pair',
   TRIPLE = 'Triple',
-  STRAIGHT = 'Straight', // Sảnh
-  FOUR_OF_A_KIND = 'Four of a Kind', // Tứ Quý
-  THREE_PAIR_STRAIGHT = 'Three Pair Straight', // Ba Đôi Thông
-  // FOUR_PAIR_STRAIGHT = 'Four Pair Straight', // Tứ Đôi Thông (optional, powerful)
+  STRAIGHT = 'Straight', 
+  FOUR_OF_A_KIND = 'Four of a Kind', 
+  THREE_PAIR_STRAIGHT = 'Three Pair Straight', 
   INVALID = 'Invalid',
 }
 
 export interface ValidatedHand {
   type: TienLenHandType;
   cards: TienLenCard[];
-  rankValue: number; // Highest rank value (e.g., for pair of K, value of K) or lowest for Ba Đôi Thông
-  suitValue?: number; // For singles, to break ties
-  length?: number; // For straights
+  rankValue: number; 
+  suitValue?: number; 
+  length?: number; 
 }
 
 export interface TienLenGameModalProps {
@@ -577,14 +549,12 @@ export interface CreditPackage {
   id: string;
   name: string;
   description: string;
-  price: number; // e.g., 5.00
-  currency: 'USD' | 'VND'; // Example currencies
+  price: number; 
+  currency: 'USD' | 'VND'; 
   creditsAwarded: number;
 }
 
-// --- User Session State ---
 export interface DemoUserLimits {
-  // These will represent MONTHLY limits for named DEMO users
   fluxKontextMaxMonthlyUsesLeft: number;
   fluxKontextMaxMonthlyMaxUses: number;
   fluxKontextProMonthlyUsesLeft: number;
@@ -595,8 +565,8 @@ export interface DemoUserLimits {
   openaiTtsMonthlyMaxChars: number;
   fluxUltraMonthlyImagesLeft: number; 
   fluxUltraMonthlyMaxImages: number;
-  klingVideoMonthlyUsed?: number; // Used videos this month
-  klingVideoMonthlyMaxUses?: number; // Max videos allowed this month (likely 0 for demo)
+  klingVideoMonthlyUsed?: number; 
+  klingVideoMonthlyMaxUses?: number; 
 }
 
 export interface PaidUserLimits {
@@ -605,20 +575,20 @@ export interface PaidUserLimits {
   openaiTtsCharsLeft: number; 
   openaiTtsMaxChars: number;
   fluxKontextMaxMonthlyUsesLeft: number;
-  fluxKontextMaxMonthlyMaxUses: number; // Updated from 40 to 25
+  fluxKontextMaxMonthlyMaxUses: number; 
   fluxKontextProMonthlyUsesLeft: number;
-  fluxKontextProMonthlyMaxUses: number; // Updated from 50 to 35
+  fluxKontextProMonthlyMaxUses: number; 
   fluxUltraMonthlyImagesLeft: number; 
-  fluxUltraMonthlyMaxImages: number;  // Updated from 100 to 30
-  klingVideoMonthlyUsed?: number; // Videos used this month by paid user
-  klingVideoMonthlyMaxGenerations?: number; // Max videos allowed this month for paid user
+  fluxUltraMonthlyMaxImages: number;  
+  klingVideoMonthlyUsed?: number; 
+  klingVideoMonthlyMaxGenerations?: number; 
 }
 
 export interface UserSessionState {
   isDemoUser: boolean;
-  demoUsername?: string; // Username for the specific DEMO account
-  demoUserToken: string | null; // Token issued by the server for this DEMO user
-  demoLimits: DemoUserLimits | null; // Specific limits for this DEMO user
+  demoUsername?: string; 
+  demoUserToken: string | null; 
+  demoLimits: DemoUserLimits | null; 
 
   isPaidUser: boolean;
   paidUsername?: string;
@@ -627,14 +597,13 @@ export interface UserSessionState {
   paidLimits: PaidUserLimits | null;
 }
 
-// This response type will likely be from /api/auth/verify-code when a DEMO user logs in
 export interface DemoUserLoginResponse {
     success: boolean;
     message?: string;
-    isDemoUser: true; // Key identifier
-    username: string; // The specific DEMO username
-    demoUserToken: string; // Token for this session
-    limits: DemoUserLimits; // Their specific, potentially monthly, limits
+    isDemoUser: true; 
+    username: string; 
+    demoUserToken: string; 
+    limits: DemoUserLimits; 
 }
 
 export interface AdminLoginResponse {
@@ -653,11 +622,9 @@ export interface PaidLoginResponse {
     limits: PaidUserLimits;
 }
 
-// UserType on the server will determine which of these responses (or similar) is sent from /api/auth/verify-code
 export type LoginResponseType = DemoUserLoginResponse | AdminLoginResponse | PaidLoginResponse;
 
 
-// For Flux Kontext Proxy Service
 export interface SingleImageData {
   image_base_64: string;
   image_mime_type: 'image/jpeg' | 'image/png';
@@ -668,29 +635,27 @@ export interface MultiImageData {
 }
 
 export interface EditImageWithFluxKontexParams {
-  modelIdentifier: string; // e.g., 'fal-ai/flux-pro/kontext' or 'fal-ai/flux-pro/kontext/max/multi'
+  modelIdentifier: string; 
   prompt: string;
   settings: FluxKontexSettings;
   imageData: SingleImageData | MultiImageData; 
   userSession: UserSessionState;
-  requestHeaders?: HeadersInit; // Added for ChatPage to pass auth headers
+  requestHeaders?: HeadersInit; 
 }
 
-// For Flux Ultra Image Generation Proxy Service
 export interface GenerateImageWithFluxUltraParams {
-  modelIdentifier: string; // Should be 'fal-ai/flux-pro/v1.1-ultra'
+  modelIdentifier: string; 
   prompt: string;
   settings: FluxUltraSettings;
   userSession: UserSessionState;
-  requestHeaders?: HeadersInit; // Added for ChatPage to pass auth headers
+  requestHeaders?: HeadersInit; 
 }
 
-// For Kling AI Video Generation Proxy Service
 export interface GenerateVideoWithKlingParams {
-  modelIdentifier: string; // e.g., 'fal-ai/kling-video/v2.1/standard/image-to-video'
+  modelIdentifier: string; 
   prompt: string;
   settings: KlingAiSettings;
-  imageData: SingleImageData; // Kling takes one image_url (base64)
+  imageData: SingleImageData; 
   userSession: UserSessionState;
   requestHeaders?: HeadersInit;
 }
@@ -734,17 +699,15 @@ export interface HeaderProps {
   onPurchaseCredits: (packageId: string, paymentMethod: 'paypal' | 'stripe' | 'vietqr') => void;
   paypalEmail: string | undefined;
   onSavePayPalEmail: (email: string) => void;
-  onToggleNewsModal: () => void; // Added new prop
+  onToggleNewsModal: () => void; 
 }
 
 
-// Function to get actual model ID (especially for models with display names)
 export const getActualModelIdentifier = (model: Model): string => {
   const match = model.match(/\(([^)]+)\)$/);
   return match ? match[1] : model;
 };
 
-// Fal.ai Proxy Service Response Types
 export interface FalSubmitProxyResponse {
   requestId?: string;
   message?: string;
@@ -761,7 +724,6 @@ export interface FalStatusProxyResponse {
   rawResult?: any; 
 }
 
-// Trading Pro API Response Types (from your new proxy endpoints)
 export interface AlphaVantageProxyResponse {
   data?: AlphaVantageTimeSeries;
   error?: string;
