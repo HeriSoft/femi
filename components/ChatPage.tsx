@@ -614,6 +614,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
   useEffect(() => {
     const currentModelStatus = apiKeyStatuses[selectedModel];
+    const newModel = selectedModel;
+    const oldModel = prevSelectedModelRef.current;
 
     // Handle Web Search Toggle based on model compatibility
     if (isWebSearchEnabled && (
@@ -632,65 +634,66 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     }
 
     // Handle Image/File Clearing and other side effects on model *change*
-    if (selectedModel !== prevSelectedModelRef.current) {
-        const newModel = selectedModel;
-        const oldModel = prevSelectedModelRef.current;
+    if (newModel !== oldModel) {
         let shouldClearGeneralAttachments = false;
-        let shouldClearTextFileAttachments = false;
+        let shouldClearTextFileAttachmentsOnly = false;
 
+        // Condition 1: Switching TO a model that doesn't use general attachments from the main chat bar.
         if (
             newModel === Model.IMAGEN3 ||
             newModel === Model.OPENAI_TTS ||
             newModel === Model.REAL_TIME_TRANSLATION ||
-            newModel === Model.PRIVATE ||
-            newModel === Model.CLAUDE ||
-            getIsFluxKontexModel(newModel) ||
-            getIsFluxUltraModel(newModel) ||
-            getIsKlingVideoModel(newModel)
+            newModel === Model.CLAUDE || // Assuming current mock Claude doesn't use attachments
+            newModel === Model.FLUX_ULTRA // Flux Ultra generates, doesn't take image input here
         ) {
             shouldClearGeneralAttachments = true;
-        } else if (oldModel) {
-             if (
-                getIsFluxKontexModel(oldModel) ||
-                getIsFluxUltraModel(oldModel) ||
-                getIsKlingVideoModel(oldModel) ||
-                oldModel === Model.IMAGEN3 ||
-                oldModel === Model.OPENAI_TTS ||
-                getIsTradingProModel(oldModel) // Clear attachments if switching FROM Trading Pro
-             ) {
+        }
+        // Condition 2: Switching FROM a model with specific attachments TO a DIFFERENT model.
+        // This means if you had an image for Kling, and switch to Gemini, the image should clear.
+        // But if you switch from Gemini with an image TO Kling, the image should persist.
+        else if (oldModel && newModel !== oldModel) {
+            if (
+                (getIsKlingVideoModel(oldModel) && !getIsKlingVideoModel(newModel)) ||
+                (getIsTradingProModel(oldModel) && !getIsTradingProModel(newModel)) ||
+                (getIsFluxKontexModel(oldModel) && !getIsFluxKontexModel(newModel))
+            ) {
                  shouldClearGeneralAttachments = true;
-             }
-        }
-        
-        // AAS now only supports images, so clear text files if switching to it
-        if (newModel === Model.AI_AGENT_SMART) {
-            shouldClearTextFileAttachments = true;
+            }
         }
 
-
-        if (oldModel &&
+        // Condition 3: Switching between Flux Kontext types.
+        if (oldModel && newModel &&
             ((newModel === Model.FLUX_KONTEX && oldModel === Model.FLUX_KONTEX_MAX_MULTI) ||
              (newModel === Model.FLUX_KONTEX_MAX_MULTI && oldModel === Model.FLUX_KONTEX))
         ) {
             shouldClearGeneralAttachments = true;
         }
 
+        // Condition 4: Switching TO AI Agent Smart (only supports images).
+        if (newModel === Model.AI_AGENT_SMART && !shouldClearGeneralAttachments) {
+            shouldClearTextFileAttachmentsOnly = true;
+        }
+
+
         if (shouldClearGeneralAttachments) {
             if (uploadedImages.length > 0 || imagePreviews.length > 0) {
                 setUploadedImages([]);
                 setImagePreviews([]);
-                addNotification("Cleared previous image attachments for the new model.", "info");
+                addNotification("Cleared previous image attachments for the new model or mode.", "info");
             }
             if (uploadedTextFileContent || uploadedTextFileName) {
                  setUploadedTextFileContent(null);
                  setUploadedTextFileName(null);
-                 addNotification("Cleared previous file attachment for the new model.", "info");
+                 addNotification("Cleared previous file attachment for the new model or mode.", "info");
             }
-        } else if (shouldClearTextFileAttachments) { // Specific for AAS
+            if (tradingProState.chartImageUrl) {
+                setTradingProState(prev => ({ ...prev, chartImageUrl: null, uploadedImageValidationError: null}));
+            }
+        } else if (shouldClearTextFileAttachmentsOnly) {
              if (uploadedTextFileContent || uploadedTextFileName) {
                  setUploadedTextFileContent(null);
                  setUploadedTextFileName(null);
-                 addNotification("Cleared previous file attachment as AI Agent Smart only supports images.", "info");
+                 addNotification("Cleared previous file attachment as this model only supports images.", "info");
             }
         }
 
@@ -766,14 +769,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                 selectedPair: (allSettings[Model.TRADING_PRO] as TradingProSettings | undefined)?.selectedPair || null,
             }));
         }
-
-
         clearSearch();
     }
-
     prevSelectedModelRef.current = selectedModel;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedModel, addNotification, clearSearch, isGpt41Unlocked, isListening, isSpeakingLiveTranslation, allSettings]);
+  }, [selectedModel, addNotification, clearSearch, isGpt41Unlocked, isListening, isSpeakingLiveTranslation, allSettings, uploadedImages, imagePreviews, uploadedTextFileContent, uploadedTextFileName, tradingProState.chartImageUrl]); // Added dependencies
 
 
   const translateLiveSegment = useCallback(async (text: string, targetLangCode: string) => {
@@ -2812,10 +2812,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         imageUploadLimit > 0 &&
         !isTextToSpeechModelSelected &&
         !isRealTimeTranslationMode &&
-        !isImagenModelSelected && // Already 0 limit
-        !isClaudeModelSelected && // Already 0 limit
-        !getIsKlingVideoModel(selectedModel) // Kling handles its own upload button
-        // Trading Pro will use this button, so no !getIsTradingProModel(selectedModel)
+        !isImagenModelSelected && 
+        !isClaudeModelSelected
+        // Kling AI (and others needing single image like Trading Pro) will now show this button
     );
   }, [imageUploadLimit, selectedModel, isTextToSpeechModelSelected, isRealTimeTranslationMode, isImagenModelSelected, isClaudeModelSelected]);
 
