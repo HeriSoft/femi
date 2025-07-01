@@ -17,7 +17,7 @@ export enum Model {
   PRIVATE = 'Private (Local Data Storage)', 
   FLUX_KONTEX = 'Flux Kontext Image Edit (fal-ai/flux-pro/kontext)', 
   FLUX_KONTEX_MAX_MULTI = 'Flux Kontext Max Multi-Image (fal-ai/flux-pro/kontext/max/multi)',
-  FLUX_ULTRA = 'Flux1.1 [Ultra] (fal-ai/flux-pro/v1.1-ultra)', 
+  FLUX_ULTRA = 'Flux Dev (fal-ai/flux-1/dev)', 
   KLING_VIDEO = 'Kling AI Video Gen (fal-ai/kling-video/v2.1/standard/image-to-video)', 
   TRADING_PRO = 'Trading Pro (Gemini Analysis)', 
 }
@@ -109,10 +109,10 @@ export interface FluxKontexSettings {
   output_format?: 'jpeg' | 'png'; 
 }
 
-export type FluxUltraAspectRatio = 'default' | '21:9' | '16:9' | '4:3' | '3:2' | '1:1' | '2:3' | '3:4' | '9:16' | '9:21';
+export type FluxDevImageSize = 'square_hd' | 'square' | 'portrait_4_3' | 'portrait_16_9' | 'landscape_4_3' | 'landscape_16_9';
 
-export interface FluxUltraSettings { 
-  aspect_ratio?: FluxUltraAspectRatio; 
+export interface FluxDevSettings { 
+  image_size?: FluxDevImageSize; 
   num_inference_steps?: number;
   seed?: number | null;
   guidance_scale?: number;
@@ -177,7 +177,7 @@ export type ModelSpecificSettingsMap = {
   [Model.PRIVATE]: PrivateModeSettings;
   [Model.FLUX_KONTEX]: FluxKontexSettings;
   [Model.FLUX_KONTEX_MAX_MULTI]: FluxKontexSettings;
-  [Model.FLUX_ULTRA]: FluxUltraSettings;
+  [Model.FLUX_ULTRA]: FluxDevSettings;
   [Model.KLING_VIDEO]: KlingAiSettings;
   [Model.TRADING_PRO]: TradingProSettings;
 };
@@ -190,7 +190,7 @@ export type AnyModelSettings =
   | AiAgentSmartSettings // Updated
   | PrivateModeSettings
   | FluxKontexSettings
-  | FluxUltraSettings
+  | FluxDevSettings
   | KlingAiSettings
   | TradingProSettings;
 
@@ -236,7 +236,7 @@ export interface ApiKeyStatus {
   isPrivateMode?: boolean; 
   isImageEditing?: boolean; 
   isMultiImageEditing?: boolean; 
-  isFluxUltraImageGeneration?: boolean; 
+  isFluxDevImageGeneration?: boolean; 
   isKlingVideoGeneration?: boolean; 
   isTradingPro?: boolean; 
 }
@@ -545,8 +545,8 @@ export interface DemoUserLimits {
   imagen3MonthlyMaxImages: number;
   openaiTtsMonthlyCharsLeft: number;
   openaiTtsMonthlyMaxChars: number;
-  fluxUltraMonthlyImagesLeft: number; 
-  fluxUltraMonthlyMaxImages: number;
+  fluxDevMonthlyImagesLeft: number; 
+  fluxDevMonthlyMaxImages: number;
   klingVideoMonthlyUsed?: number; 
   klingVideoMonthlyMaxUses?: number; 
 }
@@ -560,8 +560,8 @@ export interface PaidUserLimits {
   fluxKontextMaxMonthlyMaxUses: number; 
   fluxKontextProMonthlyUsesLeft: number;
   fluxKontextProMonthlyMaxUses: number; 
-  fluxUltraMonthlyImagesLeft: number; 
-  fluxUltraMonthlyMaxImages: number;  
+  fluxDevMonthlyImagesLeft: number; 
+  fluxDevMonthlyMaxImages: number;  
   klingVideoMonthlyUsed?: number; 
   klingVideoMonthlyMaxGenerations?: number; 
 }
@@ -625,10 +625,10 @@ export interface EditImageWithFluxKontexParams {
   requestHeaders?: HeadersInit; 
 }
 
-export interface GenerateImageWithFluxUltraParams {
+export interface GenerateImageWithFluxDevParams {
   modelIdentifier: string; 
   prompt: string;
-  settings: FluxUltraSettings;
+  settings: FluxDevSettings;
   userSession: UserSessionState;
   requestHeaders?: HeadersInit; 
 }

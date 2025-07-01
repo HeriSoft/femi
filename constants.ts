@@ -1,5 +1,4 @@
-
-import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank, AiAgentSmartSettings, CreditPackage, PrivateModeSettings, FluxKontexSettings, FluxKontexAspectRatio, DemoUserLimits, PaidUserLimits, FluxUltraSettings, FluxUltraAspectRatio, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, ModelSpecificSettingsMap, TradingProSettings, TradingPair } from './types.ts';
+import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank, AiAgentSmartSettings, CreditPackage, PrivateModeSettings, FluxKontexSettings, FluxKontexAspectRatio, DemoUserLimits, PaidUserLimits, FluxDevSettings, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, ModelSpecificSettingsMap, TradingProSettings, TradingPair, FluxDevImageSize } from './types.ts';
 
 export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
   temperature: 0.7,
@@ -117,13 +116,13 @@ export const DEFAULT_FLUX_KONTEX_SETTINGS: FluxKontexSettings = {
   output_format: 'jpeg',
 };
 
-export const DEFAULT_FLUX_ULTRA_SETTINGS: FluxUltraSettings = {
-  aspect_ratio: '16:9',
+export const DEFAULT_FLUX_DEV_SETTINGS: FluxDevSettings = {
+  image_size: 'landscape_4_3',
   num_inference_steps: 28,
   seed: null,
   guidance_scale: 3.5,
   num_images: 1,
-  enable_safety_checker: true,
+  enable_safety_checker: false,
   output_format: 'jpeg',
 };
 
@@ -164,7 +163,7 @@ export const ALL_MODEL_DEFAULT_SETTINGS: ModelSpecificSettingsMap = {
   [Model.PRIVATE]: { ...DEFAULT_PRIVATE_MODE_SETTINGS },
   [Model.FLUX_KONTEX]: { ...DEFAULT_FLUX_KONTEX_SETTINGS },
   [Model.FLUX_KONTEX_MAX_MULTI]: { ...DEFAULT_FLUX_KONTEX_SETTINGS, num_images: 2 },
-  [Model.FLUX_ULTRA]: { ...DEFAULT_FLUX_ULTRA_SETTINGS },
+  [Model.FLUX_ULTRA]: { ...DEFAULT_FLUX_DEV_SETTINGS },
   [Model.KLING_VIDEO]: { ...DEFAULT_KLING_AI_SETTINGS },
   [Model.TRADING_PRO]: { ...DEFAULT_TRADING_PRO_SETTINGS },
 };
@@ -185,7 +184,7 @@ export const DEMO_USER_DEFAULT_MONTHLY_LIMITS = {
   FLUX_KONTEX_PRO_MONTHLY: 1,
   IMAGEN3_MONTHLY_IMAGES: 5,
   OPENAI_TTS_MONTHLY_CHARS: 10000,
-  FLUX_ULTRA_MONTHLY_IMAGES: 0,
+  FLUX_DEV_MONTHLY_IMAGES: 0,
   KLING_VIDEO_MONTHLY_MAX_USES: 0,
 };
 
@@ -198,8 +197,8 @@ export const INITIAL_DEMO_USER_LIMITS: DemoUserLimits = {
   imagen3MonthlyMaxImages: DEMO_USER_DEFAULT_MONTHLY_LIMITS.IMAGEN3_MONTHLY_IMAGES,
   openaiTtsMonthlyCharsLeft: DEMO_USER_DEFAULT_MONTHLY_LIMITS.OPENAI_TTS_MONTHLY_CHARS,
   openaiTtsMonthlyMaxChars: DEMO_USER_DEFAULT_MONTHLY_LIMITS.OPENAI_TTS_MONTHLY_CHARS,
-  fluxUltraMonthlyImagesLeft: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_ULTRA_MONTHLY_IMAGES,
-  fluxUltraMonthlyMaxImages: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_ULTRA_MONTHLY_IMAGES,
+  fluxDevMonthlyImagesLeft: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_DEV_MONTHLY_IMAGES,
+  fluxDevMonthlyMaxImages: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_DEV_MONTHLY_IMAGES,
   klingVideoMonthlyUsed: 0,
   klingVideoMonthlyMaxUses: DEMO_USER_DEFAULT_MONTHLY_LIMITS.KLING_VIDEO_MONTHLY_MAX_USES,
 };
@@ -214,8 +213,8 @@ export const PAID_USER_LIMITS_CONFIG: PaidUserLimits = {
   fluxKontextMaxMonthlyMaxUses: 25,
   fluxKontextProMonthlyUsesLeft: 0,
   fluxKontextProMonthlyMaxUses: 35,
-  fluxUltraMonthlyImagesLeft: 0,
-  fluxUltraMonthlyMaxImages: 30,
+  fluxDevMonthlyImagesLeft: 0,
+  fluxDevMonthlyMaxImages: 30,
   klingVideoMonthlyUsed: 0,
   klingVideoMonthlyMaxGenerations: 1,
 };
@@ -362,17 +361,14 @@ export const CARDS_PER_PLAYER = 12;
 export const TIEN_LEN_TURN_COUNTDOWN_SECONDS = 10;
 export const TIEN_LEN_AI_THINKING_MILLISECONDS = 1500;
 
-// Flux Ultra Aspect Ratio Options
-export const FLUX_ULTRA_ASPECT_RATIOS: { value: FluxUltraAspectRatio; label: string }[] = [
-  { value: '16:9', label: '16:9 (Widescreen)' },
-  { value: '1:1', label: '1:1 (Square)' },
-  { value: '4:3', label: '4:3 (Standard)' },
-  { value: '3:2', label: '3:2 (Photo)' },
-  { value: '21:9', label: '21:9 (Ultra Wide)' },
-  { value: '2:3', label: '2:3 (Tall Photo)' },
-  { value: '3:4', label: '3:4 (Portrait)' },
-  { value: '9:16', label: '9:16 (Tall Screen)' },
-  { value: '9:21', label: '9:21 (Ultra Tall)' },
+// Flux Dev Image Size Options
+export const FLUX_DEV_IMAGE_SIZES: { value: FluxDevImageSize; label: string }[] = [
+  { value: 'square_hd', label: 'Square HD (1:1)' },
+  { value: 'square', label: 'Square (1:1)' },
+  { value: 'portrait_4_3', label: 'Portrait (4:3)' },
+  { value: 'portrait_16_9', label: 'Portrait (16:9)' },
+  { value: 'landscape_4_3', label: 'Landscape (4:3)' },
+  { value: 'landscape_16_9', label: 'Landscape (16:9)' },
 ];
 
 // Kling AI Constants
@@ -443,10 +439,10 @@ export const API_KEY_STATUSES_DEFINITIONS = {
   [Model.FLUX_ULTRA]: {
     isSet: true,
     envVarName: 'FAL_KEY (on proxy)',
-    modelName: 'Flux1.1 [Ultra] Image Gen',
+    modelName: 'Flux Dev Image Gen',
     isMock: false,
     isGeminiPlatform: false,
-    isFluxUltraImageGeneration: true,
+    isFluxDevImageGeneration: true,
   },
   [Model.KLING_VIDEO]: {
     isSet: true,
