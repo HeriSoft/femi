@@ -22,7 +22,7 @@ const featureComparisonData: FeatureComparisonItem[] = [
   { feature: "AI Agent (Gemini)", paidUser: "✅ Full Access", demoUser: "✅ Full Access" },
   { feature: "Private Mode (Local)", paidUser: "✅ Full Access", demoUser: "✅ Full Access" },
   { category: "Image Generation", feature: "Imagen3", paidUser: "25 images/month", demoUser: "5 images/month" },
-  { feature: "Flux1.1 [Ultra]", paidUser: "30 images/month", demoUser: <span className="text-red-500 dark:text-red-400">❌ Paid Only</span> },
+  { feature: "Flux Dev", paidUser: "30 images/month", demoUser: <span className="text-red-500 dark:text-red-400">❌ Paid Only</span> },
   { category: "Image Editing", feature: "Flux Kontext Pro", paidUser: <span>35 uses/month <br/><small>(1 image input/use)</small></span>, demoUser: <span>1 use/month <br/><small>(1 image input/use)</small></span> },
   { feature: "Flux Kontext Max", paidUser: <span>25 uses/month <br/><small>(up to 4 image inputs/use)</small></span>, demoUser: <span className="text-red-500 dark:text-red-400">❌ Paid Only</span> },
   { category: "Video Generation", feature: "Kling AI Video", paidUser: "4 videos/month", demoUser: <span className="text-red-500 dark:text-red-400">❌ Paid Only</span> },
@@ -51,7 +51,7 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
       >
         <div className="flex justify-between items-center mb-4 pb-3 border-b border-secondary dark:border-neutral-darkest">
           <h2 id="news-modal-title" className="text-xl sm:text-2xl font-semibold text-primary dark:text-primary-light flex items-center">
-            <MegaphoneIcon className="w-7 h-7 mr-2" /> Version 1.7 - Updates & Features
+            <MegaphoneIcon className="w-7 h-7 mr-2" /> Version 1.8 - Updates & Features
           </h2>
           <button
             onClick={onClose}
@@ -64,12 +64,12 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
 
         <div className="overflow-y-auto flex-grow space-y-4 text-sm text-neutral-700 dark:text-neutral-200 pr-1">
           <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-md">
-            <h3 className="text-lg font-semibold text-blue-700 dark:text-blue-300 mb-2">Change Logs for v1.7:</h3>
+            <h3 className="text-lg font-semibold text-blue-700 dark:text-blue-300 mb-2">Change Logs for v1.8:</h3>
             <ul className="list-disc list-inside space-y-1 text-blue-600 dark:text-blue-200">
-              <li>Improved User Experience (UX) and User Interface (UI) for error display and handling throughout the application.</li>
-              <li>Enhanced stability for Trading Pro analysis, especially for XAU/USD and BTC/USD when chart images are unavailable.</li>
-              <li>Adjusted scroll-down button visibility in chat for better user experience.</li>
-              <li>Upgrade for AI-Agent Smart (AAS) - Location Search</li>
+              <li>New Flan Models Option for Paid User.</li>
+              <li>Change Model Flux Ultra to Flux Dev for image generation.</li>
+              <li>Added new model Google Veo3.</li>
+              <li>Fixed some errors for AI-Agent Smart (AAS) - Location check-in</li>
             </ul>
           </div>
 
