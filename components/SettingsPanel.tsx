@@ -1,8 +1,9 @@
 
+
 import React, { useState } from 'react';
-import { Model, ModelSettings, SettingsPanelProps, ApiKeyStatus, getActualModelIdentifier, ImagenSettings, Persona, OpenAITtsSettings, OpenAiTtsVoice, RealTimeTranslationSettings, AiAgentSmartSettings, FluxKontexSettings, FluxKontexAspectRatio, FluxUltraSettings, FluxUltraAspectRatio, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, PrivateModeSettings, AnyModelSettings, TradingProSettings } from '../types.ts'; 
+import { Model, ModelSettings, SettingsPanelProps, ApiKeyStatus, getActualModelIdentifier, ImagenSettings, Persona, OpenAITtsSettings, OpenAiTtsVoice, RealTimeTranslationSettings, AiAgentSmartSettings, FluxKontexSettings, FluxKontexAspectRatio, FluxDevSettings, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, PrivateModeSettings, AnyModelSettings, TradingProSettings, FluxDevImageSize } from '../types.ts'; 
 import { ArrowUpTrayIcon, PhotoIcon, XMarkIcon, MagnifyingGlassIcon, KeyIcon, InformationCircleIcon, UserCircleIcon, PlusCircleIcon, TrashIcon, PencilSquareIcon, SpeakerWaveIcon, LanguageIcon, PencilIcon as EditIcon, ArrowPathIcon, FilmIcon, PresentationChartLineIcon } from './Icons.tsx'; // Added PresentationChartLineIcon
-import { TRANSLATION_TARGET_LANGUAGES, DEFAULT_FLUX_KONTEX_SETTINGS, DEFAULT_FLUX_ULTRA_SETTINGS, FLUX_ULTRA_ASPECT_RATIOS, DEFAULT_KLING_AI_SETTINGS, KLING_AI_DURATIONS, KLING_AI_ASPECT_RATIOS, ALL_MODEL_DEFAULT_SETTINGS, TRADING_PRO_PAIRS } from '../constants.ts'; 
+import { TRANSLATION_TARGET_LANGUAGES, DEFAULT_FLUX_KONTEX_SETTINGS, DEFAULT_FLUX_DEV_SETTINGS, FLUX_DEV_IMAGE_SIZES, DEFAULT_KLING_AI_SETTINGS, KLING_AI_DURATIONS, KLING_AI_ASPECT_RATIOS, ALL_MODEL_DEFAULT_SETTINGS, TRADING_PRO_PAIRS } from '../constants.ts'; 
 
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({
@@ -33,14 +34,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const isAiAgentSmartModel = selectedModel === Model.AI_AGENT_SMART || currentApiKeyStatus?.isAiAgentSmart; // Updated
   const isPrivateModel = selectedModel === Model.PRIVATE || currentApiKeyStatus?.isPrivateMode;
   const isFluxKontexModel = selectedModel === Model.FLUX_KONTEX || selectedModel === Model.FLUX_KONTEX_MAX_MULTI;
-  const isFluxUltraImageGenModel = selectedModel === Model.FLUX_ULTRA || currentApiKeyStatus?.isFluxUltraImageGeneration;
+  const isFluxDevImageGenModel = selectedModel === Model.FLUX_ULTRA || currentApiKeyStatus?.isFluxDevImageGeneration;
   const isKlingVideoModel = selectedModel === Model.KLING_VIDEO || currentApiKeyStatus?.isKlingVideoGeneration;
   const isTradingProModel = selectedModel === Model.TRADING_PRO || currentApiKeyStatus?.isTradingPro;
 
 
-  const showPersonaSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentSmartModel && !isPrivateModel && !isFluxKontexModel && !isFluxUltraImageGenModel && !isKlingVideoModel && !isTradingProModel && selectedModel !== Model.CLAUDE; // Updated
-  const showChatModelSettingsSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentSmartModel && !isFluxKontexModel && !isFluxUltraImageGenModel && !isPrivateModel && !isKlingVideoModel && !isTradingProModel && selectedModel !== Model.CLAUDE; // Updated
-  const showWebSearchToggle = currentApiKeyStatus?.isGeminiPlatform && !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentSmartModel && !isPrivateModel && !isFluxKontexModel && !isFluxUltraImageGenModel && !isKlingVideoModel && !isTradingProModel; // Updated
+  const showPersonaSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentSmartModel && !isPrivateModel && !isFluxKontexModel && !isFluxDevImageGenModel && !isKlingVideoModel && !isTradingProModel && selectedModel !== Model.CLAUDE; // Updated
+  const showChatModelSettingsSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentSmartModel && !isFluxKontexModel && !isFluxDevImageGenModel && !isPrivateModel && !isKlingVideoModel && !isTradingProModel && selectedModel !== Model.CLAUDE; // Updated
+  const showWebSearchToggle = currentApiKeyStatus?.isGeminiPlatform && !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentSmartModel && !isPrivateModel && !isFluxKontexModel && !isFluxDevImageGenModel && !isKlingVideoModel && !isTradingProModel; // Updated
 
 
   const handlePersonaEdit = (persona: Persona) => {
@@ -95,7 +96,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                          !currentApiKeyStatus?.isAiAgentSmart && // Updated
                                          !currentApiKeyStatus?.isImageEditing &&
                                          !currentApiKeyStatus?.isMultiImageEditing &&
-                                         !currentApiKeyStatus?.isFluxUltraImageGeneration &&
+                                         !currentApiKeyStatus?.isFluxDevImageGeneration &&
                                          !isKlingVideoModel &&
                                          !isTradingProModel;
 
@@ -132,12 +133,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     { value: 'shimmer', label: 'Shimmer' },
   ];
   
-  const handleRandomizeSeed = (modelType: 'fluxKontext' | 'fluxUltra') => {
+  const handleRandomizeSeed = (modelType: 'fluxKontext' | 'fluxDev') => {
     const randomSeed = Math.floor(Math.random() * 1000000000); 
     if (modelType === 'fluxKontext' && isFluxKontexModel) {
         onModelSettingsChange({ seed: randomSeed } as Partial<FluxKontexSettings>);
-    } else if (modelType === 'fluxUltra' && isFluxUltraImageGenModel) {
-        onModelSettingsChange({ seed: randomSeed } as Partial<FluxUltraSettings>);
+    } else if (modelType === 'fluxDev' && isFluxDevImageGenModel) {
+        onModelSettingsChange({ seed: randomSeed } as Partial<FluxDevSettings>);
     }
   };
   
@@ -150,7 +151,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     else if (currentApiKeyStatus.isRealTimeTranslation) apiKeyTypeString = "Translation API";
     else if (currentApiKeyStatus.isAiAgentSmart) apiKeyTypeString = "AI Agent Smart API"; // Updated
     else if (currentApiKeyStatus.isImageEditing || currentApiKeyStatus.isMultiImageEditing) apiKeyTypeString = "Image Editing API";
-    else if (currentApiKeyStatus.isFluxUltraImageGeneration) apiKeyTypeString = "Image Gen API (Flux Ultra)";
+    else if (currentApiKeyStatus.isFluxDevImageGeneration) apiKeyTypeString = "Image Gen API (Flux Dev)";
     else if (currentApiKeyStatus.isKlingVideoGeneration) apiKeyTypeString = "Video Gen API (Kling)";
     else if (currentApiKeyStatus.isPrivateMode) apiKeyTypeString = "Local Mode";
     else if (currentApiKeyStatus.isTradingPro) apiKeyTypeString = "Trading Analysis APIs";
@@ -173,9 +174,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
         >
           {models.map((model) => {
             const isFluxMax = model === Model.FLUX_KONTEX_MAX_MULTI;
-            const isFluxUltra = model === Model.FLUX_ULTRA;
+            const isFluxDev = model === Model.FLUX_ULTRA;
             const isKling = model === Model.KLING_VIDEO;
-            const isRestricted = (isFluxMax || isFluxUltra || isKling) && !userSession.isPaidUser && !isAdminUser; 
+            const isRestricted = (isFluxMax || isFluxDev || isKling) && !userSession.isPaidUser && !isAdminUser; 
             return (
               <option key={model} value={model} disabled={isRestricted}
                 className={isRestricted ? "text-gray-400 dark:text-gray-600" : ""}>
@@ -348,7 +349,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
             />
           </div>
-          { (currentApiKeyStatus?.isGeminiPlatform && !currentApiKeyStatus.isImageGeneration && !currentApiKeyStatus.isImageEditing && !currentApiKeyStatus.isPrivateMode && !currentApiKeyStatus.isMultiImageEditing && !currentApiKeyStatus.isFluxUltraImageGeneration && !isKlingVideoModel && !isTradingProModel) && ( 
+          { (currentApiKeyStatus?.isGeminiPlatform && !currentApiKeyStatus.isImageGeneration && !currentApiKeyStatus.isImageEditing && !currentApiKeyStatus.isPrivateMode && !currentApiKeyStatus.isMultiImageEditing && !currentApiKeyStatus.isFluxDevImageGeneration && !isKlingVideoModel && !isTradingProModel) && ( 
           <div>
             <label htmlFor="top-k" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
               Top K: {(modelSettings as ModelSettings).topK}
@@ -548,81 +549,81 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
         </div>
       )}
       
-      {isFluxUltraImageGenModel && (
+      {isFluxDevImageGenModel && (
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
             <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
                 <PhotoIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" /> 
-                Flux1.1 [Ultra] Settings
+                Flux Dev Settings
             </h3>
              <div>
-                <label htmlFor="flux-ultra-aspect-ratio" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Aspect Ratio</label>
+                <label htmlFor="flux-dev-image-size" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Image Size</label>
                 <select 
-                    id="flux-ultra-aspect-ratio"
-                    value={(modelSettings as FluxUltraSettings).aspect_ratio || DEFAULT_FLUX_ULTRA_SETTINGS.aspect_ratio}
-                    onChange={(e) => onModelSettingsChange({ aspect_ratio: e.target.value as FluxUltraAspectRatio } as Partial<FluxUltraSettings>)}
+                    id="flux-dev-image-size"
+                    value={(modelSettings as FluxDevSettings).image_size || DEFAULT_FLUX_DEV_SETTINGS.image_size}
+                    onChange={(e) => onModelSettingsChange({ image_size: e.target.value as FluxDevImageSize } as Partial<FluxDevSettings>)}
                     disabled={disabled}
                     className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
                 >
-                    {FLUX_ULTRA_ASPECT_RATIOS.map(ratioOpt => (
+                    {FLUX_DEV_IMAGE_SIZES.map(ratioOpt => (
                         <option key={ratioOpt.value} value={ratioOpt.value}>{ratioOpt.label}</option>
                     ))}
                 </select>
             </div>
             <div>
-                <label htmlFor="flux-ultra-num-inference-steps" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-                Inference Steps: {(modelSettings as FluxUltraSettings).num_inference_steps ?? DEFAULT_FLUX_ULTRA_SETTINGS.num_inference_steps}
+                <label htmlFor="flux-dev-num-inference-steps" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+                Inference Steps: {(modelSettings as FluxDevSettings).num_inference_steps ?? DEFAULT_FLUX_DEV_SETTINGS.num_inference_steps}
                 </label>
                 <input
-                type="range" id="flux-ultra-num-inference-steps" min="10" max="50" step="1"
-                value={(modelSettings as FluxUltraSettings).num_inference_steps ?? DEFAULT_FLUX_ULTRA_SETTINGS.num_inference_steps}
-                onChange={(e) => onModelSettingsChange({ num_inference_steps: parseInt(e.target.value, 10) } as Partial<FluxUltraSettings>)}
+                type="range" id="flux-dev-num-inference-steps" min="10" max="50" step="1"
+                value={(modelSettings as FluxDevSettings).num_inference_steps ?? DEFAULT_FLUX_DEV_SETTINGS.num_inference_steps}
+                onChange={(e) => onModelSettingsChange({ num_inference_steps: parseInt(e.target.value, 10) } as Partial<FluxDevSettings>)}
                 disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
                 />
             </div>
              <div>
-                <label htmlFor="flux-ultra-guidance-scale" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-                Guidance Scale: {((modelSettings as FluxUltraSettings).guidance_scale ?? DEFAULT_FLUX_ULTRA_SETTINGS.guidance_scale!).toFixed(1)}
+                <label htmlFor="flux-dev-guidance-scale" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+                Guidance Scale: {((modelSettings as FluxDevSettings).guidance_scale ?? DEFAULT_FLUX_DEV_SETTINGS.guidance_scale!).toFixed(1)}
                 </label>
                 <input
-                type="range" id="flux-ultra-guidance-scale" min="0" max="10" step="0.1"
-                value={(modelSettings as FluxUltraSettings).guidance_scale ?? DEFAULT_FLUX_ULTRA_SETTINGS.guidance_scale}
-                onChange={(e) => onModelSettingsChange({ guidance_scale: parseFloat(e.target.value) } as Partial<FluxUltraSettings>)}
+                type="range" id="flux-dev-guidance-scale" min="0" max="10" step="0.1"
+                value={(modelSettings as FluxDevSettings).guidance_scale ?? DEFAULT_FLUX_DEV_SETTINGS.guidance_scale}
+                onChange={(e) => onModelSettingsChange({ guidance_scale: parseFloat(e.target.value) } as Partial<FluxDevSettings>)}
                 disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
                 />
             </div>
             <div>
-                <label htmlFor="flux-ultra-num-images" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-                Number of Images: {(modelSettings as FluxUltraSettings).num_images ?? DEFAULT_FLUX_ULTRA_SETTINGS.num_images}
+                <label htmlFor="flux-dev-num-images" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+                Number of Images: {(modelSettings as FluxDevSettings).num_images ?? DEFAULT_FLUX_DEV_SETTINGS.num_images}
                 </label>
                 <input
-                type="range" id="flux-ultra-num-images" min="1" max="4" step="1"
-                value={(modelSettings as FluxUltraSettings).num_images ?? DEFAULT_FLUX_ULTRA_SETTINGS.num_images}
-                onChange={(e) => onModelSettingsChange({ num_images: parseInt(e.target.value, 10) } as Partial<FluxUltraSettings>)}
+                type="range" id="flux-dev-num-images" min="1" max="4" step="1"
+                value={(modelSettings as FluxDevSettings).num_images ?? DEFAULT_FLUX_DEV_SETTINGS.num_images}
+                onChange={(e) => onModelSettingsChange({ num_images: parseInt(e.target.value, 10) } as Partial<FluxDevSettings>)}
                 disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
                 />
             </div>
             <div className="flex items-end space-x-2">
                 <div className="flex-grow">
-                    <label htmlFor="flux-ultra-seed" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Seed (empty for random)</label>
-                    <input type="number" id="flux-ultra-seed"
-                        value={(modelSettings as FluxUltraSettings).seed === null || (modelSettings as FluxUltraSettings).seed === undefined ? '' : (modelSettings as FluxUltraSettings).seed}
-                        onChange={(e) => onModelSettingsChange({ seed: e.target.value === '' ? null : parseInt(e.target.value, 10) } as Partial<FluxUltraSettings>)}
+                    <label htmlFor="flux-dev-seed" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Seed (empty for random)</label>
+                    <input type="number" id="flux-dev-seed"
+                        value={(modelSettings as FluxDevSettings).seed === null || (modelSettings as FluxDevSettings).seed === undefined ? '' : (modelSettings as FluxDevSettings).seed}
+                        onChange={(e) => onModelSettingsChange({ seed: e.target.value === '' ? null : parseInt(e.target.value, 10) } as Partial<FluxDevSettings>)}
                         placeholder="Random" disabled={disabled}
                         className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none" />
                 </div>
-                <button onClick={() => handleRandomizeSeed('fluxUltra')} disabled={disabled}
+                <button onClick={() => handleRandomizeSeed('fluxDev')} disabled={disabled}
                     className="p-2 border border-secondary dark:border-neutral-darkest rounded-md text-neutral-darker dark:text-secondary-light hover:bg-secondary/50 dark:hover:bg-neutral-dark/50" title="Randomize Seed">
                     <ArrowPathIcon className="w-5 h-5"/>
                 </button>
             </div>
             <div className="flex items-center justify-between mt-2">
-                <label htmlFor="flux-ultra-enable-safety-checker" className="text-sm font-medium text-neutral-darker dark:text-secondary-light">Enable Safety Checker</label>
+                <label htmlFor="flux-dev-enable-safety-checker" className="text-sm font-medium text-neutral-darker dark:text-secondary-light">Enable Safety Checker</label>
                 <button
-                  onClick={() => onModelSettingsChange({ enable_safety_checker: !((modelSettings as FluxUltraSettings).enable_safety_checker ?? DEFAULT_FLUX_ULTRA_SETTINGS.enable_safety_checker) } as Partial<FluxUltraSettings>)}
+                  onClick={() => onModelSettingsChange({ enable_safety_checker: !((modelSettings as FluxDevSettings).enable_safety_checker ?? DEFAULT_FLUX_DEV_SETTINGS.enable_safety_checker) } as Partial<FluxDevSettings>)}
                   disabled={disabled}
-                  className={`${((modelSettings as FluxUltraSettings).enable_safety_checker ?? DEFAULT_FLUX_ULTRA_SETTINGS.enable_safety_checker) ? 'bg-primary dark:bg-primary-light' : 'bg-secondary dark:bg-neutral-darkest'} relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:ring-offset-2 dark:focus:ring-offset-neutral-dark`}
-                  role="switch" aria-checked={(modelSettings as FluxUltraSettings).enable_safety_checker ?? DEFAULT_FLUX_ULTRA_SETTINGS.enable_safety_checker}>
-                  <span className={`${((modelSettings as FluxUltraSettings).enable_safety_checker ?? DEFAULT_FLUX_ULTRA_SETTINGS.enable_safety_checker) ? 'translate-x-6' : 'translate-x-1'} inline-block w-4 h-4 transform bg-white rounded-full transition-transform`} />
+                  className={`${((modelSettings as FluxDevSettings).enable_safety_checker ?? DEFAULT_FLUX_DEV_SETTINGS.enable_safety_checker) ? 'bg-primary dark:bg-primary-light' : 'bg-secondary dark:bg-neutral-darkest'} relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:ring-offset-2 dark:focus:ring-offset-neutral-dark`}
+                  role="switch" aria-checked={(modelSettings as FluxDevSettings).enable_safety_checker ?? DEFAULT_FLUX_DEV_SETTINGS.enable_safety_checker}>
+                  <span className={`${((modelSettings as FluxDevSettings).enable_safety_checker ?? DEFAULT_FLUX_DEV_SETTINGS.enable_safety_checker) ? 'translate-x-6' : 'translate-x-1'} inline-block w-4 h-4 transform bg-white rounded-full transition-transform`} />
                 </button>
             </div>
              <div className="mt-2 p-3 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-sm text-blue-700 dark:text-blue-300">
