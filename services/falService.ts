@@ -1,7 +1,8 @@
 
-import { FluxKontexSettings, EditImageWithFluxKontexParams, SingleImageData, MultiImageData, FluxUltraSettings, GenerateImageWithFluxUltraParams, UserSessionState, GenerateVideoWithKlingParams, KlingAiSettings } from '../types.ts'; // Updated
 
-// FalServiceEditParams and FalServiceGenerateParams are now directly EditImageWithFluxKontexParams and GenerateImageWithFluxUltraParams
+import { FluxKontexSettings, EditImageWithFluxKontexParams, SingleImageData, MultiImageData, FluxDevSettings, GenerateImageWithFluxDevParams, UserSessionState, GenerateVideoWithKlingParams, KlingAiSettings } from '../types.ts'; // Updated
+
+// FalServiceEditParams and FalServiceGenerateParams are now directly EditImageWithFluxKontexParams and GenerateImageWithFluxDevParams
 // as these base types now include userSession and requestHeaders.
 
 // Updated response type for the initial submission from the proxy
@@ -107,8 +108,8 @@ export async function editImageWithFluxKontexProxy(
 }
 
 
-export async function generateImageWithFluxUltraProxy(
-  params: GenerateImageWithFluxUltraParams
+export async function generateImageWithFluxDevProxy(
+  params: GenerateImageWithFluxDevParams
 ): Promise<FalSubmitProxyResponse> {
   const { modelIdentifier, prompt, settings, requestHeaders, userSession } = params;
 
@@ -117,17 +118,10 @@ export async function generateImageWithFluxUltraProxy(
     ...(requestHeaders || {}), // Spread headers passed from ChatPage
   };
 
-  // Removed internal header construction from userSession
-  // if (userSession.isPaidUser && userSession.paidUserToken) {
-  //   headers['X-Paid-User-Token'] = userSession.paidUserToken;
-  // } else if (userSession.isDemoUser && userSession.demoUserToken) {
-  //   headers['X-Demo-Token'] = userSession.demoUserToken;
-  // }
-
   const bodyPayload = {
     modelIdentifier,
     prompt,
-    ...settings // Spread all settings from FluxUltraSettings
+    ...settings // Spread all settings from FluxDevSettings
   };
 
   try {
@@ -137,35 +131,35 @@ export async function generateImageWithFluxUltraProxy(
       body: JSON.stringify(bodyPayload),
     };
 
-    const response = await fetch('/api/fal/image/generate/flux-ultra', fetchOptions); // Updated endpoint
+    const response = await fetch('/api/fal/image/generate/flux-dev', fetchOptions); // Updated endpoint
     const responseText = await response.text();
     let data: FalSubmitProxyResponse;
 
     try {
         if (!responseText) {
-             console.error("[FalService Error] generateImageWithFluxUltraProxy: Proxy returned an empty response. Status:", response.status, response.statusText);
-             return { error: `Proxy returned an empty response (Status: ${response.status}) for Flux Ultra submission.`};
+             console.error("[FalService Error] generateImageWithFluxDevProxy: Proxy returned an empty response. Status:", response.status, response.statusText);
+             return { error: `Proxy returned an empty response (Status: ${response.status}) for Flux Dev submission.`};
         }
         data = JSON.parse(responseText);
     } catch (e) {
-        console.error("[FalService Error] generateImageWithFluxUltraProxy: Proxy response was not valid JSON. Status:", response.status, response.statusText, "Response Text (first 500 chars):", responseText.substring(0, 500));
-        return { error: `Proxy returned non-JSON response (Status: ${response.status}) for Flux Ultra. Response (partial): ${responseText.substring(0,100)}...`};
+        console.error("[FalService Error] generateImageWithFluxDevProxy: Proxy response was not valid JSON. Status:", response.status, response.statusText, "Response Text (first 500 chars):", responseText.substring(0, 500));
+        return { error: `Proxy returned non-JSON response (Status: ${response.status}) for Flux Dev. Response (partial): ${responseText.substring(0,100)}...`};
     }
 
 
     if (!response.ok || data.error) {
-      return { error: data.error || `Fal.ai Flux Ultra proxy submission failed: ${response.statusText}` };
+      return { error: data.error || `Fal.ai Flux Dev proxy submission failed: ${response.statusText}` };
     }
     
     if (data.requestId) {
       return { requestId: data.requestId, message: data.message };
     } else {
-      return { error: data.error || "Fal.ai Flux Ultra proxy did not return a requestId." };
+      return { error: data.error || "Fal.ai Flux Dev proxy did not return a requestId." };
     }
 
   } catch (error: any) {
-    console.error("Error calling Fal.ai Flux Ultra proxy service for submission:", error);
-    return { error: `Network or unexpected error calling Fal.ai Flux Ultra proxy for submission: ${error.message}` };
+    console.error("Error calling Fal.ai Flux Dev proxy service for submission:", error);
+    return { error: `Network or unexpected error calling Fal.ai Flux Dev proxy for submission: ${error.message}` };
   }
 }
 
