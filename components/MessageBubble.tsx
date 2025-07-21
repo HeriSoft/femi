@@ -390,6 +390,21 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       });
   };
 
+  const handleDownloadAudio = () => {
+    if (!message.audioUrl) return;
+    const link = document.createElement('a');
+    link.href = message.audioUrl;
+    
+    const safePrompt = (message.originalPrompt || 'tts_audio').replace(/[^a-z0-9_.-]/gi, '_').substring(0, 50);
+    const timestamp = message.id || Date.now();
+    link.download = `${safePrompt}_${timestamp}.mp3`;
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    addNotification("Audio download started.", "success");
+  };
+
   const handleDownloadAgentResponse = () => {
     if (!message.text || !message.promptedByMessageId) return;
     const goalText = message.originalPrompt || message.promptedByMessageId || "ai_agent_plan";
@@ -646,16 +661,23 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           )}
 
           {message.audioUrl && !isUser && (
-             <div className="mt-2 flex items-center">
+             <div className="mt-2 flex items-center flex-wrap gap-2">
                 <button onClick={onPlayAudio} disabled={isLoading}
-                    className={`${audioButtonClasses} p-2 rounded-full mr-2 transition-colors disabled:opacity-50`}
+                    className={`${audioButtonClasses} p-2 rounded-full transition-colors disabled:opacity-50`}
                     aria-label={isAudioPlaying ? "Stop audio playback" : "Play audio response"}
                     title={isAudioPlaying ? "Stop audio" : "Play audio"}
                 >
                     {isAudioPlaying ? <StopCircleIcon className="w-5 h-5"/> : <SpeakerWaveIcon className="w-5 h-5"/>}
                 </button>
+                <button onClick={handleDownloadAudio} disabled={isLoading}
+                    className={`${audioButtonClasses} p-2 rounded-full transition-colors disabled:opacity-50`}
+                    aria-label="Download audio file"
+                    title="Download audio"
+                >
+                    <ArrowDownTrayIcon className="w-5 h-5"/>
+                </button>
                 <span className="text-xs italic opacity-80" style={{color: bubbleTextColor === '#FFFFFF' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)'}}>
-                    Audio generated for: "{message.originalPrompt ? (message.originalPrompt.length > 30 ? message.originalPrompt.substring(0,27)+'...' : message.originalPrompt) : 'your prompt'}"
+                    Audio for: "{message.originalPrompt ? (message.originalPrompt.length > 30 ? message.originalPrompt.substring(0,27)+'...' : message.originalPrompt) : 'your prompt'}"
                 </span>
              </div>
           )}
