@@ -21,7 +21,7 @@
 *   AI agent Smart - The assistant is smart by Google
 *   Payment & Credit system ( Demo )
 *   Flux Kontext Pro/Max Multi Editing Images **( NEW HOT )**
-*   Flux 1.1 Ultra - Ultra 2K megapixel quality - Image Generate **( NEW HOT )**
+*   Flux.1 Dev - 12B data High-quality Image Generate **( NEW HOT )**
 *   Kling AI 2.1 - High-quality video generation **( NEW HOT )**
 *   Trading Pro - Help traders save more time in technical analysis and profit optimization **( NEW HOT )**
 
