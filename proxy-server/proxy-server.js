@@ -1187,7 +1187,7 @@ The "detailed_analysis" field in the JSON should be a complete summary of your f
         }
 
         const geminiResponse = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-preview-04-17',
+            model: 'gemini-2.5-flash',
             contents: geminiContents,
             config: {
                 tools: [{ googleSearch: {} }],
