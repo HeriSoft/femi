@@ -406,7 +406,7 @@ export const API_KEY_STATUSES_DEFINITIONS = {
   [Model.AI_AGENT_SMART]: {
     isSet: true,
     envVarName: 'GEMINI_API_KEY (on proxy)',
-    modelName: 'AI Agent Smart (gemini-2.5-flash-preview-04-17)',
+    modelName: 'AI Agent Smart (gemini-2.5-flash)',
     isMock: false,
     isGeminiPlatform: true,
     isAiAgentSmart: true,
@@ -455,7 +455,7 @@ export const API_KEY_STATUSES_DEFINITIONS = {
   [Model.TRADING_PRO]: {
     isSet: true, // Assuming proxy has necessary keys (Gemini for analysis)
     envVarName: 'GEMINI_API_KEY (on proxy)',
-    modelName: 'Trading Analysis (Paid/Admin, Demo w/ Code)', // Updated description
+    modelName: 'Trading Analysis (gemini-2.5-flash)',
     isMock: false,
     isGeminiPlatform: true,
     isTradingPro: true,

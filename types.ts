@@ -4,22 +4,22 @@ import { Chat } from '@google/genai'; // Updated import
 import React from 'react'; // Added for React.DetailedHTMLProps
 
 export enum Model {
-  GEMINI = 'Gemini (gemini-2.5-flash-preview-05-20)', 
+  GEMINI = 'Gemini (gemini-2.5-flash)', 
   DEEPSEEK = 'Deepseek (deepseek-chat)', 
   GPT4O = 'ChatGPT (gpt-4.1)', 
   GPT4O_MINI = 'ChatGPT (gpt-4.1-mini)', 
   CLAUDE = 'Claude (Mock)',
-  GEMINI_ADVANCED = 'Gemini Advanced (gemini-1.5-pro-latest)',
+  GEMINI_ADVANCED = 'Gemini Advanced (gemini-2.5-flash)',
   IMAGEN3 = 'Imagen3 (imagen-3.0-generate-002)',
   OPENAI_TTS = 'OpenAI (TTS)', 
-  REAL_TIME_TRANSLATION = 'Real-Time Translation (Gemini)', 
-  AI_AGENT_SMART = 'AI Agent Smart (gemini-2.5-flash-preview-04-17)', // Renamed from AI_AGENT and updated
+  REAL_TIME_TRANSLATION = 'Real-Time Translation (gemini-2.5-flash)', 
+  AI_AGENT_SMART = 'AI Agent Smart (gemini-2.5-flash)',
   PRIVATE = 'Private (Local Data Storage)', 
   FLUX_KONTEX = 'Flux Kontext Image Edit (fal-ai/flux-pro/kontext)', 
   FLUX_KONTEX_MAX_MULTI = 'Flux Kontext Max Multi-Image (fal-ai/flux-pro/kontext/max/multi)',
   FLUX_ULTRA = 'Flux Dev (fal-ai/flux-1/dev)', 
   KLING_VIDEO = 'Kling AI Video Gen (fal-ai/kling-video/v2.1/standard/image-to-video)', 
-  TRADING_PRO = 'Trading Pro (Gemini Analysis)', 
+  TRADING_PRO = 'Trading Pro (gemini-2.5-flash Analysis)', 
 }
 
 export interface ChatMessage {
