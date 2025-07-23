@@ -2738,9 +2738,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     const chatDiv = chatContainerRef.current;
     if (chatDiv) {
       const { scrollTop, scrollHeight, clientHeight } = chatDiv;
-      const showButtonThreshold = 1; 
+      const showButtonThreshold = 100; // Increased threshold for visibility
       const scrolledUpEnough = (scrollHeight - scrollTop - clientHeight) > showButtonThreshold;
-      setShowScrollToBottomButton(scrolledUpEnough && scrollHeight > (clientHeight + 1));
+      setShowScrollToBottomButton(scrolledUpEnough && scrollHeight > clientHeight);
     }
   }, []);
 
