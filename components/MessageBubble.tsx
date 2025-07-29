@@ -1,8 +1,9 @@
 
+
 import React, { useEffect, useRef, useState, useContext } from 'react';
 import hljs from 'https://esm.sh/highlight.js@11.9.0'; 
 import { ChatMessage, ThemeContextType, Model, GroundingSource, TradingPairValue } from '../types.ts';
-import { RobotIcon, UserIcon, LinkIcon, PhotoIcon, ArrowPathIcon, ClipboardIcon, CheckIcon, SpeakerWaveIcon, StopCircleIcon, ArrowDownTrayIcon, FilmIcon, DocumentPlusIcon, PresentationChartLineIcon, MapPinIcon, ChatBubbleOvalLeftEllipsisIcon } from './Icons.tsx'; // Added MapPinIcon, ChatBubbleOvalLeftEllipsisIcon
+import { RobotIcon, UserIcon, LinkIcon, PhotoIcon, ArrowPathIcon, ClipboardIcon, CheckIcon, SpeakerWaveIcon, StopCircleIcon, ArrowDownTrayIcon, FilmIcon, DocumentPlusIcon, PresentationChartLineIcon, MapPinIcon, ChatBubbleOvalLeftEllipsisIcon, DocumentTextIcon } from './Icons.tsx'; // Added DocumentTextIcon
 import { useNotification } from '../contexts/NotificationContext.tsx'; 
 import { ThemeContext } from '../App.tsx';
 
@@ -377,8 +378,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
 
   const handleCopyText = () => {
-    if (!finalDisplayText.trim()) return;
-    navigator.clipboard.writeText(finalDisplayText.trim())
+    let textToCopy = finalDisplayText.trim();
+    if (message.originalText && message.translatedText) {
+        textToCopy = `Original:\n${message.originalText}\n\nTranslation:\n${message.translatedText}`;
+    }
+    if (!textToCopy) return;
+    navigator.clipboard.writeText(textToCopy)
       .then(() => {
         setIsTextCopied(true);
         addNotification("Message copied to clipboard.", "success");
@@ -536,35 +541,47 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         >
            {showAvatar && <div className={tailClasses} style={tailStyle}></div>}
           
-          <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-             {parsedContent.map((part, index) => {
-                if (part.type === 'aas-system') {
-                    return <p key={index} className="text-xs italic text-neutral-500 dark:text-neutral-400 my-1">{part.text}</p>;
-                }
-                if (part.type === 'aas-place-detail') {
-                    return (
-                        <div key={index} className="my-0.5 flex items-start">
-                            <strong className="mr-1.5 flex-shrink-0">{part.label}:</strong>
-                            <span>{part.value}</span>
-                        </div>
-                    );
-                }
-                if (part.type === 'aas-button') {
-                    return (
-                        <button
-                            key={index}
-                            onClick={() => handleAASButtonClick(part.actionId, part.label)}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors my-1.5 inline-block shadow-sm hover:shadow-md ${aasButtonClasses}`}
-                            aria-label={part.label}
-                        >
-                           <MapPinIcon className="w-3.5 h-3.5 inline mr-1 align-text-bottom" /> {part.label}
-                        </button>
-                    );
-                }
-                // part.type === 'regular'
-                return <EnhancedMessageContent key={index} text={part.text} searchQuery={searchQuery} />;
-            })}
-          </div>
+           {message.originalText && message.translatedText && !isUser ? (
+            <div className="space-y-3">
+                <div className="p-2 bg-black/5 dark:bg-white/10 rounded-md">
+                    <p className="text-xs font-semibold opacity-80" style={{ color: bubbleTextColor }}>Original:</p>
+                    <p className="text-sm italic" style={{ color: bubbleTextColor }}>{message.originalText}</p>
+                </div>
+                <div className="p-2 bg-black/5 dark:bg-white/10 rounded-md">
+                    <p className="text-xs font-semibold opacity-80" style={{ color: bubbleTextColor }}>Translation:</p>
+                    <p className="text-sm font-semibold" style={{ color: bubbleTextColor }}>{message.translatedText}</p>
+                </div>
+            </div>
+            ) : (
+                <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                    {parsedContent.map((part, index) => {
+                        if (part.type === 'aas-system') {
+                            return <p key={index} className="text-xs italic text-neutral-500 dark:text-neutral-400 my-1">{part.text}</p>;
+                        }
+                        if (part.type === 'aas-place-detail') {
+                            return (
+                                <div key={index} className="my-0.5 flex items-start">
+                                    <strong className="mr-1.5 flex-shrink-0">{part.label}:</strong>
+                                    <span>{part.value}</span>
+                                </div>
+                            );
+                        }
+                        if (part.type === 'aas-button') {
+                            return (
+                                <button
+                                    key={index}
+                                    onClick={() => handleAASButtonClick(part.actionId, part.label)}
+                                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors my-1.5 inline-block shadow-sm hover:shadow-md ${aasButtonClasses}`}
+                                    aria-label={part.label}
+                                >
+                                <MapPinIcon className="w-3.5 h-3.5 inline mr-1 align-text-bottom" /> {part.label}
+                                </button>
+                            );
+                        }
+                        return <EnhancedMessageContent key={index} text={part.text} searchQuery={searchQuery} />;
+                    })}
+                </div>
+            )}
           
           {message.imagePreview && isUser && (
             <div className="mt-2">
@@ -612,11 +629,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             </div>
           )}
           
-          {message.fileName && isUser && message.model === Model.PRIVATE && !message.imagePreview && !message.videoFileName && (
-             <div className="mt-2 p-2 bg-black/5 dark:bg-white/10 rounded-md text-xs flex items-center">
-                <DocumentPlusIcon className="w-4 h-4 mr-1.5 flex-shrink-0" />
-                File: <span className="truncate ml-1">{message.fileName}</span>
-             </div>
+          {isUser && message.fileName && (
+              <div className="mt-2 p-2 bg-black/5 dark:bg-white/10 rounded-md text-xs flex items-center">
+                  {message.fileName.toLowerCase().endsWith('.mp3') ? 
+                      <SpeakerWaveIcon className="w-4 h-4 mr-1.5 flex-shrink-0" /> :
+                      <DocumentTextIcon className="w-4 h-4 mr-1.5 flex-shrink-0" />
+                  }
+                  File: <span className="truncate ml-1">{message.fileName}</span>
+              </div>
           )}
 
           {message.videoFileName && isUser && message.model === Model.PRIVATE && (
@@ -683,12 +703,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           )}
 
            <div className="absolute -top-1 -right-1 sm:top-0 sm:right-0 flex items-center p-0.5 sm:p-1 rounded-full transition-opacity duration-150">
-              {message.text.trim() && !message.isRegenerating && (
+              {(message.text.trim() || (message.originalText && message.translatedText)) && !message.isRegenerating && (
                 <ActionButton onClick={handleCopyText} title={isTextCopied ? "Copied!" : "Copy Text"} ariaLabel="Copy message text">
                   {isTextCopied ? <CheckIcon className="w-3.5 h-3.5" /> : <ClipboardIcon className="w-3.5 h-3.5" />}
                 </ActionButton>
               )}
-              {!isUser && onRegenerate && message.promptedByMessageId && !message.isImageQuery && !message.audioUrl && !message.isTaskPlan && message.model !== Model.AI_AGENT_SMART && !message.videoUrl && !message.tradingAnalysis && (
+              {!isUser && onRegenerate && message.promptedByMessageId && !message.isImageQuery && !message.audioUrl && !message.isTaskPlan && message.model !== Model.AI_AGENT_SMART && !message.videoUrl && !message.tradingAnalysis && !message.originalText && (
                 <ActionButton onClick={() => onRegenerate(message.id, message.promptedByMessageId!)} disabled={isLoading} title="Regenerate Response" ariaLabel="Regenerate AI response">
                   <ArrowPathIcon className="w-3.5 h-3.5" />
                 </ActionButton>
