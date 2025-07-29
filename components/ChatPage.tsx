@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo, useContext } 
 // Update to .ts/.tsx extensions
 import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType, UserGlobalProfile, AiAgentSmartSettings, PrivateModeSettings, FluxKontexSettings, NotificationType, UserSessionState, DemoUserLimits, PaidUserLimits, SingleImageData, MultiImageData, FluxKontexAspectRatio, EditImageWithFluxKontexParams, FluxDevSettings, GenerateImageWithFluxDevParams, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, GenerateVideoWithKlingParams, AnyModelSettings, ModelSpecificSettingsMap, TradingProSettings, TradingProState, TradingPair, GeminiTradingAnalysisResponse, FluxDevImageSize } from '../types.ts'; // Removed AlphaVantageProxyResponse
 import type { Content } from '@google/genai'; // For constructing Gemini history
-import { ALL_MODEL_DEFAULT_SETTINGS, API_KEY_STATUSES_DEFINITIONS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY, TRANSLATION_TARGET_LANGUAGES, MAX_SAVED_CHAT_SESSIONS, OPENAI_TTS_MAX_INPUT_LENGTH, PAID_USER_LIMITS_CONFIG, DEFAULT_FLUX_KONTEX_SETTINGS, DEFAULT_FLUX_DEV_SETTINGS, FLUX_DEV_IMAGE_SIZES, DEFAULT_KLING_AI_SETTINGS, KLING_AI_DURATIONS, KLING_AI_ASPECT_RATIOS, TRADING_PRO_PAIRS, DEFAULT_TRADING_PRO_SETTINGS, DEFAULT_MODEL_SETTINGS } from '../constants.ts';
+import { ALL_MODEL_DEFAULT_SETTINGS, API_KEY_STATUSES_DEFINITIONS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY, TRANSLATION_TARGET_LANGUAGES, MAX_SAVED_CHAT_SESSIONS, OPENAI_TTS_MAX_INPUT_LENGTH, PAID_USER_LIMITS_CONFIG, DEFAULT_FLUX_KONTEX_SETTINGS, DEFAULT_FLUX_DEV_SETTINGS, FLUX_DEV_IMAGE_SIZES, DEFAULT_KLING_AI_SETTINGS, KLING_AI_DURATIONS, KLING_AI_ASPECT_RATIOS, TRADING_PRO_PAIRS, DEFAULT_TRADING_PRO_SETTINGS, DEFAULT_MODEL_SETTINGS, MAX_TTS_FILE_UPLOAD_SIZE_BYTES, MAX_TRANSLATION_MP3_UPLOAD_SIZE_BYTES, MAX_TRANSLATION_TXT_UPLOAD_SIZE_BYTES } from '../constants.ts';
 import { MessageBubble } from './MessageBubble.tsx';
 import SettingsPanel from './SettingsPanel.tsx';
 import HistoryPanel from './HistoryPanel.tsx';
@@ -16,7 +16,7 @@ import { sendGeminiMessageStream, generateImageWithImagen } from '../services/ge
 import { sendOpenAIMessageStream } from '../services/openaiService.ts';
 import { sendDeepseekMessageStream } from '../services/deepseekService.ts';
 import { sendMockMessageStream } from '../services/mockApiService.ts';
-import { generateOpenAITTS, ProxiedOpenAITtsParams } from "../services/openaiTTSService";
+import { generateOpenAITTS, ProxiedOpenAITtsParams, transcribeOpenAIAudio } from "../services/openaiTTSService.ts";
 import { editImageWithFluxKontexProxy, generateImageWithFluxDevProxy, checkFalQueueStatusProxy, generateVideoWithKlingProxy } from '../services/falService.ts';
 import { PaperAirplaneIcon, CogIcon, XMarkIcon, PromptIcon, Bars3Icon, ChatBubbleLeftRightIcon, ClockIcon as HistoryIcon, MicrophoneIcon, StopCircleIcon, SpeakerWaveIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon, ChevronDownIcon, ArrowDownTrayIcon, PencilIcon as EditIcon, PhotoIcon, ArrowUpTrayIcon, DocumentTextIcon, FilmIcon, PresentationChartLineIcon } from './Icons.tsx';
 import { ThemeContext } from '../App.tsx';
@@ -1186,7 +1186,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       return;
     }
 
-    // Trading Pro Access Logic for Demo Users
+    // Trading Pro Access Logic for Demo users
     if (newModel === Model.TRADING_PRO && userSession.isDemoUser && !demoTradingProAccessGranted) {
         setModelBeforeTradingProModal(selectedModel); // Store current model
         setIsTradingProCodeModalOpen(true);
@@ -2418,7 +2418,182 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     clearSearch();
   };
 
+  const processTranslationFile = async (file: File) => {
+    setIsLoading(true);
+    setError(null);
+
+    const isTxt = file.name.toLowerCase().endsWith('.txt');
+    const userMessageId = Date.now().toString();
+    const aiMessageId = (Date.now() + 1).toString();
+
+    const userMessage: ChatMessage = {
+        id: userMessageId,
+        text: `(Translating from file: ${file.name})`,
+        sender: 'user',
+        timestamp: Date.now(),
+        fileName: file.name,
+    };
+    const aiPlaceholder: ChatMessage = {
+        id: aiMessageId,
+        text: `Processing file "${file.name}"...`,
+        sender: 'ai',
+        timestamp: Date.now() + 1,
+        model: selectedModel,
+        promptedByMessageId: userMessageId,
+    };
+    setMessages(prev => [...prev, userMessage, aiPlaceholder]);
+
+    try {
+        let textToTranslate = '';
+        if (isTxt) {
+            textToTranslate = await file.text();
+            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Translating text from "${file.name}"...`, originalText: textToTranslate } : msg));
+        } else { // It's an MP3
+            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Transcribing audio from "${file.name}"...` } : msg));
+            const transcriptionResult = await transcribeOpenAIAudio({ audioFile: file, userSession });
+            if (transcriptionResult.error || !transcriptionResult.transcription) {
+                throw new Error(transcriptionResult.error || "Transcription failed to return text.");
+            }
+            textToTranslate = transcriptionResult.transcription;
+            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Translating transcribed text...`, originalText: textToTranslate } : msg));
+        }
+        
+        if (!textToTranslate.trim()) throw new Error("File content is empty or could not be read.");
+
+        // Now translate the text
+        const targetLanguage = (currentModelSettings as RealTimeTranslationSettings).targetLanguage;
+        const targetLangName = TRANSLATION_TARGET_LANGUAGES.find(l => l.code === targetLanguage)?.name || targetLanguage;
+        const translationPrompt = `Translate the following text to ${targetLangName}. Output only the translated text directly, without any introductory phrases or explanations: "${textToTranslate}"`;
+        const modelIdentifier = getActualModelIdentifier(Model.GEMINI);
+        const history: Content[] = [{ role: 'user', parts: [{ text: translationPrompt }] }];
+        const stream = sendGeminiMessageStream({ 
+            modelName: modelIdentifier, historyContents: history, 
+            modelSettings: { temperature: 0.3, topK: 1, topP: 1, systemInstruction: "You are a direct text translator." }, 
+            enableGoogleSearch: false, userSession 
+        });
+
+        let translatedText = '';
+        for await (const chunk of stream) {
+            if (chunk.error) throw new Error(`Translation Error: ${chunk.error}`);
+            if (chunk.textDelta) {
+                translatedText += chunk.textDelta;
+                setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, translatedText: translatedText } : msg));
+            }
+        }
+        
+        translatedText = translatedText.trim();
+        if (!translatedText) throw new Error("Translation resulted in empty text.");
+
+        // Update message with final translation and prepare for TTS
+        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Synthesizing audio for translation...`, translatedText: translatedText } : msg));
+        
+        // Don't generate audio for demo users in this mode.
+        if (userSession.isDemoUser && !userSession.isPaidUser) {
+             setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Audio output disabled for demo users.` } : msg));
+             addNotification("Voice output for translated files is a Paid User feature.", "info");
+             return; // End the process here for demo users
+        }
+
+        const openAiTtsModelSettings = allSettings[Model.OPENAI_TTS] as OpenAITtsSettings | undefined;
+        const ttsParams: ProxiedOpenAITtsParams = {
+            modelIdentifier: openAiTtsModelSettings?.modelIdentifier || 'tts-1', textInput: translatedText,
+            voice: 'nova', speed: openAiTtsModelSettings?.speed || 1.0, userSession: userSession,
+        };
+        const ttsResult = await generateOpenAITTS(ttsParams);
+        if (ttsResult.error || !ttsResult.audioBlob) throw new Error(ttsResult.error || `OpenAI TTS Proxy Error`);
+
+        const audioUrl = URL.createObjectURL(ttsResult.audioBlob);
+        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? {
+            ...msg, text: `Translation complete. Audio is ready.`, audioUrl: audioUrl,
+        } : msg));
+        handlePlayAudio(audioUrl, aiMessageId);
+
+    } catch(e: any) {
+        const errorMessage = e.message || `Failed to process the file: ${file.name}`;
+        setError(errorMessage);
+        addNotification(errorMessage, "error", e.stack);
+        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error: ${errorMessage}` } : msg));
+    } finally {
+        setIsLoading(false);
+        clearSearch();
+    }
+  };
+
   const handleSendMessage = async () => {
+    if (isTextToSpeechModelSelected && uploadedTextFileContent) {
+        setIsLoading(true);
+        setError(null);
+        
+        const fileContent = uploadedTextFileContent;
+        const fileName = uploadedTextFileName || 'uploaded file';
+
+        const userMessageId = Date.now().toString();
+        const aiMessageId = (Date.now() + 1).toString();
+        
+        const userMessage: ChatMessage = {
+            id: userMessageId, text: `(Reading from file: ${fileName})`, sender: 'user',
+            timestamp: Date.now(), fileName: fileName,
+        };
+        const aiPlaceholder: ChatMessage = {
+            id: aiMessageId, text: `Translating content from "${fileName}"...`, sender: 'ai',
+            timestamp: Date.now() + 1, model: selectedModel, promptedByMessageId: userMessageId,
+        };
+        setMessages(prev => [...prev, userMessage, aiPlaceholder]);
+        
+        try {
+            const translationPrompt = `Translate the following text into natural, spoken English. Only return the translated text. Do not add any commentary, introductions, or markdown formatting. The output should be ready for a text-to-speech engine.\n\nText to translate:\n\n---\n\n${fileContent}`;
+            const modelIdentifier = getActualModelIdentifier(Model.GEMINI);
+            const history: Content[] = [{ role: 'user', parts: [{ text: translationPrompt }] }];
+            const stream = sendGeminiMessageStream({ 
+                modelName: modelIdentifier, historyContents: history, 
+                modelSettings: { temperature: 0.3, topK: 32, topP: 0.95, systemInstruction: "You are a direct text translator." }, 
+                enableGoogleSearch: false, userSession 
+            });
+
+            let translatedText = '';
+            for await (const chunk of stream) {
+                if (chunk.error) throw new Error(`Translation Error: ${chunk.error}`);
+                if (chunk.textDelta) {
+                    translatedText += chunk.textDelta;
+                    setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Translating... (${translatedText.length} chars)` } : msg));
+                }
+            }
+            
+            translatedText = translatedText.trim();
+            if (!translatedText) throw new Error("Translation resulted in empty text.");
+
+            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Synthesizing audio for "${fileName}"...` } : msg));
+
+            const ttsSettings = currentModelSettings as OpenAITtsSettings;
+            const ttsParams: ProxiedOpenAITtsParams = {
+                modelIdentifier: ttsSettings.modelIdentifier || 'tts-1', textInput: translatedText,
+                voice: ttsSettings.voice || 'alloy', speed: ttsSettings.speed || 1.0, userSession: userSession,
+            };
+            const ttsResult = await generateOpenAITTS(ttsParams);
+
+            if (ttsResult.error || !ttsResult.audioBlob) throw new Error(ttsResult.error || `OpenAI TTS Proxy Error`);
+            
+            const audioUrl = URL.createObjectURL(ttsResult.audioBlob);
+            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? {
+                ...msg, text: `Audio generated from file: "${fileName}"`, originalPrompt: `File: ${fileName}`,
+                audioUrl: audioUrl, isRegenerating: false
+            } : msg));
+            handlePlayAudio(audioUrl, aiMessageId);
+
+        } catch(e: any) {
+            const errorMessage = e.message || 'Failed to process the text file.';
+            setError(errorMessage);
+            addNotification(errorMessage, "error", e.stack);
+            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error processing file: ${errorMessage}` } : msg));
+        } finally {
+            setIsLoading(false);
+            setUploadedTextFileContent(null);
+            setUploadedTextFileName(null);
+            clearSearch();
+        }
+        return; 
+    }
+
     if (getIsTradingProModel(selectedModel) || isRealTimeTranslationMode || isListening) return;
 
     let determinedTtsMaxLength = OPENAI_TTS_MAX_INPUT_LENGTH;
@@ -2457,12 +2632,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             return;
         }
     }
-    if (isTextToSpeechModelSelected && !input.trim()) {
-        setError("Please enter text for speech synthesis.");
-        addNotification("Please enter text for speech synthesis.", "info");
+    if (isTextToSpeechModelSelected && !input.trim() && !uploadedTextFileContent) {
+        setError("Please enter text for speech synthesis or upload a .txt file.");
+        addNotification("Please enter text for speech synthesis or upload a .txt file.", "info");
         return;
     }
-    if (isTextToSpeechModelSelected && !isAdminUser && input.length > determinedTtsMaxLength) {
+    if (isTextToSpeechModelSelected && input.trim() && !isAdminUser && input.length > determinedTtsMaxLength) {
         setError(`Input for TTS exceeds maximum length of ${determinedTtsMaxLength} characters for your account type.`);
         addNotification(`TTS input too long. Max ${determinedTtsMaxLength} chars.`, "error");
         return;
@@ -2644,11 +2819,69 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
 
   const handleFileUpload = (file: File | null) => {
+    if (isTextToSpeechModelSelected) {
+        setUploadedImages([]);
+        setImagePreviews([]);
+        if (file) {
+            if (!file.name.toLowerCase().endsWith('.txt')) {
+                addNotification("Invalid file type for TTS model. Please upload a .txt file.", "error");
+                setUploadedTextFileContent(null);
+                setUploadedTextFileName(null);
+                return;
+            }
+            if (file.size > MAX_TTS_FILE_UPLOAD_SIZE_BYTES) {
+                addNotification(`File is too large. Max size for TTS is ${MAX_TTS_FILE_UPLOAD_SIZE_BYTES / 1024} KB.`, "error");
+                setUploadedTextFileContent(null);
+                setUploadedTextFileName(null);
+                return;
+            }
+            setUploadedTextFileName(file.name);
+            setError(null);
+            const reader = new FileReader();
+            reader.onload = (e) => { setUploadedTextFileContent(e.target?.result as string); };
+            reader.onerror = () => {
+              setError(`Error reading the file: ${file.name}`);
+              addNotification(`Error reading file: ${file.name}`, "error", (reader.error as Error).message);
+              setUploadedTextFileContent(null); setUploadedTextFileName(null);
+            }
+            reader.readAsText(file);
+        } else {
+            setUploadedTextFileContent(null);
+            setUploadedTextFileName(null);
+        }
+        clearSearch();
+        return;
+    }
+    if (isRealTimeTranslationMode) {
+        setUploadedImages([]);
+        setImagePreviews([]);
+        if (file) {
+            const fileNameLower = file.name.toLowerCase();
+            const isTxt = fileNameLower.endsWith('.txt');
+            const isMp3 = fileNameLower.endsWith('.mp3');
+
+            if (!isTxt && !isMp3) {
+                addNotification("Invalid file type. Please upload a .txt or .mp3 file for translation.", "error");
+                return;
+            }
+            if (isTxt && file.size > MAX_TRANSLATION_TXT_UPLOAD_SIZE_BYTES) {
+                addNotification(`Text file is too large. Max size is ${MAX_TRANSLATION_TXT_UPLOAD_SIZE_BYTES / 1024} KB.`, "error");
+                return;
+            }
+            if (isMp3 && file.size > MAX_TRANSLATION_MP3_UPLOAD_SIZE_BYTES) {
+                addNotification(`Audio file is too large. Max size is ${MAX_TRANSLATION_MP3_UPLOAD_SIZE_BYTES / 1024 / 1024} MB.`, "error");
+                return;
+            }
+            processTranslationFile(file);
+        }
+        clearSearch();
+        return;
+    }
     if (isAiAgentSmartMode || getIsTradingProModel(selectedModel)) { 
         addNotification(`This model only supports direct image uploads.`, "info");
         return;
     }
-    if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || getIsFluxKontexModel(selectedModel) || isClaudeModelSelected || getIsFluxDevModel(selectedModel) || getIsKlingVideoModel(selectedModel)) return;
+    if (isImagenModelSelected || getIsFluxKontexModel(selectedModel) || isClaudeModelSelected || getIsFluxDevModel(selectedModel) || getIsKlingVideoModel(selectedModel)) return;
 
     setUploadedImages([]);
     setImagePreviews([]);
@@ -2823,28 +3056,34 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   }, [isSpeechRecognitionSupported, selectedModel, isTextToSpeechModelSelected, isImagenModelSelected, isClaudeModelSelected]);
 
   const showImageUploadInChatBar = useMemo(() => {
+    // This button shows for any model that primarily consumes an image.
     return (
-        imageUploadLimit > 0 &&
-        !isTextToSpeechModelSelected &&
-        !isRealTimeTranslationMode &&
-        !isImagenModelSelected && 
-        !isClaudeModelSelected
-        // Kling AI (and others needing single image like Trading Pro) will now show this button
+        getIsFluxKontexModel(selectedModel) ||
+        getIsKlingVideoModel(selectedModel) ||
+        getIsTradingProModel(selectedModel) ||
+        // General purpose models that support vision
+        selectedModel === Model.GEMINI ||
+        selectedModel === Model.GEMINI_ADVANCED ||
+        selectedModel === Model.GPT4O ||
+        selectedModel === Model.GPT4O_MINI ||
+        selectedModel === Model.AI_AGENT_SMART ||
+        selectedModel === Model.PRIVATE
     );
-  }, [imageUploadLimit, selectedModel, isTextToSpeechModelSelected, isRealTimeTranslationMode, isImagenModelSelected, isClaudeModelSelected]);
-
+  }, [selectedModel]);
 
   const showFileUploadInChatBar = useMemo(() => {
-    return !isImagenModelSelected &&
-           !isTextToSpeechModelSelected &&
-           !isRealTimeTranslationMode &&
-           !getIsFluxKontexModel(selectedModel) &&
-           !getIsFluxDevModel(selectedModel) &&
-           !getIsKlingVideoModel(selectedModel) &&
-           !getIsTradingProModel(selectedModel) &&
-           !isAiAgentSmartMode &&
-           !isClaudeModelSelected;
-  }, [selectedModel, isImagenModelSelected, isTextToSpeechModelSelected, isRealTimeTranslationMode, isAiAgentSmartMode, isClaudeModelSelected]);
+    // This button shows for models that take non-image files, or are text-only.
+    // It should NOT appear if the image button is already shown.
+    if (showImageUploadInChatBar) {
+        return false;
+    }
+    return (
+        selectedModel === Model.OPENAI_TTS ||
+        selectedModel === Model.REAL_TIME_TRANSLATION ||
+        selectedModel === Model.DEEPSEEK ||
+        selectedModel === Model.CLAUDE
+    );
+  }, [selectedModel, showImageUploadInChatBar]);
 
 
   const currentPromptPlaceholder = () => {
@@ -2853,8 +3092,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     if (getIsFluxKontexModel(selectedModel)) return "Enter prompt to edit uploaded image...";
     if (getIsFluxDevModel(selectedModel)) return "Enter prompt for Flux Dev image generation...";
     if (getIsKlingVideoModel(selectedModel)) return "Enter prompt for video generation (image required)...";
-    if (isTextToSpeechModelSelected) return "Enter text to synthesize speech...";
-    if (isRealTimeTranslationMode) return "Real-Time Translation Active. Use Microphone.";
+    if (isTextToSpeechModelSelected) return "Type text to synthesize, or upload a .txt file...";
+    if (isRealTimeTranslationMode) return "Real-Time Translation Active. Use Microphone or upload file.";
     if (isAiAgentSmartMode) return "Enter goal for AI Agent Smart, or upload image...";
     if (isPrivateModeSelected) return "Enter text or upload image/file to log locally...";
     if (isClaudeModelSelected) return "Chat with Claude (Mock)...";
@@ -3070,6 +3309,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
   const imageFileAcceptTypes = "image/jpeg, image/png, image/webp, image/gif, image/avif";
   const generalFileAcceptTypes = ".txt,.md,.json,.js,.ts,.jsx,.tsx,.py,.java,.c,.cpp,.h,.hpp,.cs,.go,.rs,.rb,.php,.html,.htm,.css,.scss,.less,.xml,.yaml,.yml,.ini,.sh,.bat,.ps1,.sql,.csv,.log,.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation";
+  const ttsFileAcceptTypes = ".txt";
+  const translationFileAcceptTypes = ".txt,.mp3,audio/mpeg";
 
   const generalChatBarInteractionDisabled = (isLoading && !isRealTimeTranslationMode && !getIsTradingProModel(selectedModel)) || isListening || (isGpt41AccessModalOpen && selectedModel === Model.GPT4O);
   const microphoneButtonDisabled =
@@ -3439,7 +3680,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           <input type="file" id="image-upload-chatbar" className="hidden" onChange={handleChatBarImageUpload} accept={imageFileAcceptTypes} multiple={selectedModel === Model.FLUX_KONTEX_MAX_MULTI} />
           <input type="file" id="image-upload-chatbar-kling" className="hidden" onChange={handleChatBarImageUpload} accept={imageFileAcceptTypes} multiple={false} />
           {/* Input for Trading Pro will also use 'image-upload-chatbar' as limit is 1 */}
-          <input type="file" id="file-upload-chatbar" className="hidden" onChange={handleChatBarGeneralFileUpload} accept={generalFileAcceptTypes} />
+          <input type="file" id="file-upload-chatbar" className="hidden" onChange={handleChatBarGeneralFileUpload} 
+            accept={isTextToSpeechModelSelected ? ttsFileAcceptTypes : isRealTimeTranslationMode ? translationFileAcceptTypes : generalFileAcceptTypes} />
 
           <div className="p-3 border-t border-secondary dark:border-neutral-darkest bg-neutral-light dark:bg-neutral-darker flex items-end flex-shrink-0">
             {showMicrophoneButton && (
@@ -3454,13 +3696,23 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                 </button>
             )}
 
-            {!isRealTimeTranslationMode && showImageUploadInChatBar && (
+            {showImageUploadInChatBar && (
               <button
-                onClick={() => document.getElementById(getIsKlingVideoModel(selectedModel) ? 'image-upload-chatbar-kling' : 'image-upload-chatbar')?.click()}
-                disabled={generalChatBarInteractionDisabled || (getIsTradingProModel(selectedModel) ? (tradingProState.chartImageUrl !== null) : (uploadedImages.length >= imageUploadLimit)) }
+                onClick={
+                  getIsTradingProModel(selectedModel) && tradingProState.chartImageUrl
+                    ? () => handleRemoveUploadedImage(0)
+                    : () => document.getElementById(getIsKlingVideoModel(selectedModel) ? 'image-upload-chatbar-kling' : 'image-upload-chatbar')?.click()
+                }
+                disabled={
+                  generalChatBarInteractionDisabled ||
+                  (
+                    !(getIsTradingProModel(selectedModel) && tradingProState.chartImageUrl) && // Don't disable if it's a clear button
+                    uploadedImages.length >= imageUploadLimit
+                  )
+                }
                 className={`p-2.5 rounded-full transition-colors flex-shrink-0 mr-2
                             ${getIsKlingVideoModel(selectedModel) ? 'bg-accent dark:bg-accent-light hover:bg-accent-dark text-white' : 
-                             (getIsTradingProModel(selectedModel) && tradingProState.chartImageUrl ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-secondary dark:bg-neutral-darkest hover:bg-secondary-dark dark:hover:bg-neutral-dark text-neutral-darker dark:text-secondary-light')}
+                             (getIsTradingProModel(selectedModel) && tradingProState.chartImageUrl ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-secondary dark:bg-neutral-darkest hover:bg-secondary-dark dark:hover:bg-neutral-dark text-neutral-darker dark:text-secondary-light')}
                             disabled:opacity-50`}
                 aria-label={getIsTradingProModel(selectedModel) && tradingProState.chartImageUrl ? "Clear Uploaded Chart" : "Upload image"}
                 title={getIsTradingProModel(selectedModel) && tradingProState.chartImageUrl ? "Clear Uploaded Chart" : "Upload Image"}
@@ -3469,7 +3721,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
               </button>
             )}
             
-            {!isRealTimeTranslationMode && showFileUploadInChatBar && (
+            {showFileUploadInChatBar && (
                <button
                 onClick={() => document.getElementById('file-upload-chatbar')?.click()}
                 disabled={generalChatBarInteractionDisabled}
