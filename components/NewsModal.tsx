@@ -51,7 +51,7 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
       >
         <div className="flex justify-between items-center mb-4 pb-3 border-b border-secondary dark:border-neutral-darkest">
           <h2 id="news-modal-title" className="text-xl sm:text-2xl font-semibold text-primary dark:text-primary-light flex items-center">
-            <MegaphoneIcon className="w-7 h-7 mr-2" /> Version 1.8 - Updates & Features
+            <MegaphoneIcon className="w-7 h-7 mr-2" /> Version 1.9 - Updates & Features
           </h2>
           <button
             onClick={onClose}
@@ -64,12 +64,12 @@ const NewsModal: React.FC<NewsModalProps> = ({ isOpen, onClose }) => {
 
         <div className="overflow-y-auto flex-grow space-y-4 text-sm text-neutral-700 dark:text-neutral-200 pr-1">
           <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-md">
-            <h3 className="text-lg font-semibold text-blue-700 dark:text-blue-300 mb-2">Change Logs for v1.8:</h3>
+            <h3 className="text-lg font-semibold text-blue-700 dark:text-blue-300 mb-2">Change Logs for v1.9:</h3>
             <ul className="list-disc list-inside space-y-1 text-blue-600 dark:text-blue-200">
-              <li>New Flan Models Option for Paid User.</li>
-              <li>Change Model Flux Ultra to Flux Dev for image generation.</li>
-              <li>Added new model Google Veo3.</li>
-              <li>Fixed some errors for AI-Agent Smart (AAS) - Location check-in</li>
+              <li>Added Claude AI chat model.</li>
+              <li>Change new features for AI-Agent: Heath & Fitness.</li>
+              <li>Updated Model TTS.</li>
+              <li>Fixed errors and updated new version for Realtime-Translation</li>
             </ul>
           </div>
 
