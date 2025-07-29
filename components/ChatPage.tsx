@@ -2421,55 +2421,45 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   const processTranslationFile = async (file: File) => {
     setIsLoading(true);
     setError(null);
-
-    const isTxt = file.name.toLowerCase().endsWith('.txt');
-    const userMessageId = Date.now().toString();
-    const aiMessageId = (Date.now() + 1).toString();
-
-    const userMessage: ChatMessage = {
-        id: userMessageId,
-        text: `(Translating from file: ${file.name})`,
-        sender: 'user',
-        timestamp: Date.now(),
-        fileName: file.name,
-    };
-    const aiPlaceholder: ChatMessage = {
-        id: aiMessageId,
-        text: `Processing file "${file.name}"...`,
-        sender: 'ai',
-        timestamp: Date.now() + 1,
-        model: selectedModel,
-        promptedByMessageId: userMessageId,
-    };
-    setMessages(prev => [...prev, userMessage, aiPlaceholder]);
+    setLiveTranscriptionDisplay(`Processing "${file.name}"...`);
+    setLiveTranslationDisplay("");
+    liveTranslationAccumulatorRef.current = "";
 
     try {
         let textToTranslate = '';
-        if (isTxt) {
+        if (file.name.toLowerCase().endsWith('.txt')) {
             textToTranslate = await file.text();
-            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Translating text from "${file.name}"...`, originalText: textToTranslate } : msg));
         } else { // It's an MP3
-            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Transcribing audio from "${file.name}"...` } : msg));
+            setLiveTranscriptionDisplay(`Transcribing audio from "${file.name}"...`);
             const transcriptionResult = await transcribeOpenAIAudio({ audioFile: file, userSession });
             if (transcriptionResult.error || !transcriptionResult.transcription) {
                 throw new Error(transcriptionResult.error || "Transcription failed to return text.");
             }
             textToTranslate = transcriptionResult.transcription;
-            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Translating transcribed text...`, originalText: textToTranslate } : msg));
         }
         
-        if (!textToTranslate.trim()) throw new Error("File content is empty or could not be read.");
+        setLiveTranscriptionDisplay(textToTranslate);
 
-        // Now translate the text
+        if (!textToTranslate.trim()) {
+            setLiveTranslationDisplay("[File content is empty or could not be read.]");
+            throw new Error("File content is empty or could not be read.");
+        }
+
         const targetLanguage = (currentModelSettings as RealTimeTranslationSettings).targetLanguage;
         const targetLangName = TRANSLATION_TARGET_LANGUAGES.find(l => l.code === targetLanguage)?.name || targetLanguage;
+        
+        setLiveTranslationDisplay(`Translating to ${targetLangName}...`);
+
         const translationPrompt = `Translate the following text to ${targetLangName}. Output only the translated text directly, without any introductory phrases or explanations: "${textToTranslate}"`;
         const modelIdentifier = getActualModelIdentifier(Model.GEMINI);
         const history: Content[] = [{ role: 'user', parts: [{ text: translationPrompt }] }];
+        
         const stream = sendGeminiMessageStream({ 
-            modelName: modelIdentifier, historyContents: history, 
+            modelName: modelIdentifier, 
+            historyContents: history, 
             modelSettings: { temperature: 0.3, topK: 1, topP: 1, systemInstruction: "You are a direct text translator." }, 
-            enableGoogleSearch: false, userSession 
+            enableGoogleSearch: false, 
+            userSession 
         });
 
         let translatedText = '';
@@ -2477,45 +2467,25 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             if (chunk.error) throw new Error(`Translation Error: ${chunk.error}`);
             if (chunk.textDelta) {
                 translatedText += chunk.textDelta;
-                setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, translatedText: translatedText } : msg));
+                setLiveTranslationDisplay(translatedText);
             }
         }
         
         translatedText = translatedText.trim();
         if (!translatedText) throw new Error("Translation resulted in empty text.");
 
-        // Update message with final translation and prepare for TTS
-        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Synthesizing audio for translation...`, translatedText: translatedText } : msg));
-        
-        // Don't generate audio for demo users in this mode.
-        if (userSession.isDemoUser && !userSession.isPaidUser) {
-             setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Audio output disabled for demo users.` } : msg));
-             addNotification("Voice output for translated files is a Paid User feature.", "info");
-             return; // End the process here for demo users
-        }
-
-        const openAiTtsModelSettings = allSettings[Model.OPENAI_TTS] as OpenAITtsSettings | undefined;
-        const ttsParams: ProxiedOpenAITtsParams = {
-            modelIdentifier: openAiTtsModelSettings?.modelIdentifier || 'tts-1', textInput: translatedText,
-            voice: 'nova', speed: openAiTtsModelSettings?.speed || 1.0, userSession: userSession,
-        };
-        const ttsResult = await generateOpenAITTS(ttsParams);
-        if (ttsResult.error || !ttsResult.audioBlob) throw new Error(ttsResult.error || `OpenAI TTS Proxy Error`);
-
-        const audioUrl = URL.createObjectURL(ttsResult.audioBlob);
-        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? {
-            ...msg, text: `Translation complete. Audio is ready.`, audioUrl: audioUrl,
-        } : msg));
-        handlePlayAudio(audioUrl, aiMessageId);
+        liveTranslationAccumulatorRef.current = translatedText;
 
     } catch(e: any) {
         const errorMessage = e.message || `Failed to process the file: ${file.name}`;
         setError(errorMessage);
         addNotification(errorMessage, "error", e.stack);
-        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error: ${errorMessage}` } : msg));
+        setLiveTranslationDisplay(`[Error: ${errorMessage}]`);
+        if (e.message.includes("Transcription failed")) {
+             setLiveTranscriptionDisplay(`[Transcription Error]`);
+        }
     } finally {
         setIsLoading(false);
-        clearSearch();
     }
   };
 
@@ -2714,6 +2684,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         getIsKlingVideoModel(selectedModel) ||
         selectedModel === Model.FLUX_KONTEX ||
         selectedModel === Model.GEMINI ||
+        selectedModel === Model.GEMINI_ADVANCED ||
         selectedModel === Model.GPT4O ||
         selectedModel === Model.GPT4O_MINI ||
         selectedModel === Model.PRIVATE ||
@@ -3585,7 +3556,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                 <div className="flex-grow p-3 border-t border-secondary dark:border-neutral-darkest bg-neutral-light dark:bg-neutral-darker max-h-full overflow-y-auto text-sm">
                     <div className="mb-2">
                         <h4 className="font-semibold text-neutral-600 dark:text-neutral-300">Live Transcription ({navigator.language || 'en-US'}):</h4>
-                        <pre className="whitespace-pre-wrap text-neutral-700 dark:text-neutral-200">{liveTranscriptionDisplay || (isListening ? "Listening..." : "Start microphone to see transcription.")}</pre>
+                        <pre className="whitespace-pre-wrap text-neutral-700 dark:text-neutral-200">{liveTranscriptionDisplay || (isListening ? "Listening..." : "Start microphone or upload a file to see transcription.")}</pre>
                     </div>
                     <div>
                         <h4 className="font-semibold text-neutral-600 dark:text-neutral-300">Live Translation ({targetTranslationLangName}):</h4>
