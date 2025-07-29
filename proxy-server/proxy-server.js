@@ -9,6 +9,8 @@ import { fal } from '@fal-ai/client';
 import { randomBytes } from 'crypto';
 import mysql from 'mysql2/promise';
 import bcrypt from 'bcrypt';
+import multer from 'multer';
+import FormData from 'form-data';
 
 console.log(`[Proxy Server] Starting up at ${new Date().toISOString()}...`);
 
@@ -82,6 +84,9 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
 
 // --- Authentication ---
 const LOGIN_CODE_AUTH_ADMIN = process.env.LOGIN_CODE_AUTH_ADMIN;
@@ -620,6 +625,7 @@ app.post('/api/gemini/image/generate', async (req, res) => {
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions';
 const OPENAI_TTS_URL = 'https://api.openai.com/v1/audio/speech';
+const OPENAI_STT_URL = 'https://api.openai.com/v1/audio/transcriptions';
 if (OPENAI_API_KEY) console.log("OpenAI API Key found."); else console.warn("PROXY WARNING: OPENAI_API_KEY missing.");
 
 app.post('/api/openai/chat/stream', async (req, res) => {
@@ -729,6 +735,50 @@ app.post('/api/openai/tts/generate', async (req, res) => {
     if (error instanceof Error) errorMsg = error.message;
     if (!res.headersSent) res.status(500).json({ error: errorMsg });
   }
+});
+
+app.post('/api/openai/stt/transcribe', upload.single('audio_file'), async (req, res) => {
+    if (req.authDbError) return res.status(503).json({ error: "Service temporarily unavailable (DB auth)." });
+    if (req.authenticationAttempted && req.authenticationFailed) return res.status(403).json({ error: "Access Denied (auth failed)." });
+    
+    const isActualAdmin = !req.isPaidUser && !req.isDemoUser && !req.authenticationAttempted;
+    const isAuthenticUser = req.isPaidUser || req.isDemoUser;
+
+    if (!isAuthenticUser && !isActualAdmin) return res.status(401).json({ error: "Unauthorized access." });
+
+    if (!OPENAI_API_KEY) return res.status(500).json({ error: "OpenAI API Key not configured." });
+    if (!req.file) return res.status(400).json({ error: "No audio file provided." });
+    
+    if (isActualAdmin) console.log(`[OpenAI STT Proxy] Admin access granted (IP: ${getClientIp(req)}).`);
+    else if (req.isPaidUser) console.log(`[OpenAI STT] Paid user ${req.paidUser.username} validated.`);
+    else if (req.isDemoUser) console.log(`[OpenAI STT] Demo user ${req.demoUser.username} validated.`);
+
+    try {
+        const formData = new FormData();
+        formData.append('file', req.file.buffer, { filename: req.file.originalname, contentType: req.file.mimetype });
+        formData.append('model', 'whisper-1');
+
+        const openaiResponse = await fetch(OPENAI_STT_URL, {
+            method: 'POST',
+            headers: {
+                ...formData.getHeaders(),
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+            },
+            body: formData,
+        });
+        
+        const responseData = await openaiResponse.json();
+
+        if (!openaiResponse.ok) {
+            console.error("[OpenAI STT Proxy Error] OpenAI API returned an error:", responseData);
+            return res.status(openaiResponse.status).json({ error: responseData.error?.message || "Failed to transcribe audio." });
+        }
+
+        res.json({ transcription: responseData.text });
+    } catch (error) {
+        console.error("[OpenAI STT Proxy Error]", error);
+        res.status(500).json({ error: `STT failed on proxy: ${error.message || "Internal server error"}` });
+    }
 });
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
@@ -1026,7 +1076,7 @@ app.post('/api/fal/image/edit/status', async (req, res) => {
         responsePayload.rawResult = jobResult;
 
         if (modelIdentifier.includes('kling-video')) {
-            if (jobResult?.data?.video?.url) {
+            if (jobResult?.data?.video?.url) { // Corrected path
                 responsePayload.videoUrl = jobResult.data.video.url;
                 responsePayload.message = "Video processing completed successfully.";
             } else {
@@ -1037,26 +1087,27 @@ app.post('/api/fal/image/edit/status', async (req, res) => {
             }
         } else { // Assume image model
             let imageUrlsResult = [];
-            if (jobResult?.images && Array.isArray(jobResult.images)) {
-                imageUrlsResult = jobResult.images.map(img => img?.url).filter(Boolean);
+            if (jobResult?.images && Array.isArray(jobResult.images)) { 
+                imageUrlsResult = jobResult.images.map((img) => img?.url).filter(Boolean);
+            } else if (jobResult?.data?.images && Array.isArray(jobResult.data.images)) { // Fallback if nested under 'data'
+                imageUrlsResult = jobResult.data.images.map((img) => img?.url).filter(Boolean);
             }
-
-            if (imageUrlsResult.length === 0 && jobResult?.image_url && typeof jobResult.image_url === 'string') {
+            
+            if (imageUrlsResult.length === 0 && jobResult?.image_url && typeof jobResult.image_url === 'string') { 
                 imageUrlsResult.push(jobResult.image_url);
+            } else if (imageUrlsResult.length === 0 && jobResult?.data?.image_url && typeof jobResult.data.image_url === 'string') {
+                imageUrlsResult.push(jobResult.data.image_url);
             }
 
-            if (imageUrlsResult.length === 0 && jobResult?.data?.images && Array.isArray(jobResult.data.images)) {
-                imageUrlsResult = jobResult.data.images.map(img => img?.url).filter(Boolean);
-            }
 
             if (imageUrlsResult.length > 0) {
-                responsePayload.imageUrls = imageUrlsResult;
-                responsePayload.imageUrl = imageUrlsResult[0];
-                responsePayload.message = "Image processing completed successfully.";
+                responsePayload.imageUrls = imageUrlsResult; 
+                responsePayload.imageUrl = imageUrlsResult[0]; 
+                if (!responsePayload.message) responsePayload.message = "Image processing completed successfully.";
             } else {
-                responsePayload.status = 'COMPLETED_NO_IMAGE';
-                responsePayload.message = "Processing completed, but no image URL found in the result.";
-                responsePayload.error = "Fal.ai image result did not contain expected image URL(s). Raw result logged on proxy.";
+                responsePayload.status = 'COMPLETED_NO_IMAGE'; 
+                if (!responsePayload.message) responsePayload.message = "Processing completed, but no image URL found in the result.";
+                if (!responsePayload.error) responsePayload.error = "Fal.ai image result did not contain expected image URL(s). Raw result logged on proxy.";
                 console.warn(`[Fal Status] COMPLETED_NO_IMAGE for ${modelIdentifier}, reqId ${requestId}. Raw result:`, JSON.stringify(jobResult, null, 2));
             }
         }
