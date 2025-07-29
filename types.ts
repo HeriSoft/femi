@@ -86,6 +86,7 @@ export interface OpenAITtsSettings {
   voice: OpenAiTtsVoice;
   speed: number; 
   modelIdentifier: 'tts-1' | 'tts-1-hd'; 
+  translateBeforeSpeaking: boolean;
 }
 
 export interface RealTimeTranslationSettings {

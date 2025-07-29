@@ -17,6 +17,7 @@ export const DEFAULT_OPENAI_TTS_SETTINGS: OpenAITtsSettings = {
     voice: 'alloy',
     speed: 1.0,
     modelIdentifier: 'tts-1',
+    translateBeforeSpeaking: true,
 };
 
 export const DEFAULT_REAL_TIME_TRANSLATION_SETTINGS: RealTimeTranslationSettings = {
