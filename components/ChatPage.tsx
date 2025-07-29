@@ -2504,39 +2504,49 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             id: userMessageId, text: `(Reading from file: ${fileName})`, sender: 'user',
             timestamp: Date.now(), fileName: fileName,
         };
+
+        const ttsSettings = currentModelSettings as OpenAITtsSettings;
+        const placeholderText = ttsSettings.translateBeforeSpeaking 
+            ? `Translating content from "${fileName}"...` 
+            : `Synthesizing audio from "${fileName}"...`;
+
         const aiPlaceholder: ChatMessage = {
-            id: aiMessageId, text: `Translating content from "${fileName}"...`, sender: 'ai',
+            id: aiMessageId, text: placeholderText, sender: 'ai',
             timestamp: Date.now() + 1, model: selectedModel, promptedByMessageId: userMessageId,
         };
         setMessages(prev => [...prev, userMessage, aiPlaceholder]);
         
         try {
-            const translationPrompt = `Translate the following text into natural, spoken English. Only return the translated text. Do not add any commentary, introductions, or markdown formatting. The output should be ready for a text-to-speech engine.\n\nText to translate:\n\n---\n\n${fileContent}`;
-            const modelIdentifier = getActualModelIdentifier(Model.GEMINI);
-            const history: Content[] = [{ role: 'user', parts: [{ text: translationPrompt }] }];
-            const stream = sendGeminiMessageStream({ 
-                modelName: modelIdentifier, historyContents: history, 
-                modelSettings: { temperature: 0.3, topK: 32, topP: 0.95, systemInstruction: "You are a direct text translator." }, 
-                enableGoogleSearch: false, userSession 
-            });
+            let textToSynthesize = '';
 
-            let translatedText = '';
-            for await (const chunk of stream) {
-                if (chunk.error) throw new Error(`Translation Error: ${chunk.error}`);
-                if (chunk.textDelta) {
-                    translatedText += chunk.textDelta;
-                    setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Translating... (${translatedText.length} chars)` } : msg));
+            if (ttsSettings.translateBeforeSpeaking) {
+                const translationPrompt = `Translate the following text into natural, spoken English. Only return the translated text. Do not add any commentary, introductions, or markdown formatting. The output should be ready for a text-to-speech engine.\n\nText to translate:\n\n---\n\n${fileContent}`;
+                const modelIdentifier = getActualModelIdentifier(Model.GEMINI);
+                const history: Content[] = [{ role: 'user', parts: [{ text: translationPrompt }] }];
+                const stream = sendGeminiMessageStream({ 
+                    modelName: modelIdentifier, historyContents: history, 
+                    modelSettings: { temperature: 0.3, topK: 32, topP: 0.95, systemInstruction: "You are a direct text translator." }, 
+                    enableGoogleSearch: false, userSession 
+                });
+
+                let translatedText = '';
+                for await (const chunk of stream) {
+                    if (chunk.error) throw new Error(`Translation Error: ${chunk.error}`);
+                    if (chunk.textDelta) {
+                        translatedText += chunk.textDelta;
+                        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Translating... (${translatedText.length} chars)` } : msg));
+                    }
                 }
+                
+                textToSynthesize = translatedText.trim();
+                if (!textToSynthesize) throw new Error("Translation resulted in empty text.");
+                setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Synthesizing audio for "${fileName}"...` } : msg));
+            } else {
+                textToSynthesize = fileContent;
             }
-            
-            translatedText = translatedText.trim();
-            if (!translatedText) throw new Error("Translation resulted in empty text.");
 
-            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Synthesizing audio for "${fileName}"...` } : msg));
-
-            const ttsSettings = currentModelSettings as OpenAITtsSettings;
             const ttsParams: ProxiedOpenAITtsParams = {
-                modelIdentifier: ttsSettings.modelIdentifier || 'tts-1', textInput: translatedText,
+                modelIdentifier: ttsSettings.modelIdentifier || 'tts-1', textInput: textToSynthesize,
                 voice: ttsSettings.voice || 'alloy', speed: ttsSettings.speed || 1.0, userSession: userSession,
             };
             const ttsResult = await generateOpenAITTS(ttsParams);

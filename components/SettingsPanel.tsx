@@ -749,6 +749,21 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
                 />
             </div>
+            <div className="flex items-center justify-between mt-2">
+                <div className="flex-grow pr-4">
+                    <label htmlFor="tts-translate-toggle" className="text-sm font-medium text-neutral-darker dark:text-secondary-light">
+                        Translate to English first
+                    </label>
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400">For non-English .txt file uploads.</p>
+                </div>
+                <button
+                  onClick={() => onModelSettingsChange({ translateBeforeSpeaking: !((modelSettings as OpenAITtsSettings).translateBeforeSpeaking) } as Partial<OpenAITtsSettings>)}
+                  disabled={disabled}
+                  className={`${(modelSettings as OpenAITtsSettings).translateBeforeSpeaking ? 'bg-primary dark:bg-primary-light' : 'bg-secondary dark:bg-neutral-darkest'} relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:ring-offset-2 dark:focus:ring-offset-neutral-dark`}
+                  role="switch" aria-checked={(modelSettings as OpenAITtsSettings).translateBeforeSpeaking}>
+                  <span className={`${(modelSettings as OpenAITtsSettings).translateBeforeSpeaking ? 'translate-x-6' : 'translate-x-1'} inline-block w-4 h-4 transform bg-white rounded-full transition-transform`} />
+                </button>
+            </div>
             <div className="mt-2 p-3 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-sm text-blue-700 dark:text-blue-300">
                 <InformationCircleIcon className="w-5 h-5 inline mr-1.5 align-text-bottom" />
                 Enter text in the chat input to synthesize speech. Chat settings (temp, etc.) are not used.
