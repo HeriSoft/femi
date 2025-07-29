@@ -51,6 +51,8 @@ export interface ChatMessage {
   fluxModelId?: string; 
   isVideoQuery?: boolean; 
   videoUrl?: string; 
+  originalText?: string; 
+  translatedText?: string; 
 
   tradingAnalysis?: {
     pair: TradingPairValue;

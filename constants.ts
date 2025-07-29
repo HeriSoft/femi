@@ -177,6 +177,9 @@ export const LOCAL_STORAGE_DEVICE_LOGS_KEY = 'femiAiDeviceLogs';
 export const MAX_DEVICE_LOGS = 5;
 export const LOCAL_STORAGE_CHAT_BACKGROUND_KEY = 'femiAiChatBackgroundUrl';
 export const MAX_SAVED_CHAT_SESSIONS = 10;
+export const MAX_TTS_FILE_UPLOAD_SIZE_BYTES = 100 * 1024; // 100 KB
+export const MAX_TRANSLATION_MP3_UPLOAD_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB (OpenAI Whisper limit)
+export const MAX_TRANSLATION_TXT_UPLOAD_SIZE_BYTES = 100 * 1024; // 100 KB
 
 
 export const DEMO_USER_DEFAULT_MONTHLY_LIMITS = {
