@@ -13,6 +13,16 @@ export interface ProxiedOpenAITtsParams {
   responseFormat?: 'mp3' | 'opus' | 'aac' | 'flac'; // Default is mp3
 }
 
+export interface ProxiedOpenAISttParams {
+    audioFile: File;
+    userSession: UserSessionState;
+}
+
+export interface ProxiedOpenAISttResponse {
+    transcription?: string;
+    error?: string;
+}
+
 const MAX_TTS_CHUNK_LENGTH = 4000; // OpenAI's limit is 4096, use a slightly smaller value for safety.
 const MAX_TOTAL_LENGTH = OPENAI_TTS_MAX_INPUT_LENGTH; // Use imported constant
 
@@ -136,4 +146,38 @@ export async function generateOpenAITTS(
   const combinedBlob = new Blob(audioBlobs, { type: mimeType });
 
   return { audioBlob: combinedBlob };
+}
+
+export async function transcribeOpenAIAudio(params: ProxiedOpenAISttParams): Promise<ProxiedOpenAISttResponse> {
+    const { audioFile, userSession } = params;
+
+    const formData = new FormData();
+    formData.append('audio_file', audioFile);
+    
+    const headers: HeadersInit = {};
+    if (userSession.isPaidUser && userSession.paidUserToken) {
+        headers['X-Paid-User-Token'] = userSession.paidUserToken;
+    } else if (userSession.isDemoUser && userSession.demoUserToken) {
+        headers['X-Demo-Token'] = userSession.demoUserToken;
+    }
+
+    try {
+        const response = await fetch('/api/openai/stt/transcribe', {
+            method: 'POST',
+            headers: headers,
+            body: formData,
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            return { error: result.error || `OpenAI STT Proxy Error: ${response.statusText}` };
+        }
+
+        return { transcription: result.transcription };
+
+    } catch (error: any) {
+        console.error('OpenAI STT Proxy Service Fetch Error:', error);
+        return { error: `Fetch error for OpenAI STT via proxy: ${error.message || 'Unknown fetch error'}` };
+    }
 }
