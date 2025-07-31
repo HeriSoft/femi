@@ -301,6 +301,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   let timestampColor = '';
   let specialBorderClass = '';
   let aasButtonClasses = '';
+  
+  const isVideoMessage = (message.model === Model.KLING_VIDEO || message.model === Model.WAN_I2V) && message.videoUrl;
 
   if (currentTheme === 'light') {
     if (isUser) {
@@ -311,13 +313,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       if (message.isTaskGoal) specialBorderClass = 'border-l-4 border-blue-400';
       else if (message.model === Model.PRIVATE) specialBorderClass = 'border-l-4 border-slate-400';
     } else { 
-      bubbleBackgroundColor = message.isTaskPlan ? '#d1fae5' : (message.model === Model.KLING_VIDEO && message.videoUrl ? '#e0e7ff' : (message.model === Model.TRADING_PRO && message.tradingAnalysis ? '#eef2ff' : (message.model === Model.AI_AGENT_SMART ? '#e0f2f7' : '#ffffff')));
+      bubbleBackgroundColor = message.isTaskPlan ? '#d1fae5' : (isVideoMessage ? '#e0e7ff' : (message.model === Model.TRADING_PRO && message.tradingAnalysis ? '#eef2ff' : (message.model === Model.AI_AGENT_SMART ? '#e0f2f7' : '#ffffff')));
       bubbleTextColor = '#374151';    
       audioButtonClasses = 'bg-gray-200 hover:bg-gray-300 text-neutral-700'; 
       timestampColor = 'rgba(107, 114, 128, 0.9)'; 
       aasButtonClasses = 'bg-accent hover:bg-accent-dark text-white';
       if (message.isTaskPlan) specialBorderClass = 'border-l-4 border-green-400';
-      else if (message.model === Model.KLING_VIDEO && message.videoUrl) specialBorderClass = 'border-l-4 border-indigo-400';
+      else if (isVideoMessage) specialBorderClass = 'border-l-4 border-indigo-400';
       else if (message.model === Model.TRADING_PRO && message.tradingAnalysis) specialBorderClass = 'border-l-4 border-purple-400';
       else if (message.model === Model.AI_AGENT_SMART) specialBorderClass = 'border-l-4 border-cyan-400';
     }
@@ -330,13 +332,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       if (message.isTaskGoal) specialBorderClass = 'border-l-4 border-blue-500';
       else if (message.model === Model.PRIVATE) specialBorderClass = 'border-l-4 border-slate-500';
     } else { 
-      bubbleBackgroundColor = message.isTaskPlan ? '#065f46' : (message.model === Model.KLING_VIDEO && message.videoUrl ? '#312e81' : (message.model === Model.TRADING_PRO && message.tradingAnalysis ? '#3730a3' : (message.model === Model.AI_AGENT_SMART ? '#0e7490' : '#182533')));
+      bubbleBackgroundColor = message.isTaskPlan ? '#065f46' : (isVideoMessage ? '#312e81' : (message.model === Model.TRADING_PRO && message.tradingAnalysis ? '#3730a3' : (message.model === Model.AI_AGENT_SMART ? '#0e7490' : '#182533')));
       bubbleTextColor = '#FFFFFF';    
       audioButtonClasses = 'bg-white/20 hover:bg-white/30 text-white'; 
       timestampColor = 'rgba(156, 163, 175, 0.8)'; 
       aasButtonClasses = 'bg-accent-light hover:bg-accent text-neutral-darker';
       if (message.isTaskPlan) specialBorderClass = 'border-l-4 border-green-500';
-      else if (message.model === Model.KLING_VIDEO && message.videoUrl) specialBorderClass = 'border-l-4 border-indigo-500';
+      else if (isVideoMessage) specialBorderClass = 'border-l-4 border-indigo-500';
       else if (message.model === Model.TRADING_PRO && message.tradingAnalysis) specialBorderClass = 'border-l-4 border-purple-500';
       else if (message.model === Model.AI_AGENT_SMART) specialBorderClass = 'border-l-4 border-cyan-500';
     }
@@ -435,7 +437,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       originalPrompt: message.originalPrompt || '',
       editedImageUrl: message.imagePreviews[0],
       timestamp: message.timestamp,
-      fluxRequestId: message.fluxRequestId || null,
+      falRequestId: message.falRequestId || null,
       imageMimeType: message.imageMimeType || null,
     };
 
@@ -460,13 +462,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     if (!message.videoUrl) return;
     const link = document.createElement('a');
     link.href = message.videoUrl;
-    const safePrompt = (message.originalPrompt || 'kling_video').replace(/[^a-z0-9_.-]/gi, '_').substring(0, 30);
+    const modelName = message.model === Model.KLING_VIDEO ? 'kling_ai_video' : 'wan_i2v_video';
+    const safePrompt = (message.originalPrompt || modelName).replace(/[^a-z0-9_.-]/gi, '_').substring(0, 30);
     const timestampForFile = message.id || Date.now();
-    link.download = `kling_video_${safePrompt}_${timestampForFile}.mp4`;
+    link.download = `${modelName}_${safePrompt}_${timestampForFile}.mp4`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    addNotification("Kling AI video download started.", "success");
+    addNotification(`${message.model} video download started.`, "success");
   };
 
   const handleAASButtonClick = (actionId: string, label: string) => {
@@ -518,14 +521,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           <div className={`w-full h-full rounded-full flex items-center justify-center ${
             isUser 
               ? (message.model === Model.PRIVATE ? 'bg-slate-200 dark:bg-slate-700' : 'bg-blue-100 dark:bg-blue-900')
-              : (message.model === Model.KLING_VIDEO ? 'bg-indigo-200 dark:bg-indigo-700' 
+              : (isVideoMessage ? 'bg-indigo-200 dark:bg-indigo-700' 
                   : (message.model === Model.TRADING_PRO ? 'bg-purple-200 dark:bg-purple-700' 
                   : (message.model === Model.AI_AGENT_SMART ? 'bg-cyan-200 dark:bg-cyan-700' : 'bg-gray-200 dark:bg-gray-700')))
             } shadow-sm`}
             title={isUser ? 'User' : (message.model || 'AI Assistant')}
           >
             {isUser ? <UserIcon className={`w-5 h-5 ${message.model === Model.PRIVATE ? 'text-slate-600 dark:text-slate-300' : 'text-blue-600 dark:text-blue-300'}`} /> 
-                     : (message.model === Model.KLING_VIDEO ? <FilmIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-300" /> 
+                     : (isVideoMessage ? <FilmIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-300" /> 
                      : (message.model === Model.TRADING_PRO ? <PresentationChartLineIcon className="w-5 h-5 text-purple-600 dark:text-purple-300" /> 
                      : (message.model === Model.AI_AGENT_SMART ? <MapPinIcon className="w-5 h-5 text-cyan-600 dark:text-cyan-300" /> : <RobotIcon className="w-5 h-5 text-gray-600 dark:text-gray-300" />)))}
           </div>
@@ -589,7 +592,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             </div>
           )}
 
-          {message.imagePreviews && !isUser && message.model !== Model.KLING_VIDEO && message.imagePreviews.length > 0 && (
+          {message.imagePreviews && !isUser && !isVideoMessage && message.imagePreviews.length > 0 && (
              <div className={`mt-2 grid gap-2 ${message.imagePreviews.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} place-items-center`}>
               {message.imagePreviews.map((imgStr, index) => ( 
                 <div 
@@ -609,7 +612,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               ))}
             </div>
           )}
-           {message.model === Model.KLING_VIDEO && message.videoUrl && !message.klingVideoRequestId && (
+           {isVideoMessage && !message.falRequestId && (
             <div className="mt-2">
               <video
                 src={message.videoUrl}

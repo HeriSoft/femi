@@ -1,9 +1,9 @@
 
 
 import React, { useState } from 'react';
-import { Model, ModelSettings, SettingsPanelProps, ApiKeyStatus, getActualModelIdentifier, ImagenSettings, Persona, OpenAITtsSettings, OpenAiTtsVoice, RealTimeTranslationSettings, AiAgentSmartSettings, FluxKontexSettings, FluxKontexAspectRatio, FluxDevSettings, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, PrivateModeSettings, AnyModelSettings, TradingProSettings, FluxDevImageSize } from '../types.ts'; 
+import { Model, ModelSettings, SettingsPanelProps, ApiKeyStatus, getActualModelIdentifier, ImagenSettings, Persona, OpenAITtsSettings, OpenAiTtsVoice, RealTimeTranslationSettings, AiAgentSmartSettings, FluxKontexSettings, FluxKontexAspectRatio, FluxDevSettings, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, PrivateModeSettings, AnyModelSettings, TradingProSettings, FluxDevImageSize, WanI2vSettings, WanI2vResolution, WanI2vAspectRatio, LoraWeight } from '../types.ts'; 
 import { ArrowUpTrayIcon, PhotoIcon, XMarkIcon, MagnifyingGlassIcon, KeyIcon, InformationCircleIcon, UserCircleIcon, PlusCircleIcon, TrashIcon, PencilSquareIcon, SpeakerWaveIcon, LanguageIcon, PencilIcon as EditIcon, ArrowPathIcon, FilmIcon, PresentationChartLineIcon } from './Icons.tsx'; // Added PresentationChartLineIcon
-import { TRANSLATION_TARGET_LANGUAGES, DEFAULT_FLUX_KONTEX_SETTINGS, DEFAULT_FLUX_DEV_SETTINGS, FLUX_DEV_IMAGE_SIZES, DEFAULT_KLING_AI_SETTINGS, KLING_AI_DURATIONS, KLING_AI_ASPECT_RATIOS, ALL_MODEL_DEFAULT_SETTINGS, TRADING_PRO_PAIRS } from '../constants.ts'; 
+import { TRANSLATION_TARGET_LANGUAGES, DEFAULT_FLUX_KONTEX_SETTINGS, DEFAULT_FLUX_DEV_SETTINGS, FLUX_DEV_IMAGE_SIZES, DEFAULT_KLING_AI_SETTINGS, KLING_AI_DURATIONS, KLING_AI_ASPECT_RATIOS, ALL_MODEL_DEFAULT_SETTINGS, TRADING_PRO_PAIRS, DEFAULT_WAN_I2V_SETTINGS, WAN_I2V_RESOLUTIONS, WAN_I2V_ASPECT_RATIOS } from '../constants.ts'; 
 
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({
@@ -36,12 +36,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const isFluxKontexModel = selectedModel === Model.FLUX_KONTEX || selectedModel === Model.FLUX_KONTEX_MAX_MULTI;
   const isFluxDevImageGenModel = selectedModel === Model.FLUX_ULTRA || currentApiKeyStatus?.isFluxDevImageGeneration;
   const isKlingVideoModel = selectedModel === Model.KLING_VIDEO || currentApiKeyStatus?.isKlingVideoGeneration;
+  const isWanI2vVideoModel = selectedModel === Model.WAN_I2V || currentApiKeyStatus?.isWanI2vVideoGeneration;
   const isTradingProModel = selectedModel === Model.TRADING_PRO || currentApiKeyStatus?.isTradingPro;
 
 
-  const showPersonaSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentSmartModel && !isPrivateModel && !isFluxKontexModel && !isFluxDevImageGenModel && !isKlingVideoModel && !isTradingProModel && selectedModel !== Model.CLAUDE; // Updated
-  const showChatModelSettingsSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentSmartModel && !isFluxKontexModel && !isFluxDevImageGenModel && !isPrivateModel && !isKlingVideoModel && !isTradingProModel && selectedModel !== Model.CLAUDE; // Updated
-  const showWebSearchToggle = currentApiKeyStatus?.isGeminiPlatform && !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentSmartModel && !isPrivateModel && !isFluxKontexModel && !isFluxDevImageGenModel && !isKlingVideoModel && !isTradingProModel; // Updated
+  const showPersonaSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentSmartModel && !isPrivateModel && !isFluxKontexModel && !isFluxDevImageGenModel && !isKlingVideoModel && !isWanI2vVideoModel && !isTradingProModel && selectedModel !== Model.CLAUDE;
+  const showChatModelSettingsSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentSmartModel && !isFluxKontexModel && !isFluxDevImageGenModel && !isPrivateModel && !isKlingVideoModel && !isWanI2vVideoModel && !isTradingProModel && selectedModel !== Model.CLAUDE;
+  const showWebSearchToggle = currentApiKeyStatus?.isGeminiPlatform && !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentSmartModel && !isPrivateModel && !isFluxKontexModel && !isFluxDevImageGenModel && !isKlingVideoModel && !isWanI2vVideoModel && !isTradingProModel;
 
 
   const handlePersonaEdit = (persona: Persona) => {
@@ -98,6 +99,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                          !currentApiKeyStatus?.isMultiImageEditing &&
                                          !currentApiKeyStatus?.isFluxDevImageGeneration &&
                                          !isKlingVideoModel &&
+                                         !isWanI2vVideoModel &&
                                          !isTradingProModel;
 
 
@@ -133,14 +135,45 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     { value: 'shimmer', label: 'Shimmer' },
   ];
   
-  const handleRandomizeSeed = (modelType: 'fluxKontext' | 'fluxDev') => {
-    const randomSeed = Math.floor(Math.random() * 1000000000); 
+  const handleRandomizeSeed = (modelType: 'fluxKontext' | 'fluxDev' | 'kling' | 'wanI2v') => {
+    const randomSeed = Math.floor(Math.random() * 1000000000);
     if (modelType === 'fluxKontext' && isFluxKontexModel) {
         onModelSettingsChange({ seed: randomSeed } as Partial<FluxKontexSettings>);
     } else if (modelType === 'fluxDev' && isFluxDevImageGenModel) {
         onModelSettingsChange({ seed: randomSeed } as Partial<FluxDevSettings>);
+    } else if (modelType === 'wanI2v' && isWanI2vVideoModel) {
+        onModelSettingsChange({ seed: randomSeed } as Partial<WanI2vSettings>);
     }
   };
+
+  const handleLoraChange = (index: number, field: keyof LoraWeight, value: string | number) => {
+    const currentSettings = modelSettings as WanI2vSettings;
+    const newLoras = [...(currentSettings.loras || [])];
+    const loraToUpdate = { ...newLoras[index] };
+
+    if (field === 'scale') {
+      const parsedValue = parseFloat(value as string);
+      loraToUpdate[field] = isNaN(parsedValue) ? 1.0 : parsedValue;
+    } else {
+      loraToUpdate[field] = value as string;
+    }
+
+    newLoras[index] = loraToUpdate;
+    onModelSettingsChange({ loras: newLoras } as Partial<WanI2vSettings>);
+  };
+
+  const addLora = () => {
+    const currentSettings = modelSettings as WanI2vSettings;
+    const newLoras = [...(currentSettings.loras || []), { path: '', scale: 1.0 }];
+    onModelSettingsChange({ loras: newLoras } as Partial<WanI2vSettings>);
+  };
+
+  const removeLora = (index: number) => {
+    const currentSettings = modelSettings as WanI2vSettings;
+    const newLoras = (currentSettings.loras || []).filter((_, i) => i !== index);
+    onModelSettingsChange({ loras: newLoras } as Partial<WanI2vSettings>);
+  };
+
   
   const isAdminUser = !userSession.isDemoUser && !userSession.isPaidUser;
 
@@ -153,6 +186,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     else if (currentApiKeyStatus.isImageEditing || currentApiKeyStatus.isMultiImageEditing) apiKeyTypeString = "Image Editing API";
     else if (currentApiKeyStatus.isFluxDevImageGeneration) apiKeyTypeString = "Image Gen API (Flux Dev)";
     else if (currentApiKeyStatus.isKlingVideoGeneration) apiKeyTypeString = "Video Gen API (Kling)";
+    else if (currentApiKeyStatus.isWanI2vVideoGeneration) apiKeyTypeString = "Video Gen API (Wan I2V)";
     else if (currentApiKeyStatus.isPrivateMode) apiKeyTypeString = "Local Mode";
     else if (currentApiKeyStatus.isTradingPro) apiKeyTypeString = "Trading Analysis APIs";
     else apiKeyTypeString = "Live API Key";
@@ -176,7 +210,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             const isFluxMax = model === Model.FLUX_KONTEX_MAX_MULTI;
             const isFluxDev = model === Model.FLUX_ULTRA;
             const isKling = model === Model.KLING_VIDEO;
-            const isRestricted = (isFluxMax || isFluxDev || isKling) && !userSession.isPaidUser && !isAdminUser; 
+            const isWanI2v = model === Model.WAN_I2V;
+            const isRestricted = (isFluxMax || isFluxDev || isKling || isWanI2v) && !userSession.isPaidUser && !isAdminUser; 
             return (
               <option key={model} value={model} disabled={isRestricted}
                 className={isRestricted ? "text-gray-400 dark:text-gray-600" : ""}>
@@ -699,6 +734,160 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
         </div>
       )}
 
+      {isWanI2vVideoModel && (
+        <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
+          <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
+            <FilmIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" />
+            Wan I2V Video Settings
+          </h3>
+          <div>
+            <label htmlFor="wan-resolution" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Resolution</label>
+            <select id="wan-resolution" value={(modelSettings as WanI2vSettings).resolution || DEFAULT_WAN_I2V_SETTINGS.resolution}
+              onChange={(e) => onModelSettingsChange({ resolution: e.target.value as WanI2vResolution } as Partial<WanI2vSettings>)} disabled={disabled}
+              className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none">
+              {WAN_I2V_RESOLUTIONS.map(opt => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="wan-aspect-ratio" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Aspect Ratio</label>
+            <select id="wan-aspect-ratio" value={(modelSettings as WanI2vSettings).aspect_ratio || DEFAULT_WAN_I2V_SETTINGS.aspect_ratio}
+              onChange={(e) => onModelSettingsChange({ aspect_ratio: e.target.value as WanI2vAspectRatio } as Partial<WanI2vSettings>)} disabled={disabled}
+              className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none">
+              {WAN_I2V_ASPECT_RATIOS.map(opt => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="wan-num-frames" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Number of Frames: {(modelSettings as WanI2vSettings).num_frames ?? DEFAULT_WAN_I2V_SETTINGS.num_frames}
+            </label>
+            <input type="range" id="wan-num-frames" min="81" max="100" step="1"
+              value={(modelSettings as WanI2vSettings).num_frames ?? DEFAULT_WAN_I2V_SETTINGS.num_frames}
+              onChange={(e) => onModelSettingsChange({ num_frames: parseInt(e.target.value, 10) } as Partial<WanI2vSettings>)}
+              disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light" />
+          </div>
+          <div>
+            <label htmlFor="wan-fps" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Frames Per Second: {(modelSettings as WanI2vSettings).frames_per_second ?? DEFAULT_WAN_I2V_SETTINGS.frames_per_second}
+            </label>
+            <input type="range" id="wan-fps" min="5" max="24" step="1"
+              value={(modelSettings as WanI2vSettings).frames_per_second ?? DEFAULT_WAN_I2V_SETTINGS.frames_per_second}
+              onChange={(e) => onModelSettingsChange({ frames_per_second: parseInt(e.target.value, 10) } as Partial<WanI2vSettings>)}
+              disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light" />
+          </div>
+           <div className="flex items-end space-x-2">
+                <div className="flex-grow">
+                    <label htmlFor="wan-seed" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Seed (empty for random)</label>
+                    <input type="number" id="wan-seed"
+                        value={(modelSettings as WanI2vSettings).seed === null || (modelSettings as WanI2vSettings).seed === undefined ? '' : (modelSettings as WanI2vSettings).seed}
+                        onChange={(e) => onModelSettingsChange({ seed: e.target.value === '' ? null : parseInt(e.target.value, 10) } as Partial<WanI2vSettings>)}
+                        placeholder="Random" disabled={disabled}
+                        className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none" />
+                </div>
+                <button onClick={() => handleRandomizeSeed('wanI2v')} disabled={disabled}
+                    className="p-2 border border-secondary dark:border-neutral-darkest rounded-md text-neutral-darker dark:text-secondary-light hover:bg-secondary/50 dark:hover:bg-neutral-dark/50" title="Randomize Seed">
+                    <ArrowPathIcon className="w-5 h-5"/>
+                </button>
+            </div>
+            <div>
+              <label htmlFor="wan-num-inference-steps" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+                Inference Steps: {(modelSettings as WanI2vSettings).num_inference_steps ?? DEFAULT_WAN_I2V_SETTINGS.num_inference_steps}
+              </label>
+              <input type="range" id="wan-num-inference-steps" min="10" max="50" step="1"
+                value={(modelSettings as WanI2vSettings).num_inference_steps ?? DEFAULT_WAN_I2V_SETTINGS.num_inference_steps}
+                onChange={(e) => onModelSettingsChange({ num_inference_steps: parseInt(e.target.value, 10) } as Partial<WanI2vSettings>)}
+                disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light" />
+            </div>
+            <div>
+              <label htmlFor="wan-guide-scale" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+                Guidance Scale: {((modelSettings as WanI2vSettings).guide_scale ?? DEFAULT_WAN_I2V_SETTINGS.guide_scale!).toFixed(1)}
+              </label>
+              <input type="range" id="wan-guide-scale" min="1" max="15" step="0.5"
+                value={(modelSettings as WanI2vSettings).guide_scale ?? DEFAULT_WAN_I2V_SETTINGS.guide_scale}
+                onChange={(e) => onModelSettingsChange({ guide_scale: parseFloat(e.target.value) } as Partial<WanI2vSettings>)}
+                disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light" />
+            </div>
+            <div>
+              <label htmlFor="wan-shift" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+                Shift: {((modelSettings as WanI2vSettings).shift ?? DEFAULT_WAN_I2V_SETTINGS.shift!).toFixed(1)}
+              </label>
+              <input type="range" id="wan-shift" min="0" max="10" step="0.5"
+                value={(modelSettings as WanI2vSettings).shift ?? DEFAULT_WAN_I2V_SETTINGS.shift}
+                onChange={(e) => onModelSettingsChange({ shift: parseFloat(e.target.value) } as Partial<WanI2vSettings>)}
+                disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light" />
+            </div>
+          <div>
+            <label htmlFor="wan-negative-prompt" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Negative Prompt
+            </label>
+            <textarea id="wan-negative-prompt" rows={3}
+              value={(modelSettings as WanI2vSettings).negative_prompt || DEFAULT_WAN_I2V_SETTINGS.negative_prompt}
+              onChange={(e) => onModelSettingsChange({ negative_prompt: e.target.value } as Partial<WanI2vSettings>)}
+              disabled={disabled} placeholder={DEFAULT_WAN_I2V_SETTINGS.negative_prompt}
+              className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none text-xs" />
+          </div>
+            <div className="flex items-center justify-between mt-2">
+                <label htmlFor="wan-safety-checker" className="text-sm font-medium text-neutral-darker dark:text-secondary-light">Enable Safety Checker</label>
+                <button onClick={() => onModelSettingsChange({ enable_safety_checker: !((modelSettings as WanI2vSettings).enable_safety_checker ?? DEFAULT_WAN_I2V_SETTINGS.enable_safety_checker) } as Partial<WanI2vSettings>)} disabled={disabled}
+                  className={`${((modelSettings as WanI2vSettings).enable_safety_checker ?? DEFAULT_WAN_I2V_SETTINGS.enable_safety_checker) ? 'bg-primary dark:bg-primary-light' : 'bg-secondary dark:bg-neutral-darkest'} relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:ring-offset-2 dark:focus:ring-offset-neutral-dark`}
+                  role="switch" aria-checked={(modelSettings as WanI2vSettings).enable_safety_checker ?? DEFAULT_WAN_I2V_SETTINGS.enable_safety_checker}>
+                  <span className={`${((modelSettings as WanI2vSettings).enable_safety_checker ?? DEFAULT_WAN_I2V_SETTINGS.enable_safety_checker) ? 'translate-x-6' : 'translate-x-1'} inline-block w-4 h-4 transform bg-white rounded-full transition-transform`} />
+                </button>
+            </div>
+            <div className="flex items-center justify-between mt-2">
+                <label htmlFor="wan-prompt-expansion" className="text-sm font-medium text-neutral-darker dark:text-secondary-light">Enable Prompt Expansion</label>
+                <button onClick={() => onModelSettingsChange({ enable_prompt_expansion: !((modelSettings as WanI2vSettings).enable_prompt_expansion ?? DEFAULT_WAN_I2V_SETTINGS.enable_prompt_expansion) } as Partial<WanI2vSettings>)} disabled={disabled}
+                  className={`${((modelSettings as WanI2vSettings).enable_prompt_expansion ?? DEFAULT_WAN_I2V_SETTINGS.enable_prompt_expansion) ? 'bg-primary dark:bg-primary-light' : 'bg-secondary dark:bg-neutral-darkest'} relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:ring-offset-2 dark:focus:ring-offset-neutral-dark`}
+                  role="switch" aria-checked={(modelSettings as WanI2vSettings).enable_prompt_expansion ?? DEFAULT_WAN_I2V_SETTINGS.enable_prompt_expansion}>
+                  <span className={`${((modelSettings as WanI2vSettings).enable_prompt_expansion ?? DEFAULT_WAN_I2V_SETTINGS.enable_prompt_expansion) ? 'translate-x-6' : 'translate-x-1'} inline-block w-4 h-4 transform bg-white rounded-full transition-transform`} />
+                </button>
+            </div>
+            <div className="flex items-center justify-between mt-2">
+                <label htmlFor="wan-reverse-video" className="text-sm font-medium text-neutral-darker dark:text-secondary-light">Reverse Video</label>
+                <button onClick={() => onModelSettingsChange({ reverse_video: !((modelSettings as WanI2vSettings).reverse_video ?? DEFAULT_WAN_I2V_SETTINGS.reverse_video) } as Partial<WanI2vSettings>)} disabled={disabled}
+                  className={`${((modelSettings as WanI2vSettings).reverse_video ?? DEFAULT_WAN_I2V_SETTINGS.reverse_video) ? 'bg-primary dark:bg-primary-light' : 'bg-secondary dark:bg-neutral-darkest'} relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:ring-offset-2 dark:focus:ring-offset-neutral-dark`}
+                  role="switch" aria-checked={(modelSettings as WanI2vSettings).reverse_video ?? DEFAULT_WAN_I2V_SETTINGS.reverse_video}>
+                  <span className={`${((modelSettings as WanI2vSettings).reverse_video ?? DEFAULT_WAN_I2V_SETTINGS.reverse_video) ? 'translate-x-6' : 'translate-x-1'} inline-block w-4 h-4 transform bg-white rounded-full transition-transform`} />
+                </button>
+            </div>
+          <div className="flex items-center justify-between mt-2">
+              <label htmlFor="wan-turbo-mode" className="text-sm font-medium text-neutral-darker dark:text-secondary-light">Turbo Mode</label>
+              <button onClick={() => onModelSettingsChange({ turbo_mode: !((modelSettings as WanI2vSettings).turbo_mode ?? DEFAULT_WAN_I2V_SETTINGS.turbo_mode) } as Partial<WanI2vSettings>)} disabled={disabled}
+                className={`${((modelSettings as WanI2vSettings).turbo_mode ?? DEFAULT_WAN_I2V_SETTINGS.turbo_mode) ? 'bg-primary dark:bg-primary-light' : 'bg-secondary dark:bg-neutral-darkest'} relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:ring-offset-2 dark:focus:ring-offset-neutral-dark`}
+                role="switch" aria-checked={(modelSettings as WanI2vSettings).turbo_mode ?? DEFAULT_WAN_I2V_SETTINGS.turbo_mode}>
+                <span className={`${((modelSettings as WanI2vSettings).turbo_mode ?? DEFAULT_WAN_I2V_SETTINGS.turbo_mode) ? 'translate-x-6' : 'translate-x-1'} inline-block w-4 h-4 transform bg-white rounded-full transition-transform`} />
+              </button>
+          </div>
+          <div className="pt-4 border-t border-secondary dark:border-neutral-darkest">
+            <h4 className="text-md font-semibold text-neutral-darker dark:text-secondary-light mb-2">LoRA Weights</h4>
+            <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
+              {((modelSettings as WanI2vSettings).loras || []).map((lora, index) => (
+                <div key={index} className="p-3 border border-secondary dark:border-neutral-darkest rounded-md bg-secondary-light/50 dark:bg-neutral-dark/30 relative">
+                  <button onClick={() => removeLora(index)} className="absolute top-1 right-1 p-1 text-red-500 hover:text-red-700" title="Remove LoRA"><TrashIcon className="w-4 h-4"/></button>
+                  <div className="space-y-2">
+                    <div>
+                        <label htmlFor={`lora-path-${index}`} className="block text-xs font-medium">Path (URL)</label>
+                        <input id={`lora-path-${index}`} type="text" value={lora.path} onChange={(e) => handleLoraChange(index, 'path', e.target.value)} placeholder="https://..." className="w-full p-1.5 mt-1 border rounded-md text-sm bg-neutral-light dark:bg-neutral-dark"/>
+                    </div>
+                    <div>
+                        <label htmlFor={`lora-name-${index}`} className="block text-xs font-medium">Weight Name (optional)</label>
+                        <input id={`lora-name-${index}`} type="text" value={lora.weight_name || ''} onChange={(e) => handleLoraChange(index, 'weight_name', e.target.value)} placeholder="e.g., my_lora" className="w-full p-1.5 mt-1 border rounded-md text-sm bg-neutral-light dark:bg-neutral-dark"/>
+                    </div>
+                    <div>
+                        <label htmlFor={`lora-scale-${index}`} className="block text-xs font-medium">Scale: {lora.scale?.toFixed(2) ?? '1.00'}</label>
+                        <input id={`lora-scale-${index}`} type="range" min="0" max="2" step="0.05" value={lora.scale ?? 1.0} onChange={(e) => handleLoraChange(index, 'scale', e.target.value)} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"/>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button onClick={addLora} className="mt-2 px-3 py-1.5 text-xs bg-primary hover:bg-primary-dark text-white rounded-md flex items-center"><PlusCircleIcon className="w-4 h-4 mr-1"/> Add LoRA</button>
+          </div>
+          <div className="mt-2 p-3 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-sm text-blue-700 dark:text-blue-300">
+              <InformationCircleIcon className="w-5 h-5 inline mr-1.5 align-text-bottom" />
+              Upload an image and enter a prompt to generate a video.
+          </div>
+        </div>
+      )}
 
       {isTextToSpeechModel && (
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">

@@ -2,7 +2,7 @@
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo, useContext } from 'react';
 // Update to .ts/.tsx extensions
-import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType, UserGlobalProfile, AiAgentSmartSettings, PrivateModeSettings, FluxKontexSettings, NotificationType, UserSessionState, DemoUserLimits, PaidUserLimits, SingleImageData, MultiImageData, FluxKontexAspectRatio, EditImageWithFluxKontexParams, FluxDevSettings, GenerateImageWithFluxDevParams, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, GenerateVideoWithKlingParams, AnyModelSettings, ModelSpecificSettingsMap, TradingProSettings, TradingProState, TradingPair, GeminiTradingAnalysisResponse, FluxDevImageSize } from '../types.ts'; // Removed AlphaVantageProxyResponse
+import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType, UserGlobalProfile, AiAgentSmartSettings, PrivateModeSettings, FluxKontexSettings, NotificationType, UserSessionState, DemoUserLimits, PaidUserLimits, SingleImageData, MultiImageData, FluxKontexAspectRatio, EditImageWithFluxKontexParams, FluxDevSettings, GenerateImageWithFluxDevParams, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, GenerateVideoWithKlingParams, AnyModelSettings, ModelSpecificSettingsMap, TradingProSettings, TradingProState, TradingPair, GeminiTradingAnalysisResponse, FluxDevImageSize, WanI2vSettings, GenerateVideoWithWanI2vParams, WanI2vSettings as KlingAiSettingsWithLoras } from '../types.ts'; // Removed AlphaVantageProxyResponse
 import type { Content } from '@google/genai'; // For constructing Gemini history
 import { ALL_MODEL_DEFAULT_SETTINGS, API_KEY_STATUSES_DEFINITIONS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY, TRANSLATION_TARGET_LANGUAGES, MAX_SAVED_CHAT_SESSIONS, OPENAI_TTS_MAX_INPUT_LENGTH, PAID_USER_LIMITS_CONFIG, DEFAULT_FLUX_KONTEX_SETTINGS, DEFAULT_FLUX_DEV_SETTINGS, FLUX_DEV_IMAGE_SIZES, DEFAULT_KLING_AI_SETTINGS, KLING_AI_DURATIONS, KLING_AI_ASPECT_RATIOS, TRADING_PRO_PAIRS, DEFAULT_TRADING_PRO_SETTINGS, DEFAULT_MODEL_SETTINGS, MAX_TTS_FILE_UPLOAD_SIZE_BYTES, MAX_TRANSLATION_MP3_UPLOAD_SIZE_BYTES, MAX_TRANSLATION_TXT_UPLOAD_SIZE_BYTES } from '../constants.ts';
 import { MessageBubble } from './MessageBubble.tsx';
@@ -17,7 +17,7 @@ import { sendOpenAIMessageStream } from '../services/openaiService.ts';
 import { sendDeepseekMessageStream } from '../services/deepseekService.ts';
 import { sendMockMessageStream } from '../services/mockApiService.ts';
 import { generateOpenAITTS, ProxiedOpenAITtsParams, transcribeOpenAIAudio } from "../services/openaiTTSService.ts";
-import { editImageWithFluxKontexProxy, generateImageWithFluxDevProxy, checkFalQueueStatusProxy, generateVideoWithKlingProxy } from '../services/falService.ts';
+import { editImageWithFluxKontexProxy, generateImageWithFluxDevProxy, checkFalQueueStatusProxy, generateVideoWithKlingProxy, generateVideoWithWanI2vProxy } from '../services/falService.ts';
 import { PaperAirplaneIcon, CogIcon, XMarkIcon, PromptIcon, Bars3Icon, ChatBubbleLeftRightIcon, ClockIcon as HistoryIcon, MicrophoneIcon, StopCircleIcon, SpeakerWaveIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon, ChevronDownIcon, ArrowDownTrayIcon, PencilIcon as EditIcon, PhotoIcon, ArrowUpTrayIcon, DocumentTextIcon, FilmIcon, PresentationChartLineIcon } from './Icons.tsx';
 import { ThemeContext } from '../App.tsx';
 
@@ -208,6 +208,13 @@ const getIsKlingVideoModel = (model: Model | null): boolean => {
     if (!model) return false;
     return model === Model.KLING_VIDEO;
 };
+const getIsWanI2vVideoModel = (model: Model | null): boolean => {
+    if (!model) return false;
+    return model === Model.WAN_I2V;
+};
+const getIsFalVideoModel = (model: Model | null): boolean => {
+    return getIsKlingVideoModel(model) || getIsWanI2vVideoModel(model);
+};
 const getIsTradingProModel = (model: Model | null): boolean => {
     if (!model) return false;
     return model === Model.TRADING_PRO;
@@ -332,6 +339,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         case Model.FLUX_KONTEX_MAX_MULTI: baseModelSettings = getTypedSettings(Model.FLUX_KONTEX_MAX_MULTI); break;
         case Model.FLUX_ULTRA: baseModelSettings = getTypedSettings(Model.FLUX_ULTRA); break;
         case Model.KLING_VIDEO: baseModelSettings = getTypedSettings(Model.KLING_VIDEO); break;
+        case Model.WAN_I2V: baseModelSettings = getTypedSettings(Model.WAN_I2V); break;
         case Model.TRADING_PRO: baseModelSettings = getTypedSettings(Model.TRADING_PRO); break;
         default:
             const _exhaustiveCheck: never = selectedModelKey;
@@ -557,6 +565,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           return "Flux Dev Generator";
         case Model.KLING_VIDEO:
           return "Kling AI Video Generator";
+        case Model.WAN_I2V:
+          return "Wan I2V Video Generator";
         case Model.PRIVATE:
           return "Private Mode";
         case Model.AI_AGENT_SMART:
@@ -643,7 +653,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         currentModelStatus?.isImageEditing ||
         currentModelStatus?.isMultiImageEditing ||
         currentModelStatus?.isFluxDevImageGeneration ||
-        getIsKlingVideoModel(selectedModel) ||
+        getIsFalVideoModel(selectedModel) ||
         getIsTradingProModel(selectedModel)
     )) {
         setIsWebSearchEnabled(false);
@@ -669,7 +679,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         // But if you switch from Gemini with an image TO Kling, the image should persist.
         else if (oldModel && newModel !== oldModel) {
             if (
-                (getIsKlingVideoModel(oldModel) && !getIsKlingVideoModel(newModel)) ||
+                (getIsFalVideoModel(oldModel) && !getIsFalVideoModel(newModel)) ||
                 (getIsTradingProModel(oldModel) && !getIsTradingProModel(newModel)) ||
                 (getIsFluxKontexModel(oldModel) && !getIsFluxKontexModel(newModel))
             ) {
@@ -715,7 +725,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
 
         // Clear personas if new model doesn't support them
-        if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || getIsFluxKontexModel(newModel) || isClaudeModelSelected || getIsFluxDevModel(newModel) || getIsKlingVideoModel(newModel) || getIsTradingProModel(newModel) || isAiAgentSmartMode) {
+        if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || getIsFluxKontexModel(newModel) || isClaudeModelSelected || getIsFluxDevModel(newModel) || getIsFalVideoModel(newModel) || getIsTradingProModel(newModel) || isAiAgentSmartMode) {
           if (activePersonaId) {
             setActivePersonaId(null);
           }
@@ -724,7 +734,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         // Microphone stopping logic
         if (isListening && recognitionRef.current) {
             const micIncompatibleForCurrentModel =
-                (isImagenModelSelected || isTextToSpeechModelSelected || isClaudeModelSelected || getIsFluxDevModel(newModel) || getIsKlingVideoModel(newModel) || getIsTradingProModel(newModel)) && !isRealTimeTranslationMode;
+                (isImagenModelSelected || isTextToSpeechModelSelected || isClaudeModelSelected || getIsFluxDevModel(newModel) || getIsFalVideoModel(newModel) || getIsTradingProModel(newModel)) && !isRealTimeTranslationMode;
             const stopForGptModal = newModel === Model.GPT4O && isGpt41AccessModalOpen;
 
             if (micIncompatibleForCurrentModel || stopForGptModal) {
@@ -1173,16 +1183,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
   const handleModelSelection = useCallback((newModel: Model) => {
     const isAdmin = !userSession.isDemoUser && !userSession.isPaidUser;
-    if (newModel === Model.FLUX_KONTEX_MAX_MULTI && !userSession.isPaidUser && !isAdmin) {
-      addNotification("Flux Kontext Max is for Paid Users or Admin only.", "error");
-      return;
-    }
-    if (newModel === Model.FLUX_ULTRA && !userSession.isPaidUser && !isAdmin) {
-      addNotification("Flux Dev is for Paid Users or Admin only.", "error");
-      return;
-    }
-    if (newModel === Model.KLING_VIDEO && !userSession.isPaidUser && !isAdmin) {
-      addNotification("Kling AI Video generation is only available for Paid Users or Admin.", "error");
+    if ((newModel === Model.FLUX_KONTEX_MAX_MULTI || newModel === Model.FLUX_ULTRA || getIsFalVideoModel(newModel)) && !userSession.isPaidUser && !isAdmin) {
+      addNotification(`${newModel} is for Paid Users or Admin only.`, "error");
       return;
     }
 
@@ -1228,8 +1230,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   };
 
   const handleSaveCurrentChat = useCallback(() => {
-    if (isRealTimeTranslationMode || isAiAgentSmartMode || isPrivateModeSelected || getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsKlingVideoModel(selectedModel) || getIsTradingProModel(selectedModel)) {
-        addNotification(`Cannot save chat in ${getIsTradingProModel(selectedModel) ? 'Trading Pro' : (isRealTimeTranslationMode ? 'Real-Time Translation' : (isAiAgentSmartMode ? 'AI Agent Smart' : (isPrivateModeSelected ? 'Private' : (getIsFluxKontexModel(selectedModel) ? 'Image Editing' : (getIsFluxDevModel(selectedModel) ? 'Flux Dev Image Gen' : 'Kling Video Gen')))))} mode.`, "info");
+    if (isRealTimeTranslationMode || isAiAgentSmartMode || isPrivateModeSelected || getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsFalVideoModel(selectedModel) || getIsTradingProModel(selectedModel)) {
+        addNotification(`Cannot save chat in ${getIsTradingProModel(selectedModel) ? 'Trading Pro' : (isRealTimeTranslationMode ? 'Real-Time Translation' : (isAiAgentSmartMode ? 'AI Agent Smart' : (isPrivateModeSelected ? 'Private' : (getIsFluxKontexModel(selectedModel) ? 'Image Editing' : (getIsFluxDevModel(selectedModel) ? 'Flux Dev Image Gen' : 'Video Gen')))))} mode.`, "info");
         return;
     }
     if (messages.length === 0) {
@@ -1325,7 +1327,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           return;
       }
 
-      if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT_SMART || sessionToLoad.model === Model.PRIVATE || getIsFluxKontexModel(sessionToLoad.model) || getIsFluxDevModel(sessionToLoad.model) || getIsKlingVideoModel(sessionToLoad.model) || (getIsTradingProModel(sessionToLoad.model) && !forceLoadAsTradingPro && !userSession.isPaidUser && !isAdminUser && !(userSession.isDemoUser && demoTradingProAccessGranted))) {
+      if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT_SMART || sessionToLoad.model === Model.PRIVATE || getIsFluxKontexModel(sessionToLoad.model) || getIsFluxDevModel(sessionToLoad.model) || getIsFalVideoModel(sessionToLoad.model) || (getIsTradingProModel(sessionToLoad.model) && !forceLoadAsTradingPro && !userSession.isPaidUser && !isAdminUser && !(userSession.isDemoUser && demoTradingProAccessGranted))) {
           addNotification(`Cannot load "${sessionToLoad.model}" sessions directly or access restricted. Please start a new one or verify access.`, "info");
           return;
       }
@@ -1375,7 +1377,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     setUploadedTextFileName(null);
     setIsWebSearchEnabled(false);
 
-    if (selectedModel !== Model.REAL_TIME_TRANSLATION && selectedModel !== Model.PRIVATE && !getIsFluxKontexModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsKlingVideoModel(selectedModel) && !getIsTradingProModel(selectedModel) && !(selectedModel === Model.GPT4O && !isGpt41Unlocked)) {
+    if (!isRealTimeTranslationMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsFalVideoModel(selectedModel) && !getIsTradingProModel(selectedModel) && !(selectedModel === Model.GPT4O && !isGpt41Unlocked)) {
         setAllSettings(prev => {
             const modelKey = selectedModel;
             const defaultSettingsForModel = getSpecificDefaultSettings(modelKey);
@@ -1395,7 +1397,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         });
     }
 
-    if (!isAiAgentSmartMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsKlingVideoModel(selectedModel) && !getIsTradingProModel(selectedModel)) setActivePersonaId(null);
+    if (!isAiAgentSmartMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsFalVideoModel(selectedModel) && !getIsTradingProModel(selectedModel)) setActivePersonaId(null);
     setError(null);
     setIsSidebarOpen(false);
     addNotification("Started new chat.", "info");
@@ -1481,8 +1483,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   }, [addNotification, pruneChatSessions]);
 
   const handleSaveChatToDevice = useCallback(() => {
-    if (isRealTimeTranslationMode || isAiAgentSmartMode || isPrivateModeSelected || getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsKlingVideoModel(selectedModel) || getIsTradingProModel(selectedModel)) {
-      addNotification(`Cannot save chat to device in ${getIsTradingProModel(selectedModel) ? 'Trading Pro' : (isRealTimeTranslationMode ? 'Real-Time Translation' : (isAiAgentSmartMode ? 'AI Agent Smart' : (isPrivateModeSelected ? 'Private' : (getIsFluxKontexModel(selectedModel) ? 'Image Editing' : (getIsFluxDevModel(selectedModel) ? 'Flux Dev Image Gen' : 'Kling Video Gen')))))} mode.`, "info");
+    if (isRealTimeTranslationMode || isAiAgentSmartMode || isPrivateModeSelected || getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsFalVideoModel(selectedModel) || getIsTradingProModel(selectedModel)) {
+      addNotification(`Cannot save chat to device in ${getIsTradingProModel(selectedModel) ? 'Trading Pro' : (isRealTimeTranslationMode ? 'Real-Time Translation' : (isAiAgentSmartMode ? 'AI Agent Smart' : (isPrivateModeSelected ? 'Private' : (getIsFluxKontexModel(selectedModel) ? 'Image Editing' : (getIsFluxDevModel(selectedModel) ? 'Flux Dev Image Gen' : 'Video Gen')))))} mode.`, "info");
       return;
     }
     if (messages.length === 0) {
@@ -1566,7 +1568,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             if (!sessionToLoad.messages || !sessionToLoad.model || !sessionToLoad.modelSettingsSnapshot || !sessionToLoad.name || !sessionToLoad.timestamp) {
                 throw new Error("File is not a valid chat session format. Missing required fields.");
             }
-            if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT_SMART || sessionToLoad.model === Model.PRIVATE || getIsFluxKontexModel(sessionToLoad.model) || getIsFluxDevModel(sessionToLoad.model) || getIsKlingVideoModel(sessionToLoad.model) || getIsTradingProModel(sessionToLoad.model)) {
+            if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT_SMART || sessionToLoad.model === Model.PRIVATE || getIsFluxKontexModel(sessionToLoad.model) || getIsFluxDevModel(sessionToLoad.model) || getIsFalVideoModel(sessionToLoad.model) || getIsTradingProModel(sessionToLoad.model)) {
                 addNotification(`Cannot load "${sessionToLoad.model}" sessions from file.`, "info");
                 return;
             }
@@ -1765,7 +1767,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       pollCount++;
       if (pollCount > MAX_TOTAL_POLLS) {
         if (intervalId) clearInterval(intervalId);
-        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Image processing timed out for: "${userPrompt}". Please try again.`, isRegenerating: false, fluxRequestId: undefined } : msg));
+        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Image processing timed out for: "${userPrompt}". Please try again.`, isRegenerating: false, falRequestId: undefined } : msg));
         addNotification("Fal.ai image processing timed out.", "error");
         setIsLoading(false);
         return;
@@ -1786,12 +1788,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
               imageMimeType: 'image/png',
               originalPrompt: userPrompt,
               isRegenerating: false,
-              fluxRequestId: undefined,
+              falRequestId: undefined,
               timestamp: msg.timestamp || Date.now()
             } : msg));
             addNotification("Image processing successful!", "success");
           } else {
-            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Image processing completed, but no image was returned. Prompt: "${userPrompt}"`, isRegenerating: false, fluxRequestId: undefined } : msg));
+            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Image processing completed, but no image was returned. Prompt: "${userPrompt}"`, isRegenerating: false, falRequestId: undefined } : msg));
             addNotification("Fal.ai: Processing completed, but no image was returned by the API.", "info", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0, 200) : undefined);
           }
           setIsLoading(false);
@@ -1804,7 +1806,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           if (notFoundCount > MAX_NOT_FOUND_POLLS) {
             if (intervalId) clearInterval(intervalId);
             const errorMessage = statusResult.error || `Request ID ${requestId} not found after several attempts.`;
-            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error processing image: ${errorMessage}. Prompt: "${userPrompt}"`, isRegenerating: false, fluxRequestId: undefined } : msg));
+            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error processing image: ${errorMessage}. Prompt: "${userPrompt}"`, isRegenerating: false, falRequestId: undefined } : msg));
             addNotification(`Fal.ai Error: ${errorMessage}`, "error", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0,200) : undefined);
             setIsLoading(false);
             return;
@@ -1813,13 +1815,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         } else {
           if (intervalId) clearInterval(intervalId);
           const errorMessage = statusResult.error || "Unknown error during image processing.";
-          setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error processing image: ${errorMessage}. Prompt: "${userPrompt}"`, isRegenerating: false, fluxRequestId: undefined } : msg));
+          setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error processing image: ${errorMessage}. Prompt: "${userPrompt}"`, isRegenerating: false, falRequestId: undefined } : msg));
           addNotification(`Fal.ai Error: ${errorMessage}`, "error", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0,200) : undefined);
           setIsLoading(false);
         }
       } catch (pollingError: any) {
         if (intervalId) clearInterval(intervalId);
-        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error checking image processing status: ${pollingError.message}. Prompt: "${userPrompt}"`, isRegenerating: false, fluxRequestId: undefined } : msg));
+        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error checking image processing status: ${pollingError.message}. Prompt: "${userPrompt}"`, isRegenerating: false, falRequestId: undefined } : msg));
         addNotification(`Polling Error: ${pollingError.message}`, "error");
         setIsLoading(false);
       }
@@ -1829,7 +1831,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     intervalId = window.setInterval(performPoll, POLL_INTERVAL);
   }, [addNotification, setMessages, setIsLoading]);
 
-   const pollKlingVideoStatus = useCallback(async (requestId: string, aiMessageId: string, userPrompt: string, falModelIdForPolling: string) => {
+   const pollFalVideoStatus = useCallback(async (requestId: string, aiMessageId: string, userPrompt: string, falModelIdForPolling: string, modelNameForDisplay: string) => {
     const MAX_TOTAL_POLLS_VIDEO = 60;
     const POLL_INTERVAL_VIDEO = 5000;
     const MAX_NOT_FOUND_POLLS_VIDEO = 15;
@@ -1842,8 +1844,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       pollCount++;
       if (pollCount > MAX_TOTAL_POLLS_VIDEO) {
         if (intervalId) clearInterval(intervalId);
-        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Video processing timed out for: "${userPrompt}". Please try again.`, isRegenerating: false, klingVideoRequestId: undefined } : msg));
-        addNotification("Kling AI video processing timed out.", "error");
+        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Video processing timed out for: "${userPrompt}". Please try again.`, isRegenerating: false, falRequestId: undefined } : msg));
+        addNotification(`${modelNameForDisplay} video processing timed out.`, "error");
         setIsLoading(false);
         return;
       }
@@ -1861,13 +1863,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
               videoMimeType: 'video/mp4',
               originalPrompt: userPrompt,
               isRegenerating: false,
-              klingVideoRequestId: undefined,
+              falRequestId: undefined,
               timestamp: msg.timestamp || Date.now()
             } : msg));
-            addNotification("Kling AI video processing successful!", "success");
+            addNotification(`${modelNameForDisplay} video processing successful!`, "success");
           } else {
-            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Video processing completed, but no video was returned. Prompt: "${userPrompt}"`, isRegenerating: false, klingVideoRequestId: undefined } : msg));
-            addNotification("Kling AI: Processing completed, but no video was returned by the API.", "info", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0, 200) : undefined);
+            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Video processing completed, but no video was returned. Prompt: "${userPrompt}"`, isRegenerating: false, falRequestId: undefined } : msg));
+            addNotification(`${modelNameForDisplay}: Processing completed, but no video was returned.`, "info", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0, 200) : undefined);
           }
           setIsLoading(false);
           return;
@@ -1879,8 +1881,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           if (notFoundCount > MAX_NOT_FOUND_POLLS_VIDEO) {
             if (intervalId) clearInterval(intervalId);
             const errorMessage = statusResult.error || `Request ID ${requestId} not found after several attempts.`;
-            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error processing video: ${errorMessage}. Prompt: "${userPrompt}"`, isRegenerating: false, klingVideoRequestId: undefined } : msg));
-            addNotification(`Kling AI Error: ${errorMessage}`, "error", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0,200) : undefined);
+            setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error processing video: ${errorMessage}. Prompt: "${userPrompt}"`, isRegenerating: false, falRequestId: undefined } : msg));
+            addNotification(`${modelNameForDisplay} Error: ${errorMessage}`, "error", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0,200) : undefined);
             setIsLoading(false);
             return;
           }
@@ -1888,14 +1890,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         } else {
           if (intervalId) clearInterval(intervalId);
           const errorMessage = statusResult.error || "Unknown error during video processing.";
-          setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error processing video: ${errorMessage}. Prompt: "${userPrompt}"`, isRegenerating: false, klingVideoRequestId: undefined } : msg));
-          addNotification(`Kling AI Error: ${errorMessage}`, "error", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0,200) : undefined);
+          setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error processing video: ${errorMessage}. Prompt: "${userPrompt}"`, isRegenerating: false, falRequestId: undefined } : msg));
+          addNotification(`${modelNameForDisplay} Error: ${errorMessage}`, "error", statusResult.rawResult ? JSON.stringify(statusResult.rawResult).substring(0,200) : undefined);
           setIsLoading(false);
         }
       } catch (pollingError: any) {
         if (intervalId) clearInterval(intervalId);
-        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error checking video processing status: ${pollingError.message}. Prompt: "${userPrompt}"`, isRegenerating: false, klingVideoRequestId: undefined } : msg));
-        addNotification(`Kling Polling Error: ${pollingError.message}`, "error");
+        setMessages(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: `Error checking video processing status: ${pollingError.message}. Prompt: "${userPrompt}"`, isRegenerating: false, falRequestId: undefined } : msg));
+        addNotification(`${modelNameForDisplay} Polling Error: ${pollingError.message}`, "error");
         setIsLoading(false);
       }
     };
@@ -1934,7 +1936,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         selectedModel === Model.AI_AGENT_SMART ||
         selectedModel === Model.PRIVATE ||
         selectedModel === Model.FLUX_KONTEX ||
-        selectedModel === Model.KLING_VIDEO ||
+        getIsFalVideoModel(selectedModel) ||
         selectedModel === Model.TRADING_PRO; // Trading Pro now can have a user-uploaded image preview
 
     const newUserMessage: ChatMessage = {
@@ -1947,7 +1949,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         imageMimeTypes: (selectedModel === Model.FLUX_KONTEX_MAX_MULTI || getIsFluxDevModel(selectedModel)) ? currentUploadedImageFiles.map(f => f.type) : undefined,
         fileName: (selectedModel !== Model.AI_AGENT_SMART && currentUploadedTextFileName) ? currentUploadedTextFileName : undefined,
         isImageQuery: isImagenModelSelected || getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel) || isAiAgentSmartMode || getIsTradingProModel(selectedModel),
-        isVideoQuery: getIsKlingVideoModel(selectedModel),
+        isVideoQuery: getIsFalVideoModel(selectedModel),
         isTaskGoal: isAiAgentSmartMode,
         isNote: isPrivateModeSelected && (currentUploadedImagePreviews.length === 0 && !currentUploadedTextFileName),
         model: isPrivateModeSelected ? Model.PRIVATE : undefined,
@@ -1959,24 +1961,16 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
     const aiMessageTimestamp = Date.now();
     const aiMessageId = isRegenerationOfAiMsgId || (aiMessageTimestamp + 1).toString();
-    const actualModelIdentifierForFal = (getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsKlingVideoModel(selectedModel)) ? getActualModelIdentifier(selectedModel) : undefined;
+    const actualModelIdentifierForFal = (getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsFalVideoModel(selectedModel)) ? getActualModelIdentifier(selectedModel) : undefined;
     const isAdmin = !userSession.isDemoUser && !userSession.isPaidUser;
+    const newModel = selectedModel; // Capture current selectedModel for use in this function scope.
 
-    if (selectedModel === Model.FLUX_KONTEX_MAX_MULTI && !userSession.isPaidUser && !isAdmin) {
-        addNotification("Flux Kontext Max is for Paid Users or Admin only.", "error");
-        setIsLoading(false);
-        return;
-    }
-    if (getIsFluxDevModel(selectedModel) && !userSession.isPaidUser && !isAdmin) {
-        addNotification("Flux Dev is for Paid Users or Admin only.", "error");
-        setIsLoading(false);
-        return;
-    }
-    if (getIsKlingVideoModel(selectedModel) && !userSession.isPaidUser && !isAdmin) {
-      addNotification("Kling AI Video generation is only available for Paid Users or Admin.", "error");
+    if ((newModel === Model.FLUX_KONTEX_MAX_MULTI || newModel === Model.FLUX_ULTRA || getIsFalVideoModel(newModel)) && !userSession.isPaidUser && !isAdmin) {
+      addNotification(`${selectedModel} is for Paid Users or Admin only.`, "error");
       setIsLoading(false);
       return;
     }
+
     if (getIsTradingProModel(selectedModel)) {
       // This case should be handled by onAnalyzeTradingProClick, not general sendMessage
       // For safety, if somehow called:
@@ -1991,7 +1985,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         if (isImagenModelSelected) aiPlaceholderText = 'Generating image(s)...';
         else if (getIsFluxKontexModel(selectedModel)) aiPlaceholderText = 'Submitting image for editing...';
         else if (getIsFluxDevModel(selectedModel)) aiPlaceholderText = 'Generating image (Flux Dev)...';
-        else if (getIsKlingVideoModel(selectedModel)) aiPlaceholderText = 'Submitting video request...';
+        else if (getIsFalVideoModel(selectedModel)) {
+            const settings = currentModelSettings as WanI2vSettings | KlingAiSettingsWithLoras;
+            if ('loras' in settings && settings.loras && settings.loras.length > 0 && settings.loras[0].path) {
+                aiPlaceholderText = 'Yêu cầu đã được gửi. Đang chuẩn bị mô hình và tải LoRA (việc này có thể mất một lúc)...';
+            } else {
+                aiPlaceholderText = 'Request sent. Preparing model for video generation...';
+            }
+        }
         else if (isTextToSpeechModelSelected) aiPlaceholderText = 'Synthesizing audio...';
         else if (isAiAgentSmartMode) aiPlaceholderText = 'AI Agent Smart is processing...';
         else if (isPrivateModeSelected) aiPlaceholderText = 'Data logged locally. No AI response.';
@@ -2009,7 +2010,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         promptedByMessageId: userMessageId,
         isTaskPlan: isAiAgentSmartMode,
         originalPrompt: userDisplayedText,
-        fluxModelId: (getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsKlingVideoModel(selectedModel)) ? actualModelIdentifierForFal : undefined,
+        fluxModelId: (getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsFalVideoModel(selectedModel)) ? actualModelIdentifierForFal : undefined,
     };
 
     if (isPrivateModeSelected) {
@@ -2036,66 +2037,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     } else if (userSession.isDemoUser && userSession.demoUserToken) {
         requestHeaders['X-Demo-Token'] = userSession.demoUserToken;
     }
-
-    if (userSession.isDemoUser && !isAdmin) {
-        const limits = userSession.demoLimits;
-        let limitExceeded = false;
-        let notificationMessage = "";
-
-        if (getIsFluxKontexModel(selectedModel)) {
-            const isMax = selectedModel === Model.FLUX_KONTEX_MAX_MULTI;
-            const usesLeft = isMax ? limits?.fluxKontextMaxMonthlyUsesLeft : limits?.fluxKontextProMonthlyUsesLeft;
-            if (!limits || usesLeft === undefined || usesLeft <= 0) {
-                limitExceeded = true;
-                notificationMessage = `Đã hết lượt dùng thử ${isMax ? 'Flux Kontext Max' : 'Flux Kontext Pro'}. Vui lòng liên hệ admin.`;
-            }
-        } else if (getIsFluxDevModel(selectedModel)) {
-            limitExceeded = true;
-            notificationMessage = "Flux Dev is for Paid Users or Admin only. DEMO users cannot use this model.";
-        } else if (getIsKlingVideoModel(selectedModel)) {
-            limitExceeded = true;
-            notificationMessage = "Kling AI Video is for Paid Users or Admin only. DEMO users cannot use this model.";
-        } else if (isImagenModelSelected) {
-            const imagenSettings = currentModelSettings as ImagenSettings;
-            const numImagesToGen = imagenSettings.numberOfImages || 1;
-            if (!limits || limits.imagen3MonthlyImagesLeft < numImagesToGen) {
-                limitExceeded = true;
-                notificationMessage = `Not enough Imagen3 demo uses left. Need ${numImagesToGen}, have ${limits?.imagen3MonthlyImagesLeft || 0}.`;
-            }
-        } else if (isTextToSpeechModelSelected) {
-            if (!limits || currentInputText.length > limits.openaiTtsMonthlyCharsLeft) {
-                 limitExceeded = true;
-                 notificationMessage = `OpenAI TTS character limit exceeded for DEMO. Need ${currentInputText.length}, have ${limits?.openaiTtsMonthlyCharsLeft || 0} left.`;
-            }
-        }
-        if (limitExceeded) {
-            addNotification(notificationMessage, "error");
-            setIsLoading(false);
-            setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
-            return;
-        }
-    }
-
-    if (userSession.isPaidUser && userSession.paidLimits && !isAdmin) {
-        if (getIsFluxDevModel(selectedModel)) {
-            const fluxDevSettings = currentModelSettings as FluxDevSettings;
-            const numImagesToGenFluxDev = fluxDevSettings.num_images || 1;
-            if (userSession.paidLimits.fluxDevMonthlyImagesLeft < numImagesToGenFluxDev) {
-                addNotification(`Not enough Flux Dev paid uses left. Need ${numImagesToGenFluxDev}, have ${userSession.paidLimits.fluxDevMonthlyImagesLeft}.`, "error");
-                setIsLoading(false);
-                setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
-                return;
-            }
-        } else if (getIsKlingVideoModel(selectedModel)) {
-            if ((userSession.paidLimits.klingVideoMonthlyUsed || 0) >= (userSession.paidLimits.klingVideoMonthlyMaxGenerations || PAID_USER_LIMITS_CONFIG.klingVideoMonthlyMaxGenerations || 1)) {
-                 addNotification(`Monthly Kling AI Video generation limit reached. Max ${userSession.paidLimits.klingVideoMonthlyMaxGenerations || PAID_USER_LIMITS_CONFIG.klingVideoMonthlyMaxGenerations || 1} per month.`, "error");
-                 setIsLoading(false);
-                 setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
-                 return;
-            }
-        }
-    }
-
 
     try {
       const currentModelSpecificSettingsForApiCall: AnyModelSettings = currentModelSettings;
@@ -2178,7 +2119,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
           if (fluxResult.requestId) {
             setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? {
-                ...msg, text: fluxResult.message || `Image editing submitted (ID: ${fluxResult.requestId}). Waiting for results...`, fluxRequestId: fluxResult.requestId, isRegenerating: false, timestamp: msg.timestamp || Date.now(), fluxModelId: actualModelIdentifier
+                ...msg, text: fluxResult.message || `Image editing submitted (ID: ${fluxResult.requestId}). Waiting for results...`, falRequestId: fluxResult.requestId, isRegenerating: false, timestamp: msg.timestamp || Date.now(), fluxModelId: actualModelIdentifier
             } : msg));
             pollFalStatus(fluxResult.requestId, aiMessageId, userDisplayedText, actualModelIdentifier);
             if (userSession.isDemoUser && !isAdmin && userSession.demoLimits) {
@@ -2209,7 +2150,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
             if (fluxDevResult.requestId) {
                 setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? {
-                    ...msg, text: fluxDevResult.message || `Flux Dev image generation submitted (ID: ${fluxDevResult.requestId}). Waiting for results...`, fluxRequestId: fluxDevResult.requestId, isRegenerating: false, timestamp: msg.timestamp || Date.now(), fluxModelId: actualModelIdentifier
+                    ...msg, text: fluxDevResult.message || `Flux Dev image generation submitted (ID: ${fluxDevResult.requestId}). Waiting for results...`, falRequestId: fluxDevResult.requestId, isRegenerating: false, timestamp: msg.timestamp || Date.now(), fluxModelId: actualModelIdentifier
                 } : msg));
                 pollFalStatus(fluxDevResult.requestId, aiMessageId, userDisplayedText, actualModelIdentifier);
                 if (userSession.isPaidUser && !isAdmin && userSession.paidLimits) {
@@ -2217,43 +2158,52 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                     onUpdateDemoLimits({ fluxDevMonthlyImagesLeft: (userSession.paidLimits?.fluxDevMonthlyImagesLeft || 0) - numImages });
                 }
             } else { throw new Error(fluxDevResult.error || "Flux Dev submission failed (no request ID)."); }
-      } else if (currentModelStatus?.isKlingVideoGeneration && !currentModelStatus.isMock) {
+      } else if (getIsFalVideoModel(selectedModel) && !currentModelStatus.isMock) {
           if (currentUploadedImageFiles.length === 0 || currentUploadedImagePreviews.length === 0) {
-            throw new Error("Kling AI video generation requires an image to be uploaded.");
+            throw new Error(`${selectedModel} requires an image to be uploaded.`);
           }
           const [header, base64DataOnly] = currentUploadedImagePreviews[0].split(',');
           if (!base64DataOnly || !/^[A-Za-z0-9+/=]+$/.test(base64DataOnly)) {
-            throw new Error("Invalid image data provided for Kling AI.");
+            throw new Error(`Invalid image data provided for ${selectedModel}.`);
           }
           const mimeTypeMatch = header?.match(/data:(image\/[a-zA-Z0-9-.+]+);base64/);
-          const klingImageData: SingleImageData = {
+          const videoImageData: SingleImageData = {
               image_base_64: base64DataOnly,
               image_mime_type: (mimeTypeMatch ? mimeTypeMatch[1] : (currentUploadedImageFiles[0]?.type || 'image/png')) as 'image/jpeg' | 'image/png'
           };
+          
+          let falResult;
 
-          const klingApiSettings: KlingAiSettings = { ...(currentModelSpecificSettingsForApiCall as KlingAiSettings) };
+          if(getIsKlingVideoModel(selectedModel)){
+             const klingApiSettings: KlingAiSettings = { ...(currentModelSpecificSettingsForApiCall as KlingAiSettings) };
+             const klingParams: GenerateVideoWithKlingParams = {
+                modelIdentifier: actualModelIdentifier, prompt: textForApi, settings: klingApiSettings, imageData: videoImageData, requestHeaders, userSession,
+             };
+             falResult = await generateVideoWithKlingProxy(klingParams);
+          } else { // WanI2V
+             const wanI2vApiSettings: WanI2vSettings = { ...(currentModelSpecificSettingsForApiCall as WanI2vSettings) };
+             const wanI2vParams: GenerateVideoWithWanI2vParams = {
+                modelIdentifier: actualModelIdentifier, prompt: textForApi, settings: wanI2vApiSettings, imageData: videoImageData, requestHeaders, userSession,
+             };
+             falResult = await generateVideoWithWanI2vProxy(wanI2vParams);
+          }
+          
+          if (falResult.error) throw new Error(falResult.error);
 
-          const klingParams: GenerateVideoWithKlingParams = {
-              modelIdentifier: actualModelIdentifier,
-              prompt: textForApi,
-              settings: klingApiSettings,
-              imageData: klingImageData,
-              requestHeaders: requestHeaders,
-              userSession: userSession,
-          };
-          const klingResult = await generateVideoWithKlingProxy(klingParams);
-          if (klingResult.error) throw new Error(klingResult.error);
-
-          if (klingResult.requestId) {
+          if (falResult.requestId) {
               setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? {
-                  ...msg, text: klingResult.message || `Kling AI video request submitted (ID: ${klingResult.requestId}). Waiting for results...`, klingVideoRequestId: klingResult.requestId, isRegenerating: false, timestamp: msg.timestamp || Date.now(), fluxModelId: actualModelIdentifier
+                  ...msg, text: falResult.message || `${selectedModel} request submitted (ID: ${falResult.requestId}). Waiting...`, falRequestId: falResult.requestId, isRegenerating: false, timestamp: msg.timestamp || Date.now(), fluxModelId: actualModelIdentifier
               } : msg));
-              pollKlingVideoStatus(klingResult.requestId, aiMessageId, userDisplayedText, actualModelIdentifier);
+              pollFalVideoStatus(falResult.requestId, aiMessageId, userDisplayedText, actualModelIdentifier, selectedModel);
 
               if (userSession.isPaidUser && !isAdmin && userSession.paidLimits) {
-                  onUpdateDemoLimits({ klingVideoMonthlyUsed: (userSession.paidLimits.klingVideoMonthlyUsed || 0) + 1 });
+                 if(getIsKlingVideoModel(selectedModel)) {
+                    onUpdateDemoLimits({ klingVideoMonthlyUsed: (userSession.paidLimits.klingVideoMonthlyUsed || 0) + 1 });
+                 } else if (getIsWanI2vVideoModel(selectedModel)) {
+                    onUpdateDemoLimits({ wanI2vMonthlyUsed: (userSession.paidLimits.wanI2vMonthlyUsed || 0) + 1 });
+                 }
               }
-          } else { throw new Error(klingResult.error || "Kling AI video submission failed (no request ID)."); }
+          } else { throw new Error(`${selectedModel} video submission failed (no request ID).`); }
       } else if (isImagenModelSelected && !currentModelStatus.isMock) {
           const imagenBody = { prompt: userDisplayedText, modelSettings: currentModelSpecificSettingsForApiCall as ImagenSettings, modelName: actualModelIdentifier };
           const imagenFetchResponse = await fetch('/api/gemini/image/generate', {
@@ -2369,7 +2319,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           if (chunk.isFinished) break;
         }
 
-      } else if (currentModelStatus?.isMock && !isRealTimeTranslationMode && !isAiAgentSmartMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsKlingVideoModel(selectedModel)) {
+      } else if (currentModelStatus?.isMock && !isRealTimeTranslationMode && !isAiAgentSmartMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsFalVideoModel(selectedModel)) {
         const mockParts: Part[] = [];
         if (textForApi.trim()) mockParts.push({ text: textForApi.trim() });
 
@@ -2382,7 +2332,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           currentText += chunk;
           setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? { ...msg, text: currentText, isRegenerating: false } : msg));
         }
-      } else if (!isRealTimeTranslationMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsKlingVideoModel(selectedModel)) {
+      } else if (!isRealTimeTranslationMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsFalVideoModel(selectedModel)) {
           throw new Error(`API integration for ${selectedModel} is not implemented or API key/Vertex config is missing and it's not a mock model.`);
       }
     } catch (e: any) {
@@ -2397,16 +2347,16 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       }]);
     }
 
-    if (!(getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsKlingVideoModel(selectedModel)) ||
-        ((getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel)) && !messages.find(m => m.id === aiMessageId)?.fluxRequestId) ||
-        (getIsKlingVideoModel(selectedModel) && !messages.find(m => m.id === aiMessageId)?.klingVideoRequestId)) {
+    if (!(getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsFalVideoModel(selectedModel)) ||
+        ((getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel)) && !messages.find(m => m.id === aiMessageId)?.falRequestId) ||
+        (getIsFalVideoModel(selectedModel) && !messages.find(m => m.id === aiMessageId)?.falRequestId)) {
       setIsLoading(false);
     }
 
 
     if (!isRegenerationOfAiMsgId && !isRealTimeTranslationMode && !isPrivateModeSelected) {
         setInput('');
-        if (!getIsFluxKontexModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsKlingVideoModel(selectedModel) && !getIsTradingProModel(selectedModel)) { // Don't clear for trading pro image
+        if (!getIsFluxKontexModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsFalVideoModel(selectedModel) && !getIsTradingProModel(selectedModel)) { // Don't clear for trading pro image
             setUploadedImages([]);
             setImagePreviews([]);
         }
@@ -2600,15 +2550,15 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             return;
         }
     }
-     if (getIsKlingVideoModel(selectedModel)) {
+     if (getIsFalVideoModel(selectedModel)) {
         if (uploadedImages.length === 0) {
             setError("Please upload an image for video generation.");
-            addNotification("Please upload an image for Kling AI video generation.", "info");
+            addNotification("Please upload an image for video generation.", "info");
             return;
         }
         if (!input.trim()) {
             setError("Please enter a prompt for video generation.");
-            addNotification("Please enter a prompt for Kling AI video generation.", "info");
+            addNotification("Please enter a prompt for video generation.", "info");
             return;
         }
     }
@@ -2632,7 +2582,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         addNotification("Please enter text, or upload an image/file to log in Private Mode.", "info");
         return;
     }
-    if (!isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentSmartMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsKlingVideoModel(selectedModel) && !input.trim() && uploadedImages.length === 0 && !uploadedTextFileName) {
+    if (!isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentSmartMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsFalVideoModel(selectedModel) && !input.trim() && uploadedImages.length === 0 && !uploadedTextFileName) {
         return;
     }
 
@@ -2643,7 +2593,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   };
 
   const handleRegenerateResponse = async (aiMessageIdToRegenerate: string, promptedByMsgId: string) => {
-      if (getIsTradingProModel(selectedModel) || isRealTimeTranslationMode || isAiAgentSmartMode || isPrivateModeSelected || getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsKlingVideoModel(selectedModel)) return;
+      if (getIsTradingProModel(selectedModel) || isRealTimeTranslationMode || isAiAgentSmartMode || isPrivateModeSelected || getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsFalVideoModel(selectedModel)) return;
       const userMessageForRegen = messages.find(m => m.id === promptedByMsgId && m.sender === 'user');
       const aiMessageToRegen = messages.find(m => m.id === aiMessageIdToRegenerate && m.sender === 'ai');
 
@@ -2691,7 +2641,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   const imageUploadLimit = useMemo(() => {
     if (selectedModel === Model.FLUX_KONTEX_MAX_MULTI) return 4;
     if (
-        getIsKlingVideoModel(selectedModel) ||
+        getIsFalVideoModel(selectedModel) ||
         selectedModel === Model.FLUX_KONTEX ||
         selectedModel === Model.GEMINI ||
         selectedModel === Model.GEMINI_ADVANCED ||
@@ -2712,13 +2662,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         return;
     }
     
-    if (getIsKlingVideoModel(selectedModel) || getIsTradingProModel(selectedModel)) {
+    if (getIsFalVideoModel(selectedModel) || getIsTradingProModel(selectedModel)) {
         if (newFiles.length > 0) {
             const firstFile = newFiles[0];
             const reader = new FileReader();
             reader.onloadend = () => {
                 const base64Preview = reader.result as string;
-                if (getIsKlingVideoModel(selectedModel)) {
+                if (getIsFalVideoModel(selectedModel)) {
                     setUploadedImages([firstFile]); // Still store the file for Kling
                     setImagePreviews([base64Preview]); // Generic preview
                 } else if (getIsTradingProModel(selectedModel)) {
@@ -2731,14 +2681,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             reader.onerror = (error) => {
                 console.error("Error reading image file for preview:", error);
                 addNotification("Error creating image preview.", "error");
-                if (getIsKlingVideoModel(selectedModel)) setImagePreviews([]);
+                if (getIsFalVideoModel(selectedModel)) setImagePreviews([]);
                 else if (getIsTradingProModel(selectedModel)) setTradingProState(prev => ({...prev, chartImageUrl: null}));
             };
             reader.readAsDataURL(firstFile);
             setUploadedTextFileContent(null);
             setUploadedTextFileName(null);
         } else {
-            if (getIsKlingVideoModel(selectedModel)) {
+            if (getIsFalVideoModel(selectedModel)) {
                  setUploadedImages([]);
                  setImagePreviews([]);
             } else if (getIsTradingProModel(selectedModel)) {
@@ -2862,7 +2812,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         addNotification(`This model only supports direct image uploads.`, "info");
         return;
     }
-    if (isImagenModelSelected || getIsFluxKontexModel(selectedModel) || isClaudeModelSelected || getIsFluxDevModel(selectedModel) || getIsKlingVideoModel(selectedModel)) return;
+    if (isImagenModelSelected || getIsFluxKontexModel(selectedModel) || isClaudeModelSelected || getIsFluxDevModel(selectedModel) || getIsFalVideoModel(selectedModel)) return;
 
     setUploadedImages([]);
     setImagePreviews([]);
@@ -3032,7 +2982,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
   const showMicrophoneButton = useMemo(() => {
     if (!isSpeechRecognitionSupported) return false;
-    if (isTextToSpeechModelSelected || isImagenModelSelected || isClaudeModelSelected || getIsFluxDevModel(selectedModel) || getIsKlingVideoModel(selectedModel) || getIsTradingProModel(selectedModel)) return false;
+    if (isTextToSpeechModelSelected || isImagenModelSelected || isClaudeModelSelected || getIsFluxDevModel(selectedModel) || getIsFalVideoModel(selectedModel) || getIsTradingProModel(selectedModel)) return false;
     return true;
   }, [isSpeechRecognitionSupported, selectedModel, isTextToSpeechModelSelected, isImagenModelSelected, isClaudeModelSelected]);
 
@@ -3040,7 +2990,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     // This button shows for any model that primarily consumes an image.
     return (
         getIsFluxKontexModel(selectedModel) ||
-        getIsKlingVideoModel(selectedModel) ||
+        getIsFalVideoModel(selectedModel) ||
         getIsTradingProModel(selectedModel) ||
         // General purpose models that support vision
         selectedModel === Model.GEMINI ||
@@ -3072,7 +3022,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     if (isImagenModelSelected) return "Enter prompt for image generation...";
     if (getIsFluxKontexModel(selectedModel)) return "Enter prompt to edit uploaded image...";
     if (getIsFluxDevModel(selectedModel)) return "Enter prompt for Flux Dev image generation...";
-    if (getIsKlingVideoModel(selectedModel)) return "Enter prompt for video generation (image required)...";
+    if (getIsFalVideoModel(selectedModel)) return "Enter prompt for video generation (image required)...";
     if (isTextToSpeechModelSelected) return "Type text to synthesize, or upload a .txt file...";
     if (isRealTimeTranslationMode) return "Real-Time Translation Active. Use Microphone or upload file.";
     if (isAiAgentSmartMode) return "Enter goal for AI Agent Smart, or upload image...";
@@ -3083,7 +3033,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
     let placeholder = "Type your message";
     
-    const canUploadImage = showImageUploadInChatBar || getIsKlingVideoModel(selectedModel) || isAiAgentSmartMode || getIsTradingProModel(selectedModel);
+    const canUploadImage = showImageUploadInChatBar || getIsFalVideoModel(selectedModel) || isAiAgentSmartMode || getIsTradingProModel(selectedModel);
     const canUploadFile = showFileUploadInChatBar; 
 
     if (uploadedImages.length === 0 && imagePreviews.length === 0 && !uploadedTextFileName && !tradingProState.chartImageUrl) {
@@ -3101,7 +3051,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
   const sendButtonLabel = () => {
     if (isImagenModelSelected || getIsFluxDevModel(selectedModel)) return "Generate Image";
-    if (getIsKlingVideoModel(selectedModel)) return "Generate Video";
+    if (getIsFalVideoModel(selectedModel)) return "Generate Video";
     if (getIsFluxKontexModel(selectedModel)) return "Edit Image";
     if (isTextToSpeechModelSelected) return "Synthesize Speech";
     if (isAiAgentSmartMode) return "Set Goal";
@@ -3112,7 +3062,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
   const sendButtonIcon = () => {
     if (isImagenModelSelected || getIsFluxDevModel(selectedModel)) return <PromptIcon className="w-6 h-6" />;
-    if (getIsKlingVideoModel(selectedModel)) return <FilmIcon className="w-6 h-6" />;
+    if (getIsFalVideoModel(selectedModel)) return <FilmIcon className="w-6 h-6" />;
     if (getIsFluxKontexModel(selectedModel)) return <EditIcon className="w-6 h-6" />;
     if (isTextToSpeechModelSelected) return <SpeakerWaveIcon className="w-6 h-6" />;
     if (getIsTradingProModel(selectedModel)) return <PresentationChartLineIcon className="w-6 h-6" />;
@@ -3317,7 +3267,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   };
 
   const showGenericAttachmentPreview = useMemo(() => {
-    if (getIsKlingVideoModel(selectedModel) && imagePreviews.length > 0) {
+    if (getIsFalVideoModel(selectedModel) && imagePreviews.length > 0) {
         return true;
     }
     if (isTextToSpeechModelSelected || isRealTimeTranslationMode || isImagenModelSelected || isClaudeModelSelected || getIsFluxDevModel(selectedModel) || getIsTradingProModel(selectedModel)) {
@@ -3682,7 +3632,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                 onClick={
                   getIsTradingProModel(selectedModel) && tradingProState.chartImageUrl
                     ? () => handleRemoveUploadedImage(0)
-                    : () => document.getElementById(getIsKlingVideoModel(selectedModel) ? 'image-upload-chatbar-kling' : 'image-upload-chatbar')?.click()
+                    : () => document.getElementById(getIsFalVideoModel(selectedModel) ? 'image-upload-chatbar-kling' : 'image-upload-chatbar')?.click()
                 }
                 disabled={
                   generalChatBarInteractionDisabled ||
@@ -3692,7 +3642,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                   )
                 }
                 className={`p-2.5 rounded-full transition-colors flex-shrink-0 mr-2
-                            ${getIsKlingVideoModel(selectedModel) ? 'bg-accent dark:bg-accent-light hover:bg-accent-dark text-white' : 
+                            ${getIsFalVideoModel(selectedModel) ? 'bg-accent dark:bg-accent-light hover:bg-accent-dark text-white' : 
                              (getIsTradingProModel(selectedModel) && tradingProState.chartImageUrl ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-secondary dark:bg-neutral-darkest hover:bg-secondary-dark dark:hover:bg-neutral-dark text-neutral-darker dark:text-secondary-light')}
                             disabled:opacity-50`}
                 aria-label={getIsTradingProModel(selectedModel) && tradingProState.chartImageUrl ? "Clear Uploaded Chart" : "Upload image"}
