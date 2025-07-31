@@ -1,4 +1,5 @@
-import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank, AiAgentSmartSettings, CreditPackage, PrivateModeSettings, FluxKontexSettings, FluxKontexAspectRatio, DemoUserLimits, PaidUserLimits, FluxDevSettings, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, ModelSpecificSettingsMap, TradingProSettings, TradingPair, FluxDevImageSize } from './types.ts';
+
+import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank, AiAgentSmartSettings, CreditPackage, PrivateModeSettings, FluxKontexSettings, FluxKontexAspectRatio, DemoUserLimits, PaidUserLimits, FluxDevSettings, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, ModelSpecificSettingsMap, TradingProSettings, TradingPair, FluxDevImageSize, WanI2vSettings, WanI2vResolution, WanI2vAspectRatio } from './types.ts';
 
 export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
   temperature: 0.7,
@@ -134,6 +135,24 @@ export const DEFAULT_KLING_AI_SETTINGS: KlingAiSettings = {
   cfg_scale: 0.5,
 };
 
+export const DEFAULT_WAN_I2V_SETTINGS: WanI2vSettings = {
+  negative_prompt: "bright colors, overexposed, static, blurred details, subtitles, style, artwork, painting, picture, still, overall gray, worst quality, low quality, JPEG compression residue, ugly, incomplete, extra fingers, poorly drawn hands, poorly drawn faces, deformed, disfigured, malformed limbs, fused fingers, still picture, cluttered background, three legs, many people in the background, walking backwards",
+  num_frames: 81,
+  frames_per_second: 16,
+  seed: null,
+  resolution: "720p",
+  num_inference_steps: 30,
+  guide_scale: 5,
+  shift: 5,
+  enable_safety_checker: true,
+  enable_prompt_expansion: false,
+  aspect_ratio: "16:9",
+  loras: [],
+  reverse_video: false,
+  turbo_mode: true,
+};
+
+
 export const DEFAULT_TRADING_PRO_SETTINGS: TradingProSettings = {
   selectedPair: null,
 };
@@ -166,6 +185,7 @@ export const ALL_MODEL_DEFAULT_SETTINGS: ModelSpecificSettingsMap = {
   [Model.FLUX_KONTEX_MAX_MULTI]: { ...DEFAULT_FLUX_KONTEX_SETTINGS, num_images: 2 },
   [Model.FLUX_ULTRA]: { ...DEFAULT_FLUX_DEV_SETTINGS },
   [Model.KLING_VIDEO]: { ...DEFAULT_KLING_AI_SETTINGS },
+  [Model.WAN_I2V]: { ...DEFAULT_WAN_I2V_SETTINGS },
   [Model.TRADING_PRO]: { ...DEFAULT_TRADING_PRO_SETTINGS },
 };
 
@@ -190,6 +210,7 @@ export const DEMO_USER_DEFAULT_MONTHLY_LIMITS = {
   OPENAI_TTS_MONTHLY_CHARS: 10000,
   FLUX_DEV_MONTHLY_IMAGES: 0,
   KLING_VIDEO_MONTHLY_MAX_USES: 0,
+  WAN_I2V_MONTHLY_MAX_USES: 0,
 };
 
 export const INITIAL_DEMO_USER_LIMITS: DemoUserLimits = {
@@ -205,6 +226,8 @@ export const INITIAL_DEMO_USER_LIMITS: DemoUserLimits = {
   fluxDevMonthlyMaxImages: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_DEV_MONTHLY_IMAGES,
   klingVideoMonthlyUsed: 0,
   klingVideoMonthlyMaxUses: DEMO_USER_DEFAULT_MONTHLY_LIMITS.KLING_VIDEO_MONTHLY_MAX_USES,
+  wanI2vMonthlyUsed: 0,
+  wanI2vMonthlyMaxUses: DEMO_USER_DEFAULT_MONTHLY_LIMITS.WAN_I2V_MONTHLY_MAX_USES,
 };
 
 
@@ -221,6 +244,8 @@ export const PAID_USER_LIMITS_CONFIG: PaidUserLimits = {
   fluxDevMonthlyMaxImages: 30,
   klingVideoMonthlyUsed: 0,
   klingVideoMonthlyMaxGenerations: 1,
+  wanI2vMonthlyUsed: 0,
+  wanI2vMonthlyMaxGenerations: 4,
 };
 
 export const OPENAI_TTS_MAX_INPUT_LENGTH = PAID_USER_LIMITS_CONFIG.openaiTtsMaxChars;
@@ -387,6 +412,20 @@ export const KLING_AI_ASPECT_RATIOS: { value: KlingAiAspectRatio; label: string 
     { value: "1:1", label: "1:1 (Square)" },
 ];
 
+// Wan I2V Video Constants
+export const WAN_I2V_RESOLUTIONS: { value: WanI2vResolution; label: string }[] = [
+    { value: "720p", label: "720p (HD)" },
+    { value: "480p", label: "480p (SD)" },
+];
+
+export const WAN_I2V_ASPECT_RATIOS: { value: WanI2vAspectRatio; label: string }[] = [
+    { value: "16:9", label: "16:9 (Widescreen)" },
+    { value: "9:16", label: "9:16 (Portrait)" },
+    { value: "1:1", label: "1:1 (Square)" },
+    { value: "auto", label: "Auto (from image)" },
+];
+
+
 // Trading Pro Constants
 export const TRADING_PRO_DISCLAIMER = `Mô hình này dựa trên kiến thức, kinh nghiệm, kỹ năng phân tích của AI để mang lại cái nhìn tổng quan chính xác và thực tế của thị trường giao dịch Crypto hoặc Vàng thế giới.\n\nĐây KHÔNG phải lời khuyên đầu tư. Chúng tôi KHÔNG đảm bảo mang lại lợi nhuận cho nhà đầu tư. Bạn phải thực sự cẩn trọng trong mọi quyết định đầu tư và quản lý vốn hiệu quả nếu bạn có ý định tham gia thị trường.\n\nChúng tôi sẽ KHÔNG chịu mọi trách nhiệm về tổn thất nếu bạn thua lỗ hoặc gặp rủi ro.`;
 
@@ -455,6 +494,14 @@ export const API_KEY_STATUSES_DEFINITIONS = {
     isMock: false,
     isGeminiPlatform: false,
     isKlingVideoGeneration: true,
+  },
+  [Model.WAN_I2V]: {
+    isSet: true,
+    envVarName: 'FAL_KEY (on proxy)',
+    modelName: 'Wan I2V Video Gen',
+    isMock: false,
+    isGeminiPlatform: false,
+    isWanI2vVideoGeneration: true,
   },
   [Model.TRADING_PRO]: {
     isSet: true, // Assuming proxy has necessary keys (Gemini for analysis)

@@ -19,6 +19,7 @@ export enum Model {
   FLUX_KONTEX_MAX_MULTI = 'Flux Kontext Max Multi-Image (fal-ai/flux-pro/kontext/max/multi)',
   FLUX_ULTRA = 'Flux Dev (fal-ai/flux-1/dev)', 
   KLING_VIDEO = 'Kling AI Video Gen (fal-ai/kling-video/v2.1/standard/image-to-video)', 
+  WAN_I2V = 'Wan I2V Video Gen (fal-ai/wan-i2v-lora)',
   TRADING_PRO = 'Trading Pro (gemini-2.5-flash Analysis)', 
 }
 
@@ -46,8 +47,7 @@ export interface ChatMessage {
   videoFileName?: string; 
   videoMimeType?: string; 
   isNote?: boolean; 
-  fluxRequestId?: string; 
-  klingVideoRequestId?: string; 
+  falRequestId?: string; 
   fluxModelId?: string; 
   isVideoQuery?: boolean; 
   videoUrl?: string; 
@@ -134,6 +134,33 @@ export interface KlingAiSettings {
   cfg_scale?: number; 
 }
 
+export type WanI2vResolution = "480p" | "720p";
+export type WanI2vAspectRatio = "auto" | "16:9" | "9:16" | "1:1";
+
+export interface LoraWeight {
+  path: string;
+  weight_name?: string;
+  scale?: number;
+}
+
+export interface WanI2vSettings {
+  negative_prompt?: string;
+  num_frames?: number;
+  frames_per_second?: number;
+  seed?: number | null;
+  resolution?: WanI2vResolution;
+  num_inference_steps?: number;
+  guide_scale?: number;
+  shift?: number;
+  enable_safety_checker?: boolean;
+  enable_prompt_expansion?: boolean;
+  aspect_ratio?: WanI2vAspectRatio;
+  loras?: LoraWeight[];
+  reverse_video?: boolean;
+  turbo_mode?: boolean;
+}
+
+
 export type TradingPairValue = 'XAUUSD' | 'BTCUSD'; 
 export interface TradingPair {
   value: TradingPairValue;
@@ -182,6 +209,7 @@ export type ModelSpecificSettingsMap = {
   [Model.FLUX_KONTEX_MAX_MULTI]: FluxKontexSettings;
   [Model.FLUX_ULTRA]: FluxDevSettings;
   [Model.KLING_VIDEO]: KlingAiSettings;
+  [Model.WAN_I2V]: WanI2vSettings;
   [Model.TRADING_PRO]: TradingProSettings;
 };
 
@@ -195,6 +223,7 @@ export type AnyModelSettings =
   | FluxKontexSettings
   | FluxDevSettings
   | KlingAiSettings
+  | WanI2vSettings
   | TradingProSettings;
 
 
@@ -241,6 +270,7 @@ export interface ApiKeyStatus {
   isMultiImageEditing?: boolean; 
   isFluxDevImageGeneration?: boolean; 
   isKlingVideoGeneration?: boolean; 
+  isWanI2vVideoGeneration?: boolean;
   isTradingPro?: boolean; 
 }
 
@@ -552,6 +582,8 @@ export interface DemoUserLimits {
   fluxDevMonthlyMaxImages: number;
   klingVideoMonthlyUsed?: number; 
   klingVideoMonthlyMaxUses?: number; 
+  wanI2vMonthlyUsed?: number;
+  wanI2vMonthlyMaxUses?: number;
 }
 
 export interface PaidUserLimits {
@@ -567,6 +599,8 @@ export interface PaidUserLimits {
   fluxDevMonthlyMaxImages: number;  
   klingVideoMonthlyUsed?: number; 
   klingVideoMonthlyMaxGenerations?: number; 
+  wanI2vMonthlyUsed?: number;
+  wanI2vMonthlyMaxGenerations?: number;
 }
 
 export interface UserSessionState {
@@ -641,6 +675,15 @@ export interface GenerateVideoWithKlingParams {
   prompt: string;
   settings: KlingAiSettings;
   imageData: SingleImageData; 
+  userSession: UserSessionState;
+  requestHeaders?: HeadersInit;
+}
+
+export interface GenerateVideoWithWanI2vParams {
+  modelIdentifier: string;
+  prompt: string;
+  settings: WanI2vSettings;
+  imageData: SingleImageData;
   userSession: UserSessionState;
   requestHeaders?: HeadersInit;
 }
