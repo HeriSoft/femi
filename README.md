@@ -24,6 +24,7 @@
 *   Flux Kontext Pro/Max Multi Editing Images **( NEW HOT )**
 *   Flux.1 Dev - 12B parameters High-quality Image Generate **( NEW HOT )**
 *   Kling AI 2.1 - High-quality video generation **( NEW HOT )**
+*   Wan video i2v with LoRa - Uncensored high quality support video generation [480p/720p] **( NEW HOT )** 
 *   Trading Pro - Help traders save more time in technical analysis and profit optimization **( NEW HOT )**
 
 ## 🛠️ Tech Stack
