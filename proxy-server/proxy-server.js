@@ -40,6 +40,24 @@ const PROXY_DEFAULT_KLING_AI_SETTINGS = {
   cfg_scale: 0.5,
 };
 
+const PROXY_DEFAULT_WAN_I2V_SETTINGS = {
+  negative_prompt: "bright colors, overexposed, static, blurred details, subtitles, style, artwork, painting, picture, still, overall gray, worst quality, low quality, JPEG compression residue, ugly, incomplete, extra fingers, poorly drawn hands, poorly drawn faces, deformed, disfigured, malformed limbs, fused fingers, still picture, cluttered background, three legs, many people in the background, walking backwards",
+  num_frames: 81,
+  frames_per_second: 16,
+  seed: null,
+  resolution: "720p",
+  num_inference_steps: 30,
+  guide_scale: 5,
+  shift: 5,
+  enable_safety_checker: true,
+  enable_prompt_expansion: false,
+  aspect_ratio: "16:9",
+  loras: [],
+  reverse_video: false,
+  turbo_mode: true,
+};
+
+
 
 dotenv.config();
 
@@ -103,6 +121,7 @@ const DEMO_USER_MONTHLY_LIMITS = {
   OPENAI_TTS_MONTHLY_CHARS: 10000,
   FLUX_DEV_MONTHLY_IMAGES: 0,
   KLING_VIDEO_MONTHLY_MAX_USES: 0,
+  WAN_I2V_MONTHLY_MAX_USES: 0,
 };
 
 // --- PAID USER LIMITS ---
@@ -113,6 +132,7 @@ const PAID_USER_MAX_LIMITS_CONFIG = {
   FLUX_KONTEX_PRO_MONTHLY_MAX_USES: 35,
   FLUX_DEV_MONTHLY_MAX_IMAGES: 30,
   KLING_VIDEO_MONTHLY_MAX_GENERATIONS: 1,
+  WAN_I2V_MONTHLY_MAX_GENERATIONS: 4,
 };
 
 
@@ -153,7 +173,7 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
                 return next();
             }
             const [users] = await pool.execute(
-                'SELECT id, username, user_type, status, paid_flux_pro_monthly_used, paid_flux_max_monthly_used, paid_flux_dev_monthly_used, paid_kling_video_monthly_used, paid_imagen3_monthly_used, paid_usage_last_reset_month FROM users WHERE username = ?',
+                'SELECT id, username, user_type, status, paid_flux_pro_monthly_used, paid_flux_max_monthly_used, paid_flux_dev_monthly_used, paid_kling_video_monthly_used, paid_wani2v_monthly_used, paid_imagen3_monthly_used, paid_usage_last_reset_month FROM users WHERE username = ?',
                 [paidUserToken]
             );
             if (users.length > 0) {
@@ -173,16 +193,17 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
                             paid_flux_max_monthly_used: fluxMaxUsed = 0,
                             paid_flux_dev_monthly_used: fluxDevUsed = 0,
                             paid_kling_video_monthly_used: klingVideoUsed = 0,
+                            paid_wani2v_monthly_used: wanI2vUsed = 0,
                             paid_imagen3_monthly_used: imagen3Used = 0,
                             paid_usage_last_reset_month: lastResetMonth
                         } = user;
 
                         if (lastResetMonth !== currentYearMonth) {
                             console.log(`[Paid Auth] Resetting monthly limits for PAID user ${user.username} for new month ${currentYearMonth}. Old month: ${lastResetMonth}`);
-                            fluxProUsed = 0; fluxMaxUsed = 0; fluxDevUsed = 0; klingVideoUsed = 0; imagen3Used = 0;
+                            fluxProUsed = 0; fluxMaxUsed = 0; fluxDevUsed = 0; klingVideoUsed = 0; wanI2vUsed = 0; imagen3Used = 0;
                             try {
                                 await pool.execute(
-                                    'UPDATE users SET paid_flux_pro_monthly_used=0, paid_flux_max_monthly_used=0, paid_flux_dev_monthly_used=0, paid_kling_video_monthly_used=0, paid_imagen3_monthly_used=0, paid_usage_last_reset_month=? WHERE id=?',
+                                    'UPDATE users SET paid_flux_pro_monthly_used=0, paid_flux_max_monthly_used=0, paid_flux_dev_monthly_used=0, paid_kling_video_monthly_used=0, paid_wani2v_monthly_used=0, paid_imagen3_monthly_used=0, paid_usage_last_reset_month=? WHERE id=?',
                                     [currentYearMonth, user.id]
                                 );
                             } catch (dbResetError) {
@@ -197,6 +218,7 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
                             fluxProMonthlyUsed: fluxProUsed,
                             fluxDevMonthlyUsed: fluxDevUsed,
                             klingVideoMonthlyUsed: klingVideoUsed,
+                            wanI2vMonthlyUsed: wanI2vUsed,
                             paid_imagen3_monthly_used: imagen3Used,
                         };
                         req.isPaidUser = true;
@@ -228,7 +250,7 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
                 return next();
             }
             const [users] = await pool.execute(
-                'SELECT id, username, user_type, status, demo_flux_max_monthly_used, demo_flux_pro_monthly_used, demo_imagen_monthly_used, demo_tts_monthly_chars_used, demo_flux_dev_monthly_used, demo_kling_video_monthly_used, demo_usage_last_reset_month FROM users WHERE username = ? AND user_type = "DEMO"',
+                'SELECT id, username, user_type, status, demo_flux_max_monthly_used, demo_flux_pro_monthly_used, demo_imagen_monthly_used, demo_tts_monthly_chars_used, demo_flux_dev_monthly_used, demo_kling_video_monthly_used, demo_wani2v_monthly_used, demo_usage_last_reset_month FROM users WHERE username = ? AND user_type = "DEMO"',
                 [demoUserToken]
             );
             if (users.length > 0) {
@@ -245,6 +267,7 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
                         ttsMonthlyCharsUsed: user.demo_tts_monthly_chars_used || 0,
                         fluxDevMonthlyUsed: user.demo_flux_dev_monthly_used || 0,
                         klingVideoMonthlyUsed: user.demo_kling_video_monthly_used || 0,
+                        wanI2vMonthlyUsed: user.demo_wani2v_monthly_used || 0,
                         usageLastResetMonth: user.demo_usage_last_reset_month
                     };
                     req.isDemoUser = true;
@@ -277,7 +300,7 @@ app.post('/api/auth/verify-code', async (req, res) => {
 
     try {
         const [users] = await pool.execute(
-            'SELECT id, username, user_type, status, password_hash, demo_flux_max_monthly_used, demo_flux_pro_monthly_used, demo_imagen_monthly_used, demo_tts_monthly_chars_used, demo_flux_dev_monthly_used, demo_kling_video_monthly_used, demo_usage_last_reset_month, paid_flux_pro_monthly_used, paid_flux_max_monthly_used, paid_flux_dev_monthly_used, paid_kling_video_monthly_used, paid_imagen3_monthly_used, paid_usage_last_reset_month FROM users WHERE username = ?',
+            'SELECT id, username, user_type, status, password_hash, demo_flux_max_monthly_used, demo_flux_pro_monthly_used, demo_imagen_monthly_used, demo_tts_monthly_chars_used, demo_flux_dev_monthly_used, demo_kling_video_monthly_used, demo_wani2v_monthly_used, demo_usage_last_reset_month, paid_flux_pro_monthly_used, paid_flux_max_monthly_used, paid_flux_dev_monthly_used, paid_kling_video_monthly_used, paid_wani2v_monthly_used, paid_imagen3_monthly_used, paid_usage_last_reset_month FROM users WHERE username = ?',
             [code]
         );
 
@@ -308,16 +331,17 @@ app.post('/api/auth/verify-code', async (req, res) => {
                     paid_flux_max_monthly_used: fluxMaxUsed = 0,
                     paid_flux_dev_monthly_used: fluxDevUsed = 0,
                     paid_kling_video_monthly_used: klingVideoUsed = 0,
+                    paid_wani2v_monthly_used: wanI2vUsed = 0,
                     paid_imagen3_monthly_used: imagen3Used = 0,
                     paid_usage_last_reset_month: lastResetMonth
                 } = user;
 
                 if (lastResetMonth !== currentYearMonth) {
                     console.log(`[Paid Login] Resetting monthly limits for PAID user ${user.username} for new month ${currentYearMonth}. Old month: ${lastResetMonth}`);
-                    fluxProUsed = 0; fluxMaxUsed = 0; fluxDevUsed = 0; klingVideoUsed = 0; imagen3Used = 0;
+                    fluxProUsed = 0; fluxMaxUsed = 0; fluxDevUsed = 0; klingVideoUsed = 0; wanI2vUsed = 0; imagen3Used = 0;
                     try {
                         await pool.execute(
-                            'UPDATE users SET paid_flux_pro_monthly_used=0, paid_flux_max_monthly_used=0, paid_flux_dev_monthly_used=0, paid_kling_video_monthly_used=0, paid_imagen3_monthly_used=0, paid_usage_last_reset_month=? WHERE id=?',
+                            'UPDATE users SET paid_flux_pro_monthly_used=0, paid_flux_max_monthly_used=0, paid_flux_dev_monthly_used=0, paid_kling_video_monthly_used=0, paid_wani2v_monthly_used=0, paid_imagen3_monthly_used=0, paid_usage_last_reset_month=? WHERE id=?',
                             [currentYearMonth, user.id]
                         );
                     } catch (dbResetError) {
@@ -342,6 +366,8 @@ app.post('/api/auth/verify-code', async (req, res) => {
                         fluxDevMonthlyMaxImages: PAID_USER_MAX_LIMITS_CONFIG.FLUX_DEV_MONTHLY_MAX_IMAGES,
                         klingVideoMonthlyUsed: klingVideoUsed, // Send current usage for the month
                         klingVideoMonthlyMaxGenerations: PAID_USER_MAX_LIMITS_CONFIG.KLING_VIDEO_MONTHLY_MAX_GENERATIONS,
+                        wanI2vMonthlyUsed: wanI2vUsed,
+                        wanI2vMonthlyMaxGenerations: PAID_USER_MAX_LIMITS_CONFIG.WAN_I2V_MONTHLY_MAX_GENERATIONS,
                     }
                 });
             } else {
@@ -358,15 +384,16 @@ app.post('/api/auth/verify-code', async (req, res) => {
                 demo_tts_monthly_chars_used: ttsCharsUsed = 0,
                 demo_flux_dev_monthly_used: fluxDevUsed = 0,
                 demo_kling_video_monthly_used: klingVideoUsed = 0,
+                demo_wani2v_monthly_used: wanI2vUsed = 0,
                 demo_usage_last_reset_month: lastResetMonth
             } = user;
 
             if (lastResetMonth !== currentYearMonth) {
                 console.log(`[DEMO Login] Resetting monthly limits for DEMO user ${user.username} for new month ${currentYearMonth}. Old month: ${lastResetMonth}`);
-                fluxMaxUsed = 0; fluxProUsed = 0; imagenUsed = 0; ttsCharsUsed = 0; fluxDevUsed = 0; klingVideoUsed = 0;
+                fluxMaxUsed = 0; fluxProUsed = 0; imagenUsed = 0; ttsCharsUsed = 0; fluxDevUsed = 0; klingVideoUsed = 0; wanI2vUsed = 0;
                 try {
                     await pool.execute(
-                        'UPDATE users SET demo_flux_max_monthly_used=0, demo_flux_pro_monthly_used=0, demo_imagen_monthly_used=0, demo_tts_monthly_chars_used=0, demo_flux_dev_monthly_used=0, demo_kling_video_monthly_used=0, demo_usage_last_reset_month=? WHERE id=?',
+                        'UPDATE users SET demo_flux_max_monthly_used=0, demo_flux_pro_monthly_used=0, demo_imagen_monthly_used=0, demo_tts_monthly_chars_used=0, demo_flux_dev_monthly_used=0, demo_kling_video_monthly_used=0, demo_wani2v_monthly_used=0, demo_usage_last_reset_month=? WHERE id=?',
                         [currentYearMonth, user.id]
                     );
                 } catch (dbResetError) {
@@ -387,6 +414,8 @@ app.post('/api/auth/verify-code', async (req, res) => {
                 fluxDevMonthlyMaxImages: DEMO_USER_MONTHLY_LIMITS.FLUX_DEV_MONTHLY_IMAGES,
                 klingVideoMonthlyUsed: klingVideoUsed, // Send current usage for the month
                 klingVideoMonthlyMaxUses: DEMO_USER_MONTHLY_LIMITS.KLING_VIDEO_MONTHLY_MAX_USES,
+                wanI2vMonthlyUsed: wanI2vUsed,
+                wanI2vMonthlyMaxUses: DEMO_USER_MONTHLY_LIMITS.WAN_I2V_MONTHLY_MAX_USES,
             };
             return res.json({
                 success: true, isDemoUser: true, username: user.username,
@@ -1060,8 +1089,68 @@ app.post('/api/fal/video/generate/kling', async (req, res) => {
     }
 });
 
+app.post('/api/fal/video/generate/wan-i2v', async (req, res) => {
+    if (req.authDbError) return res.status(503).json({ error: "Service temporarily unavailable (DB auth)." });
+    if (req.authenticationAttempted && req.authenticationFailed) return res.status(403).json({ error: "Access Denied (auth failed)." });
 
-app.post('/api/fal/image/edit/status', async (req, res) => {
+    const isActualAdmin = !req.isPaidUser && !req.isDemoUser && !req.authenticationAttempted;
+    const isAuthenticUser = req.isPaidUser || req.isDemoUser;
+
+    if (!isAuthenticUser && !isActualAdmin) return res.status(401).json({ error: "Unauthorized access." });
+
+    try {
+        if (!FAL_KEY) return res.status(500).json({ error: "Fal.ai API Key not configured." });
+        const { modelIdentifier, prompt, settings, image_base_64, image_mime_type } = req.body;
+        if (!modelIdentifier || !prompt || !settings || !image_base_64 || !image_mime_type) {
+            return res.status(400).json({ error: "Missing fields for Wan I2V video generation." });
+        }
+
+        if (!isActualAdmin) {
+            if (!req.isPaidUser) {
+                console.log(`[Fal Wan I2V Proxy] Access DENIED. Not a paid user. User: ${req.demoUser?.username || 'None'}, IP: ${getClientIp(req)}`);
+                return res.status(403).json({ error: "Wan I2V video generation is exclusively for Paid Users." });
+            }
+            if (!pool) return res.status(500).json({ error: "DB not available for PAID user Wan I2V limit check." });
+            const currentUsed = req.paidUser.wanI2vMonthlyUsed || 0;
+            if (currentUsed >= PAID_USER_MAX_LIMITS_CONFIG.WAN_I2V_MONTHLY_MAX_GENERATIONS) {
+                return res.status(429).json({
+                    error: `Monthly Wan I2V video generation limit reached. Used: ${currentUsed}/${PAID_USER_MAX_LIMITS_CONFIG.WAN_I2V_MONTHLY_MAX_GENERATIONS}`,
+                    limitReached: true
+                });
+            }
+        } else {
+            console.log(`[Fal Wan I2V Proxy] Admin access granted (IP: ${getClientIp(req)}). Bypassing limits.`);
+        }
+
+        const falInput = {
+            prompt,
+            image_url: `data:${image_mime_type};base64,${image_base_64}`,
+            ...PROXY_DEFAULT_WAN_I2V_SETTINGS,
+            ...settings, // Client settings override defaults
+        };
+
+        const queueResult = await fal.queue.submit(modelIdentifier, { input: falInput });
+        if (!queueResult?.request_id) return res.status(500).json({ error: "Fal.ai Wan I2V video submission failed (no request ID)." });
+
+        if (req.isPaidUser && !isActualAdmin && req.paidUser) {
+            try {
+                await pool.execute('UPDATE users SET paid_wani2v_monthly_used = paid_wani2v_monthly_used + 1 WHERE id = ?', [req.paidUser.id]);
+                console.log(`[Paid Usage Update - Wan I2V] SUCCESS: User ${req.paidUser.username} count incremented.`);
+            } catch (dbUpdateError) {
+                console.error(`[Paid Usage Update - Wan I2V] FAILED DB update for user ${req.paidUser.username}:`, dbUpdateError);
+            }
+        }
+
+        res.json({ requestId: queueResult.request_id, message: "Wan I2V video request submitted." });
+    } catch (error) {
+        console.error("[Wan I2V Gen Proxy Error]", error);
+        res.status(500).json({ error: `Wan I2V Gen Error: ${error.message || "Internal server error"}` });
+    }
+});
+
+
+
+app.post('/api/fal/queue/status', async (req, res) => {
   try {
     if (!FAL_KEY) return res.status(500).json({ error: "Fal.ai API Key not configured." });
     const { requestId, modelIdentifier } = req.body;
@@ -1075,14 +1164,23 @@ app.post('/api/fal/image/edit/status', async (req, res) => {
         const jobResult = await fal.queue.result(modelIdentifier, { requestId });
         responsePayload.rawResult = jobResult;
 
-        if (modelIdentifier.includes('kling-video')) {
-            if (jobResult?.data?.video?.url) { // Corrected path
-                responsePayload.videoUrl = jobResult.data.video.url;
+        const isVideoModel = modelIdentifier.includes('kling-video') || modelIdentifier.includes('wan-i2v');
+
+        if (isVideoModel) {
+            let videoUrlResult;
+            if (jobResult?.video?.url) { // wan-i2v format
+                videoUrlResult = jobResult.video.url;
+            } else if (jobResult?.data?.video?.url) { // kling format
+                videoUrlResult = jobResult.data.video.url;
+            }
+
+            if (videoUrlResult) {
+                responsePayload.videoUrl = videoUrlResult;
                 responsePayload.message = "Video processing completed successfully.";
             } else {
                 responsePayload.status = 'COMPLETED_NO_VIDEO';
-                responsePayload.message = "Processing completed, but no video URL found in the result.";
-                responsePayload.error = "Fal.ai Kling result did not contain expected video URL. Raw result logged on proxy.";
+                responsePayload.message = "Processing completed, but no video URL was found in the result.";
+                responsePayload.error = "Fal.ai video result did not contain expected video URL. Raw result logged on proxy.";
                 console.warn(`[Fal Status] COMPLETED_NO_VIDEO for ${modelIdentifier}, reqId ${requestId}. Raw result:`, JSON.stringify(jobResult, null, 2));
             }
         } else { // Assume image model
