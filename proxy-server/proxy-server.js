@@ -17,13 +17,12 @@ dotenv.config();
 
 // --- Play-DL Configuration ---
 if (process.env.YOUTUBE_COOKIE) {
-  console.log('[Play-DL Config] YOUTUBE_COOKIE found. Setting authentication token with a standard user-agent.');
-  // Add a user agent to make requests look more legitimate
+  console.log('[Play-DL Config] YOUTUBE_COOKIE found. Setting authentication token with an updated user-agent.');
+  // Update to a more recent user agent
   play.setToken({
     youtube: {
       cookie: process.env.YOUTUBE_COOKIE,
-      // A standard user agent string
-      user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36'
+      user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.7204.184 Safari/537.36'
     },
   });
 } else {
@@ -571,11 +570,6 @@ app.post('/api/tools/download-video', async (req, res) => {
     const authOptions = process.env.YOUTUBE_COOKIE ? { youtube: { cookie: process.env.YOUTUBE_COOKIE } } : {};
 
     try {
-        // Attempt to refresh the client ID to bypass some bot checks.
-        console.log('[YT Download] Attempting to refresh YouTube client ID...');
-        await play.getFreeClientID();
-        console.log('[YT Download] Client ID refreshed successfully.');
-
         if (!url || (await play.validate(url, authOptions)) !== 'yt_video') {
             return res.status(400).json({ success: false, error: "Invalid or unsupported YouTube URL." });
         }
