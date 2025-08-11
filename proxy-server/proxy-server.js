@@ -9,24 +9,17 @@ import mysql from 'mysql2/promise';
 import bcrypt from 'bcrypt';
 import multer from 'multer';
 import FormData from 'form-data';
-import play from 'play-dl';
+import ytdl from 'ytdl-core';
 
 console.log(`[Proxy Server] Starting up at ${new Date().toISOString()}...`);
 
 dotenv.config();
 
-// --- Play-DL Configuration ---
-if (process.env.YOUTUBE_COOKIE) {
-  console.log('[Play-DL Config] YOUTUBE_COOKIE found. Setting authentication token with an updated user-agent.');
-  // Update to a more recent user agent
-  play.setToken({
-    youtube: {
-      cookie: process.env.YOUTUBE_COOKIE,
-      user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.7204.184 Safari/537.36'
-    },
-  });
+// --- ytdl-core Configuration ---
+if (!process.env.YOUTUBE_COOKIE) {
+  console.warn('[ytdl-core Config] WARNING: YOUTUBE_COOKIE environment variable not set. YouTube downloads may fail due to bot detection.');
 } else {
-  console.warn('[Play-DL Config] WARNING: YOUTUBE_COOKIE environment variable not set. YouTube downloads may fail due to bot detection.');
+  console.log('[ytdl-core Config] YOUTUBE_COOKIE found. It will be used for authenticated requests.');
 }
 
 
@@ -566,35 +559,30 @@ app.post('/api/tools/download-video', async (req, res) => {
     const { url, format } = req.body;
     console.log(`[YT Download] Received request for URL: ${url}, Format: ${format}`);
     
-    // Keep passing auth options per-request as a robust measure.
-    const authOptions = process.env.YOUTUBE_COOKIE ? { youtube: { cookie: process.env.YOUTUBE_COOKIE } } : {};
+    const requestOptions = process.env.YOUTUBE_COOKIE 
+        ? { headers: { cookie: process.env.YOUTUBE_COOKIE } } 
+        : {};
 
     try {
-        if (!url || (await play.validate(url, authOptions)) !== 'yt_video') {
+        if (!url || !ytdl.validateURL(url)) {
             return res.status(400).json({ success: false, error: "Invalid or unsupported YouTube URL." });
         }
 
         console.log('[YT Download] URL validated. Fetching video info...');
-        const info = await play.video_info(url, authOptions);
-        const title = info.video_details.title || 'youtube_video';
+        const info = await ytdl.getInfo(url, { requestOptions });
+        const title = info.videoDetails.title || 'youtube_video';
         console.log(`[YT Download] Video title: "${title}"`);
         
         // Sanitize filename
         const safeTitle = title.replace(/[^a-z0-9_.-]/gi, '_').substring(0, 100);
 
-        let stream;
         let filename;
         let contentType;
-        
-        const streamOptions = {
-            ...authOptions,
-            type: format === 'mp3' ? 'audio' : 'video',
-            quality: 2, // high
-            download: true
+        const downloadOptions = {
+            requestOptions: requestOptions,
+            filter: format === 'mp3' ? 'audioonly' : (format) => format.hasVideo && format.hasAudio,
+            quality: format === 'mp3' ? 'highestaudio' : 'highest'
         };
-        
-        console.log(`[YT Download] Requesting stream for format: ${format}...`);
-        stream = await play.stream(url, streamOptions);
         
         if (format === 'mp3') {
             filename = `${safeTitle}.mp3`;
@@ -608,13 +596,12 @@ app.post('/api/tools/download-video', async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
         res.setHeader('Content-Type', contentType);
         
-        stream.stream.pipe(res);
+        ytdl(url, downloadOptions).pipe(res);
 
     } catch (error) {
         console.error("[YT Download Proxy Error]", error);
-        // Provide more specific feedback if it's the bot detection error
-        if (error.message && error.message.includes('confirm you’re not a bot')) {
-             res.status(500).json({ success: false, error: `Failed to process video: YouTube is blocking requests from this server (bot detection). The provided YOUTUBE_COOKIE might be invalid, expired, or the server IP is flagged. Please check the cookie and try again later.` });
+        if (error.message && (error.message.includes('confirm you’re not a bot') || error.statusCode === 429)) {
+             res.status(429).json({ success: false, error: `Failed to process video: YouTube is blocking requests from this server (bot detection or rate limiting). The provided YOUTUBE_COOKIE might be invalid/expired, or the server IP is flagged.` });
         } else {
              res.status(500).json({ success: false, error: `Failed to process video: ${error.message}` });
         }
