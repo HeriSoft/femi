@@ -1,3 +1,4 @@
+
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -93,15 +94,7 @@ try {
         connectionLimit: 10,
         queueLimit: 0
     });
-    console.log("MySQL Connection Pool created successfully.");
-    pool.getConnection()
-        .then(conn => {
-            console.log("Successfully connected to MySQL database.");
-            conn.release();
-        })
-        .catch(err => {
-            console.error("Failed to connect to MySQL database:", err);
-        });
+    console.log("MySQL Connection Pool created successfully (connection on first query).");
 } catch (error) {
     console.error("CRITICAL: Failed to create MySQL connection pool:", error);
 }
