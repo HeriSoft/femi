@@ -10,7 +10,7 @@ import mysql from 'mysql2/promise';
 import bcrypt from 'bcrypt';
 import multer from 'multer';
 import FormData from 'form-data';
-import YtDlpWrap from 'yt-dlp-wrap';
+import play from 'play-dl';
 
 console.log(`[Proxy Server] Starting up at ${new Date().toISOString()}...`);
 
@@ -95,14 +95,6 @@ try {
         queueLimit: 0
     });
     console.log("MySQL Connection Pool created successfully.");
-    pool.getConnection()
-        .then(conn => {
-            console.log("Successfully connected to MySQL database.");
-            conn.release();
-        })
-        .catch(err => {
-            console.error("Failed to connect to MySQL database:", err);
-        });
 } catch (error) {
     console.error("CRITICAL: Failed to create MySQL connection pool:", error);
 }
@@ -1622,9 +1614,6 @@ The "detailed_analysis" field in the JSON should be a complete summary of your f
 // 1. IP Info Tool
 app.post('/api/tools/ip-info', (req, res) => {
   const ip = getClientIp(req);
-  // In local dev, ip might be ::1 or 127.0.0.1. ip-api returns an error for this.
-  // The service can detect the IP of the requestor if no IP is provided in the URL.
-  // When deployed on Vercel, req.ip will contain the client's real IP.
   const apiUrl = (ip && ip !== '::1' && ip !== '127.0.0.1') ? `http://ip-api.com/json/${ip}` : 'http://ip-api.com/json/';
   
   console.log(`[IP Info Tool] Fetching info for IP: ${ip || 'auto-detected'}`);
@@ -1649,9 +1638,7 @@ app.post('/api/tools/ip-info', (req, res) => {
     });
 });
 
-// 2. Video Downloader Tool
-const ytDlpWrap = new YtDlpWrap();
-
+// 2. Video Downloader Tool with play-dl
 app.post('/api/tools/download-video', async (req, res) => {
   const { url, format } = req.body;
   if (!url || !format) {
@@ -1661,37 +1648,44 @@ app.post('/api/tools/download-video', async (req, res) => {
   try {
     console.log(`[Video Downloader] Request for URL: ${url} (format: ${format})`);
     
+    // Validate URL with play-dl
+    const validation = await play.validate(url);
+    if (!validation || (validation !== 'yt_video' && validation !== 'bilibili_video' && !url.includes('bilibili'))) { // Looser check for Bilibili
+       return res.status(400).json({ error: `Unsupported URL or invalid video link. Supported: YouTube, Bilibili. Got: ${validation}` });
+    }
+
     // Get video info to determine filename
-    const metadata = await ytDlpWrap.getVideoInfo(url);
-    const title = metadata.title || 'video';
+    const videoInfo = await play.video_info(url);
+    const title = videoInfo.video_details.title || 'video';
     const safeTitle = title.replace(/[^a-z0-9_.-]/gi, '_').substring(0, 100);
     const extension = format === 'mp3' ? 'mp3' : 'mp4';
     const filename = `${safeTitle}.${extension}`;
     const encodedFilename = encodeURIComponent(filename);
 
     res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodedFilename}`);
-
-    const options = format === 'mp3' 
-      ? ['-x', '--audio-format', 'mp3'] 
-      : ['-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'];
     
-    const stream = ytDlpWrap.execStream([url, ...options]);
+    const stream = await play.stream(url, {
+        quality: format === 'mp3' ? 0 : 2, // 0 for best audio, 2 for best video
+        discordPlayerCompatibility: true
+    });
+
+    if (format === 'mp3') {
+        res.setHeader('Content-Type', 'audio/mpeg');
+    } else {
+        res.setHeader('Content-Type', 'video/mp4');
+    }
     
     console.log(`[Video Downloader] Starting stream for "${filename}"`);
-    stream.pipe(res);
+    stream.stream.pipe(res);
 
-    stream.on('error', (error) => {
+    stream.stream.on('error', (error) => {
       console.error('[Video Downloader] Stream error:', error.message);
       if (!res.headersSent) {
         res.status(500).json({ error: `Failed to download video stream. Details: ${error.message.substring(0, 200)}...` });
-      } else {
-        console.error('[Video Downloader] Headers already sent, could not send JSON error to client.');
-        stream.destroy(); // Ensure stream is destroyed on error if pipe is active
-        res.end();
       }
     });
 
-    stream.on('close', () => {
+    stream.stream.on('close', () => {
       console.log(`[Video Downloader] Stream finished for "${filename}"`);
       if (!res.writableEnded) {
         res.end();
@@ -1701,7 +1695,11 @@ app.post('/api/tools/download-video', async (req, res) => {
   } catch (error) {
     console.error('[Video Downloader] Main catch block error:', error.message);
     if (!res.headersSent) {
-      res.status(500).json({ error: `Failed to process video request. Details: ${error.message.substring(0, 200)}...` });
+      if (error.message.includes('private') || error.message.includes('unavailable')) {
+        res.status(404).json({ error: 'This video is private, unavailable, or age-restricted.' });
+      } else {
+        res.status(500).json({ error: `Failed to process video request. Details: ${error.message.substring(0, 200)}...` });
+      }
     }
   }
 });
