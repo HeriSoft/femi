@@ -1,6 +1,8 @@
 
 
-import { FluxKontexSettings, EditImageWithFluxKontexParams, SingleImageData, MultiImageData, FluxDevSettings, GenerateImageWithFluxDevParams, UserSessionState, GenerateVideoWithKlingParams, KlingAiSettings, WanI2vSettings, GenerateVideoWithWanI2vParams } from '../types.ts'; // Updated
+
+
+import { FluxKontexSettings, EditImageWithFluxKontexParams, SingleImageData, MultiImageData, FluxDevSettings, GenerateImageWithFluxDevParams, UserSessionState, GenerateVideoWithKlingParams, KlingAiSettings, WanI2vSettings, GenerateVideoWithWanI2vParams, EditImageWithFluxKontexLoraParams, FluxKontexLoraSettings, WanI2vV22Settings, GenerateVideoWithWanI2vV22Params } from '../types.ts'; // Updated
 
 // FalServiceEditParams and FalServiceGenerateParams are now directly EditImageWithFluxKontexParams and GenerateImageWithFluxDevParams
 // as these base types now include userSession and requestHeaders.
@@ -104,6 +106,59 @@ export async function editImageWithFluxKontexProxy(
   } catch (error: any) {
     console.error("Error calling Fal.ai Flux Kontext proxy service for submission:", error);
     return { error: `Network or unexpected error calling Fal.ai Flux Kontext proxy for submission: ${error.message}` };
+  }
+}
+
+export async function editImageWithFluxKontexLoraProxy(
+  params: EditImageWithFluxKontexLoraParams
+): Promise<FalSubmitProxyResponse> {
+  const { modelIdentifier, prompt, settings, imageData, requestHeaders } = params;
+
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...(requestHeaders || {}),
+  };
+
+  const bodyPayload = {
+    modelIdentifier,
+    prompt,
+    image_base_64: imageData.image_base_64,
+    image_mime_type: imageData.image_mime_type,
+    settings: settings, // Send the whole settings object, proxy will handle it
+  };
+
+  try {
+    const fetchOptions: RequestInit = {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify(bodyPayload),
+    };
+
+    const response = await fetch('/api/fal/image/edit/flux-kontext-lora', fetchOptions);
+    const responseText = await response.text();
+    let data: FalSubmitProxyResponse;
+
+    try {
+      if (!responseText) {
+        return { error: `Proxy returned an empty response (Status: ${response.status}) for Flux Kontext Lora submission.` };
+      }
+      data = JSON.parse(responseText);
+    } catch (e) {
+      return { error: `Proxy returned non-JSON response (Status: ${response.status}) for Flux Kontext Lora. Response (partial): ${responseText.substring(0, 100)}...` };
+    }
+
+    if (!response.ok || data.error) {
+      return { error: data.error || `Fal.ai Flux Kontext Lora proxy submission failed: ${response.statusText}` };
+    }
+
+    if (data.requestId) {
+      return { requestId: data.requestId, message: data.message };
+    } else {
+      return { error: data.error || "Fal.ai Flux Kontext Lora proxy did not return a requestId." };
+    }
+  } catch (error: any) {
+    console.error("Error calling Fal.ai Flux Kontext Lora proxy service for submission:", error);
+    return { error: `Network or unexpected error calling Fal.ai Flux Kontext Lora proxy for submission: ${error.message}` };
   }
 }
 
@@ -275,6 +330,58 @@ export async function generateVideoWithWanI2vProxy(
   }
 }
 
+export async function generateVideoWithWanI2vV22Proxy(
+  params: GenerateVideoWithWanI2vV22Params
+): Promise<FalSubmitProxyResponse> {
+  const { modelIdentifier, prompt, settings, imageData, requestHeaders } = params;
+
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...(requestHeaders || {}),
+  };
+
+  const bodyPayload = {
+    modelIdentifier,
+    prompt,
+    settings,
+    image_base_64: imageData.image_base_64,
+    image_mime_type: imageData.image_mime_type,
+  };
+
+  try {
+    const fetchOptions: RequestInit = {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify(bodyPayload),
+    };
+    const response = await fetch('/api/fal/video/generate/wan-i2v-v22', fetchOptions);
+    const responseText = await response.text();
+    let data: FalSubmitProxyResponse;
+
+    try {
+      if (!responseText) {
+        return { error: `Proxy returned an empty response (Status: ${response.status}) for Wan I2V v2.2 video submission.` };
+      }
+      data = JSON.parse(responseText);
+    } catch (e) {
+      return { error: `Proxy returned non-JSON response (Status: ${response.status}) for Wan I2V v2.2 video. Response (partial): ${responseText.substring(0, 100)}...` };
+    }
+
+    if (!response.ok || data.error) {
+      return { error: data.error || `Fal.ai Wan I2V v2.2 Video proxy submission failed: ${response.statusText}` };
+    }
+
+    if (data.requestId) {
+      return { requestId: data.requestId, message: data.message };
+    } else {
+      return { error: data.error || "Fal.ai Wan I2V v2.2 Video proxy did not return a requestId." };
+    }
+  } catch (error: any) {
+    console.error("Error calling Fal.ai Wan I2V v2.2 Video proxy service for submission:", error);
+    return { error: `Network or unexpected error calling Fal.ai Wan I2V v2.2 Video proxy for submission: ${error.message}` };
+  }
+}
+
 
 export async function checkFalQueueStatusProxy( 
   requestId: string,
@@ -312,7 +419,7 @@ export async function checkFalQueueStatusProxy(
     // If status is COMPLETED, the proxy will have already put the correct URL(s) in the `videoUrl` or `imageUrls` fields.
     // We can still add client-side checks for safety.
     if (responsePayload.status === 'COMPLETED') {
-        const isVideoModel = modelIdentifier.includes('kling-video') || modelIdentifier.includes('wan-i2v');
+        const isVideoModel = modelIdentifier.includes('kling-video') || modelIdentifier.includes('wan-i2v') || modelIdentifier.includes('wan/v2.2-5b');
         if (isVideoModel && !responsePayload.videoUrl) {
             responsePayload.status = 'COMPLETED_NO_VIDEO';
             if (!responsePayload.message) responsePayload.message = "Processing completed, but no video URL was found in the proxy response.";
