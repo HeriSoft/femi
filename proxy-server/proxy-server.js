@@ -1,5 +1,3 @@
-
-
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -11,6 +9,7 @@ import mysql from 'mysql2/promise';
 import bcrypt from 'bcrypt';
 import multer from 'multer';
 import FormData from 'form-data';
+import play from 'play-dl';
 
 console.log(`[Proxy Server] Starting up at ${new Date().toISOString()}...`);
 
@@ -57,6 +56,24 @@ const PROXY_DEFAULT_WAN_I2V_SETTINGS = {
   turbo_mode: true,
 };
 
+const PROXY_DEFAULT_WAN_I2V_V22_SETTINGS = {
+  negative_prompt: "",
+  num_frames: 81,
+  frames_per_second: 24,
+  seed: null,
+  resolution: "720p",
+  num_inference_steps: 40,
+  guidance_scale: 3.5,
+  shift: 5,
+  enable_safety_checker: true,
+  enable_prompt_expansion: false,
+  aspect_ratio: "auto",
+  interpolator_model: "film",
+  num_interpolated_frames: 0,
+  adjust_fps_for_interpolation: true,
+  loras: [],
+};
+
 
 
 dotenv.config();
@@ -98,7 +115,8 @@ app.use(cors({
       return callback(null, true);
     }
     return callback(new Error('Not allowed by CORS'));
-  }
+  },
+  exposedHeaders: ['Content-Disposition'],
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
@@ -117,11 +135,13 @@ else console.log("LOGIN_CODE_AUTH_ADMIN is SET for admin.");
 const DEMO_USER_MONTHLY_LIMITS = {
   FLUX_KONTEX_MAX_MONTHLY: 0,
   FLUX_KONTEX_PRO_MONTHLY: 1,
+  FLUX_KONTEX_LORA_MONTHLY: 0,
   IMAGEN3_MONTHLY_IMAGES: 5,
   OPENAI_TTS_MONTHLY_CHARS: 10000,
   FLUX_DEV_MONTHLY_IMAGES: 0,
   KLING_VIDEO_MONTHLY_MAX_USES: 0,
   WAN_I2V_MONTHLY_MAX_USES: 0,
+  WAN_I2V_V22_MONTHLY_MAX_USES: 0,
 };
 
 // --- PAID USER LIMITS ---
@@ -130,9 +150,11 @@ const PAID_USER_MAX_LIMITS_CONFIG = {
   OPENAI_TTS_MAX_CHARS_TOTAL: 20000,
   FLUX_KONTEX_MAX_MONTHLY_MAX_USES: 25,
   FLUX_KONTEX_PRO_MONTHLY_MAX_USES: 35,
+  FLUX_KONTEX_LORA_MONTHLY_MAX_USES: 20,
   FLUX_DEV_MONTHLY_MAX_IMAGES: 30,
   KLING_VIDEO_MONTHLY_MAX_GENERATIONS: 1,
   WAN_I2V_MONTHLY_MAX_GENERATIONS: 4,
+  WAN_I2V_V22_MONTHLY_MAX_GENERATIONS: 4,
 };
 
 
@@ -173,7 +195,7 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
                 return next();
             }
             const [users] = await pool.execute(
-                'SELECT id, username, user_type, status, paid_flux_pro_monthly_used, paid_flux_max_monthly_used, paid_flux_dev_monthly_used, paid_kling_video_monthly_used, paid_wani2v_monthly_used, paid_imagen3_monthly_used, paid_usage_last_reset_month FROM users WHERE username = ?',
+                'SELECT id, username, user_type, status, paid_flux_pro_monthly_used, paid_flux_max_monthly_used, paid_flux_lora_monthly_used, paid_flux_dev_monthly_used, paid_kling_video_monthly_used, paid_wani2v_monthly_used, paid_wani2v_v22_monthly_used, paid_imagen3_monthly_used, paid_usage_last_reset_month FROM users WHERE username = ?',
                 [paidUserToken]
             );
             if (users.length > 0) {
@@ -191,19 +213,21 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
                         let {
                             paid_flux_pro_monthly_used: fluxProUsed = 0,
                             paid_flux_max_monthly_used: fluxMaxUsed = 0,
+                            paid_flux_lora_monthly_used: fluxLoraUsed = 0,
                             paid_flux_dev_monthly_used: fluxDevUsed = 0,
                             paid_kling_video_monthly_used: klingVideoUsed = 0,
                             paid_wani2v_monthly_used: wanI2vUsed = 0,
+                            paid_wani2v_v22_monthly_used: wanI2vV22Used = 0,
                             paid_imagen3_monthly_used: imagen3Used = 0,
                             paid_usage_last_reset_month: lastResetMonth
                         } = user;
 
                         if (lastResetMonth !== currentYearMonth) {
                             console.log(`[Paid Auth] Resetting monthly limits for PAID user ${user.username} for new month ${currentYearMonth}. Old month: ${lastResetMonth}`);
-                            fluxProUsed = 0; fluxMaxUsed = 0; fluxDevUsed = 0; klingVideoUsed = 0; wanI2vUsed = 0; imagen3Used = 0;
+                            fluxProUsed = 0; fluxMaxUsed = 0; fluxLoraUsed = 0; fluxDevUsed = 0; klingVideoUsed = 0; wanI2vUsed = 0; wanI2vV22Used = 0; imagen3Used = 0;
                             try {
                                 await pool.execute(
-                                    'UPDATE users SET paid_flux_pro_monthly_used=0, paid_flux_max_monthly_used=0, paid_flux_dev_monthly_used=0, paid_kling_video_monthly_used=0, paid_wani2v_monthly_used=0, paid_imagen3_monthly_used=0, paid_usage_last_reset_month=? WHERE id=?',
+                                    'UPDATE users SET paid_flux_pro_monthly_used=0, paid_flux_max_monthly_used=0, paid_flux_lora_monthly_used=0, paid_flux_dev_monthly_used=0, paid_kling_video_monthly_used=0, paid_wani2v_monthly_used=0, paid_wani2v_v22_monthly_used=0, paid_imagen3_monthly_used=0, paid_usage_last_reset_month=? WHERE id=?',
                                     [currentYearMonth, user.id]
                                 );
                             } catch (dbResetError) {
@@ -216,9 +240,11 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
                             subscriptionEndDate: subscriptions[0].end_date,
                             fluxMaxMonthlyUsed: fluxMaxUsed,
                             fluxProMonthlyUsed: fluxProUsed,
+                            fluxLoraMonthlyUsed: fluxLoraUsed,
                             fluxDevMonthlyUsed: fluxDevUsed,
                             klingVideoMonthlyUsed: klingVideoUsed,
                             wanI2vMonthlyUsed: wanI2vUsed,
+                            wanI2vV22MonthlyUsed: wanI2vV22Used,
                             paid_imagen3_monthly_used: imagen3Used,
                         };
                         req.isPaidUser = true;
@@ -250,7 +276,7 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
                 return next();
             }
             const [users] = await pool.execute(
-                'SELECT id, username, user_type, status, demo_flux_max_monthly_used, demo_flux_pro_monthly_used, demo_imagen_monthly_used, demo_tts_monthly_chars_used, demo_flux_dev_monthly_used, demo_kling_video_monthly_used, demo_wani2v_monthly_used, demo_usage_last_reset_month FROM users WHERE username = ? AND user_type = "DEMO"',
+                'SELECT id, username, user_type, status, demo_flux_max_monthly_used, demo_flux_pro_monthly_used, demo_flux_lora_monthly_used, demo_imagen_monthly_used, demo_tts_monthly_chars_used, demo_flux_dev_monthly_used, demo_kling_video_monthly_used, demo_wani2v_monthly_used, demo_wani2v_v22_monthly_used, demo_usage_last_reset_month FROM users WHERE username = ? AND user_type = "DEMO"',
                 [demoUserToken]
             );
             if (users.length > 0) {
@@ -263,11 +289,13 @@ async function paidOrDemoUserAuthMiddleware(req, res, next) {
                         id: user.id, username: user.username, isDemoUser: true,
                         fluxMaxMonthlyUsed: user.demo_flux_max_monthly_used || 0,
                         fluxProMonthlyUsed: user.demo_flux_pro_monthly_used || 0,
+                        fluxLoraMonthlyUsed: user.demo_flux_lora_monthly_used || 0,
                         imagenMonthlyUsed: user.demo_imagen_monthly_used || 0,
                         ttsMonthlyCharsUsed: user.demo_tts_monthly_chars_used || 0,
                         fluxDevMonthlyUsed: user.demo_flux_dev_monthly_used || 0,
                         klingVideoMonthlyUsed: user.demo_kling_video_monthly_used || 0,
                         wanI2vMonthlyUsed: user.demo_wani2v_monthly_used || 0,
+                        wanI2vV22MonthlyUsed: user.demo_wani2v_v22_monthly_used || 0,
                         usageLastResetMonth: user.demo_usage_last_reset_month
                     };
                     req.isDemoUser = true;
@@ -300,7 +328,7 @@ app.post('/api/auth/verify-code', async (req, res) => {
 
     try {
         const [users] = await pool.execute(
-            'SELECT id, username, user_type, status, password_hash, demo_flux_max_monthly_used, demo_flux_pro_monthly_used, demo_imagen_monthly_used, demo_tts_monthly_chars_used, demo_flux_dev_monthly_used, demo_kling_video_monthly_used, demo_wani2v_monthly_used, demo_usage_last_reset_month, paid_flux_pro_monthly_used, paid_flux_max_monthly_used, paid_flux_dev_monthly_used, paid_kling_video_monthly_used, paid_wani2v_monthly_used, paid_imagen3_monthly_used, paid_usage_last_reset_month FROM users WHERE username = ?',
+            'SELECT id, username, user_type, status, password_hash, demo_flux_max_monthly_used, demo_flux_pro_monthly_used, demo_flux_lora_monthly_used, demo_imagen_monthly_used, demo_tts_monthly_chars_used, demo_flux_dev_monthly_used, demo_kling_video_monthly_used, demo_wani2v_monthly_used, demo_wani2v_v22_monthly_used, demo_usage_last_reset_month, paid_flux_pro_monthly_used, paid_flux_max_monthly_used, paid_flux_lora_monthly_used, paid_flux_dev_monthly_used, paid_kling_video_monthly_used, paid_wani2v_monthly_used, paid_wani2v_v22_monthly_used, paid_imagen3_monthly_used, paid_usage_last_reset_month FROM users WHERE username = ?',
             [code]
         );
 
@@ -329,19 +357,21 @@ app.post('/api/auth/verify-code', async (req, res) => {
                 let {
                     paid_flux_pro_monthly_used: fluxProUsed = 0,
                     paid_flux_max_monthly_used: fluxMaxUsed = 0,
+                    paid_flux_lora_monthly_used: fluxLoraUsed = 0,
                     paid_flux_dev_monthly_used: fluxDevUsed = 0,
                     paid_kling_video_monthly_used: klingVideoUsed = 0,
                     paid_wani2v_monthly_used: wanI2vUsed = 0,
+                    paid_wani2v_v22_monthly_used: wanI2vV22Used = 0,
                     paid_imagen3_monthly_used: imagen3Used = 0,
                     paid_usage_last_reset_month: lastResetMonth
                 } = user;
 
                 if (lastResetMonth !== currentYearMonth) {
                     console.log(`[Paid Login] Resetting monthly limits for PAID user ${user.username} for new month ${currentYearMonth}. Old month: ${lastResetMonth}`);
-                    fluxProUsed = 0; fluxMaxUsed = 0; fluxDevUsed = 0; klingVideoUsed = 0; wanI2vUsed = 0; imagen3Used = 0;
+                    fluxProUsed = 0; fluxMaxUsed = 0; fluxLoraUsed = 0; fluxDevUsed = 0; klingVideoUsed = 0; wanI2vUsed = 0; wanI2vV22Used = 0; imagen3Used = 0;
                     try {
                         await pool.execute(
-                            'UPDATE users SET paid_flux_pro_monthly_used=0, paid_flux_max_monthly_used=0, paid_flux_dev_monthly_used=0, paid_kling_video_monthly_used=0, paid_wani2v_monthly_used=0, paid_imagen3_monthly_used=0, paid_usage_last_reset_month=? WHERE id=?',
+                            'UPDATE users SET paid_flux_pro_monthly_used=0, paid_flux_max_monthly_used=0, paid_flux_lora_monthly_used=0, paid_flux_dev_monthly_used=0, paid_kling_video_monthly_used=0, paid_wani2v_monthly_used=0, paid_wani2v_v22_monthly_used=0, paid_imagen3_monthly_used=0, paid_usage_last_reset_month=? WHERE id=?',
                             [currentYearMonth, user.id]
                         );
                     } catch (dbResetError) {
@@ -362,12 +392,16 @@ app.post('/api/auth/verify-code', async (req, res) => {
                         fluxKontextMaxMonthlyMaxUses: PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_MAX_MONTHLY_MAX_USES,
                         fluxKontextProMonthlyUsesLeft: PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_PRO_MONTHLY_MAX_USES - fluxProUsed,
                         fluxKontextProMonthlyMaxUses: PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_PRO_MONTHLY_MAX_USES,
+                        fluxKontextLoraMonthlyUsed: fluxLoraUsed,
+                        fluxKontextLoraMonthlyMaxGenerations: PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_LORA_MONTHLY_MAX_USES,
                         fluxDevMonthlyImagesLeft: PAID_USER_MAX_LIMITS_CONFIG.FLUX_DEV_MONTHLY_MAX_IMAGES - fluxDevUsed,
                         fluxDevMonthlyMaxImages: PAID_USER_MAX_LIMITS_CONFIG.FLUX_DEV_MONTHLY_MAX_IMAGES,
                         klingVideoMonthlyUsed: klingVideoUsed, // Send current usage for the month
                         klingVideoMonthlyMaxGenerations: PAID_USER_MAX_LIMITS_CONFIG.KLING_VIDEO_MONTHLY_MAX_GENERATIONS,
                         wanI2vMonthlyUsed: wanI2vUsed,
                         wanI2vMonthlyMaxGenerations: PAID_USER_MAX_LIMITS_CONFIG.WAN_I2V_MONTHLY_MAX_GENERATIONS,
+                        wanI2vV22MonthlyUsed: wanI2vV22Used,
+                        wanI2vV22MonthlyMaxGenerations: PAID_USER_MAX_LIMITS_CONFIG.WAN_I2V_V22_MONTHLY_MAX_GENERATIONS,
                     }
                 });
             } else {
@@ -380,20 +414,22 @@ app.post('/api/auth/verify-code', async (req, res) => {
             let {
                 demo_flux_max_monthly_used: fluxMaxUsed = 0,
                 demo_flux_pro_monthly_used: fluxProUsed = 0,
+                demo_flux_lora_monthly_used: fluxLoraUsed = 0,
                 demo_imagen_monthly_used: imagenUsed = 0,
                 demo_tts_monthly_chars_used: ttsCharsUsed = 0,
                 demo_flux_dev_monthly_used: fluxDevUsed = 0,
                 demo_kling_video_monthly_used: klingVideoUsed = 0,
                 demo_wani2v_monthly_used: wanI2vUsed = 0,
+                demo_wani2v_v22_monthly_used: wanI2vV22Used = 0,
                 demo_usage_last_reset_month: lastResetMonth
             } = user;
 
             if (lastResetMonth !== currentYearMonth) {
                 console.log(`[DEMO Login] Resetting monthly limits for DEMO user ${user.username} for new month ${currentYearMonth}. Old month: ${lastResetMonth}`);
-                fluxMaxUsed = 0; fluxProUsed = 0; imagenUsed = 0; ttsCharsUsed = 0; fluxDevUsed = 0; klingVideoUsed = 0; wanI2vUsed = 0;
+                fluxMaxUsed = 0; fluxProUsed = 0; fluxLoraUsed = 0; imagenUsed = 0; ttsCharsUsed = 0; fluxDevUsed = 0; klingVideoUsed = 0; wanI2vUsed = 0; wanI2vV22Used = 0;
                 try {
                     await pool.execute(
-                        'UPDATE users SET demo_flux_max_monthly_used=0, demo_flux_pro_monthly_used=0, demo_imagen_monthly_used=0, demo_tts_monthly_chars_used=0, demo_flux_dev_monthly_used=0, demo_kling_video_monthly_used=0, demo_wani2v_monthly_used=0, demo_usage_last_reset_month=? WHERE id=?',
+                        'UPDATE users SET demo_flux_max_monthly_used=0, demo_flux_pro_monthly_used=0, demo_flux_lora_monthly_used=0, demo_imagen_monthly_used=0, demo_tts_monthly_chars_used=0, demo_flux_dev_monthly_used=0, demo_kling_video_monthly_used=0, demo_wani2v_monthly_used=0, demo_wani2v_v22_monthly_used=0, demo_usage_last_reset_month=? WHERE id=?',
                         [currentYearMonth, user.id]
                     );
                 } catch (dbResetError) {
@@ -406,16 +442,20 @@ app.post('/api/auth/verify-code', async (req, res) => {
                 fluxKontextMaxMonthlyMaxUses: DEMO_USER_MONTHLY_LIMITS.FLUX_KONTEX_MAX_MONTHLY,
                 fluxKontextProMonthlyUsesLeft: Math.max(0, DEMO_USER_MONTHLY_LIMITS.FLUX_KONTEX_PRO_MONTHLY - fluxProUsed),
                 fluxKontextProMonthlyMaxUses: DEMO_USER_MONTHLY_LIMITS.FLUX_KONTEX_PRO_MONTHLY,
+                fluxKontextLoraMonthlyUsed: fluxLoraUsed,
+                fluxKontextLoraMonthlyMaxUses: DEMO_USER_MONTHLY_LIMITS.FLUX_KONTEX_LORA_MONTHLY,
                 imagen3MonthlyImagesLeft: Math.max(0, DEMO_USER_MONTHLY_LIMITS.IMAGEN3_MONTHLY_IMAGES - imagenUsed),
                 imagen3MonthlyMaxImages: DEMO_USER_MONTHLY_LIMITS.IMAGEN3_MONTHLY_IMAGES,
                 openaiTtsMonthlyCharsLeft: Math.max(0, DEMO_USER_MONTHLY_LIMITS.OPENAI_TTS_MONTHLY_CHARS - ttsCharsUsed),
                 openaiTtsMonthlyMaxChars: DEMO_USER_MONTHLY_LIMITS.OPENAI_TTS_MONTHLY_CHARS,
-                fluxDevMonthlyImagesLeft: Math.max(0, DEMO_USER_MONTHLY_LIMITS.FLUX_DEV_MONTHLY_IMAGES - fluxDevUsed),
-                fluxDevMonthlyMaxImages: DEMO_USER_MONTHLY_LIMITS.FLUX_DEV_MONTHLY_IMAGES,
+                fluxDevMonthlyImagesLeft: Math.max(0, DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_DEV_MONTHLY_IMAGES - fluxDevUsed),
+                fluxDevMonthlyMaxImages: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_DEV_MONTHLY_IMAGES,
                 klingVideoMonthlyUsed: klingVideoUsed, // Send current usage for the month
-                klingVideoMonthlyMaxUses: DEMO_USER_MONTHLY_LIMITS.KLING_VIDEO_MONTHLY_MAX_USES,
+                klingVideoMonthlyMaxUses: DEMO_USER_DEFAULT_MONTHLY_LIMITS.KLING_VIDEO_MONTHLY_MAX_USES,
                 wanI2vMonthlyUsed: wanI2vUsed,
-                wanI2vMonthlyMaxUses: DEMO_USER_MONTHLY_LIMITS.WAN_I2V_MONTHLY_MAX_USES,
+                wanI2vMonthlyMaxUses: DEMO_USER_DEFAULT_MONTHLY_LIMITS.WAN_I2V_MONTHLY_MAX_USES,
+                wanI2vV22MonthlyUsed: wanI2vV22Used,
+                wanI2vV22MonthlyMaxUses: DEMO_USER_DEFAULT_MONTHLY_LIMITS.WAN_I2V_V22_MONTHLY_MAX_USES,
             };
             return res.json({
                 success: true, isDemoUser: true, username: user.username,
@@ -483,10 +523,77 @@ if (GEMINI_API_KEY_PROXY) {
 } else console.warn("PROXY WARNING: GEMINI_API_KEY missing. Gemini and Imagen models will not function.");
 
 if (GOOGLE_MAPS_API_KEY_PROXY) {
-    console.log("GOOGLE_MAPS_API_KEY found in environment. This is relevant for AI Agent Smart backend operations.");
+    console.log("GOOGLE_MAPS_API_KEY found in environment. This is relevant for Advanced Tools backend operations.");
 } else {
-    console.warn("PROXY WARNING: GOOGLE_MAPS_API_KEY missing. The AI Agent Smart's location-based features (e.g., finding places, directions) might be impaired as the backend system it relies on may require this key.");
+    console.warn("PROXY WARNING: GOOGLE_MAPS_API_KEY missing. The Advanced Tools' location-based features (e.g., finding places, directions) might be impaired as the backend system it relies on may require this key.");
 }
+
+// --- NEW ADVANCED TOOLS ENDPOINTS ---
+app.post('/api/tools/ip-info', async (req, res) => {
+    try {
+        const ip = getClientIp(req);
+        // Using a free, no-key-required API for this example
+        const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,country,countryCode,query`);
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            res.json({ ip: data.query, country: data.country, countryCode: data.countryCode });
+        } else {
+            throw new Error(data.message || 'Failed to fetch IP geolocation data.');
+        }
+    } catch (error) {
+        console.error("[IP Info Tool Proxy Error]", error);
+        res.status(500).json({ error: `Could not get IP info: ${error.message}` });
+    }
+});
+
+app.post('/api/tools/download-video', async (req, res) => {
+    const { url, format } = req.body;
+    console.log(`[YT Download] Received request for URL: ${url}, Format: ${format}`);
+    
+    try {
+        if (!url || (await play.validate(url)) !== 'yt_video') {
+            return res.status(400).json({ success: false, error: "Invalid or unsupported YouTube URL." });
+        }
+
+        const info = await play.video_info(url);
+        const title = info.video_details.title || 'youtube_video';
+        // Sanitize filename
+        const safeTitle = title.replace(/[^a-z0-9_.-]/gi, '_').substring(0, 100);
+
+        let stream;
+        let filename;
+        let contentType;
+        
+        if (format === 'mp3') {
+            stream = await play.stream(url, {
+                type: 'audio',
+                quality: 2, // 0: low, 1: medium, 2: high
+                download: true
+            });
+            filename = `${safeTitle}.mp3`;
+            contentType = 'audio/mpeg';
+        } else { // mp4
+            stream = await play.stream(url, {
+                type: 'video',
+                quality: 2,
+                download: true
+            });
+            filename = `${safeTitle}.mp4`;
+            contentType = 'video/mp4';
+        }
+
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+        res.setHeader('Content-Type', contentType);
+        
+        stream.stream.pipe(res);
+
+    } catch (error) {
+        console.error("[YT Download Proxy Error]", error);
+        res.status(500).json({ success: false, error: `Failed to process video: ${error.message}` });
+    }
+});
+// --- END OF NEW ADVANCED TOOLS ENDPOINTS ---
 
 
 app.post('/api/gemini/chat/stream', async (req, res) => {
@@ -964,6 +1071,75 @@ app.post('/api/fal/image/edit/flux-kontext', async (req, res) => {
   }
 });
 
+app.post('/api/fal/image/edit/flux-kontext-lora', async (req, res) => {
+    if (req.authDbError) return res.status(503).json({ error: "Service temporarily unavailable (DB auth)." });
+    if (req.authenticationAttempted && req.authenticationFailed) return res.status(403).json({ error: "Access Denied (auth failed)." });
+
+    const isActualAdmin = !req.isPaidUser && !req.isDemoUser && !req.authenticationAttempted;
+    const isAuthenticUser = req.isPaidUser || req.isDemoUser;
+
+    if (!isAuthenticUser && !isActualAdmin) return res.status(401).json({ error: "Unauthorized access." });
+
+  try {
+    if (!FAL_KEY) return res.status(500).json({ error: "Fal.ai API Key not configured." });
+    const { modelIdentifier, prompt, image_base_64, image_mime_type, settings } = req.body;
+    if (!modelIdentifier || !prompt || !settings || !image_base_64 || !image_mime_type) {
+        return res.status(400).json({ error: "Missing required fields for Flux Kontext Lora." });
+    }
+    const num_images_requested = settings.num_images || 1;
+
+    if (!isActualAdmin) {
+        if (!req.isPaidUser) {
+            console.log(`[Fal Flux Lora Proxy] Access DENIED. Not a paid user. User: ${req.demoUser?.username || 'None'}, IP: ${getClientIp(req)}`);
+            return res.status(403).json({ error: "Flux Kontext Lora is exclusively for Paid Users." });
+        }
+        if (!pool) return res.status(500).json({ error: "DB not available for PAID user Flux Lora limit check." });
+        const currentUsed = req.paidUser.fluxLoraMonthlyUsed || 0;
+        if (currentUsed + num_images_requested > PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_LORA_MONTHLY_MAX_USES) {
+            return res.status(429).json({ error: `Monthly Flux Lora limit reached. Used: ${currentUsed}/${PAID_USER_MAX_LIMITS_CONFIG.FLUX_KONTEX_LORA_MONTHLY_MAX_USES}, Requested: ${num_images_requested}`, limitReached: true });
+        }
+    } else {
+        console.log(`[Fal Flux Lora Proxy] Admin access granted (IP: ${getClientIp(req)}). Bypassing limits.`);
+    }
+    
+    const falInputPayload = {
+      prompt,
+      image_url: `data:${image_mime_type};base64,${image_base_64}`,
+    };
+
+    if (settings.negative_prompt !== undefined) falInputPayload.negative_prompt = settings.negative_prompt;
+    if (settings.num_inference_steps !== undefined) falInputPayload.num_inference_steps = settings.num_inference_steps;
+    if (settings.seed !== undefined && settings.seed !== null) falInputPayload.seed = settings.seed;
+    if (settings.guidance_scale !== undefined) falInputPayload.guidance_scale = settings.guidance_scale;
+    if (settings.num_images !== undefined) falInputPayload.num_images = settings.num_images;
+    if (settings.output_format !== undefined) falInputPayload.output_format = settings.output_format;
+    if (settings.loras !== undefined && Array.isArray(settings.loras)) falInputPayload.loras = settings.loras;
+    if (settings.acceleration !== undefined) falInputPayload.acceleration = settings.acceleration;
+    if (settings.resolution_mode !== undefined) falInputPayload.resolution_mode = settings.resolution_mode;
+    if (settings.enable_safety_checker !== undefined) falInputPayload.enable_safety_checker = settings.enable_safety_checker;
+    if (settings.sampler_name !== undefined) falInputPayload.sampler_name = settings.sampler_name;
+    if (settings.scheduler !== undefined) falInputPayload.scheduler = settings.scheduler;
+    if (settings.denoising_strength !== undefined) falInputPayload.denoising_strength = settings.denoising_strength;
+    if (settings.clip_skip !== undefined) falInputPayload.clip_skip = settings.clip_skip;
+    
+    const queueResult = await fal.queue.submit(modelIdentifier, { input: falInputPayload });
+    if (!queueResult?.request_id) return res.status(500).json({ error: "Fal.ai submission failed (no request ID)." });
+
+    if (req.isPaidUser && !isActualAdmin && req.paidUser) {
+      try {
+        await pool.execute('UPDATE users SET paid_flux_lora_monthly_used = paid_flux_lora_monthly_used + ? WHERE id = ?', [num_images_requested, req.paidUser.id]);
+        console.log(`[Paid Usage Update - Flux Lora] SUCCESS: User ${req.paidUser.username} used ${num_images_requested}.`);
+      } catch (dbUpdateError) {
+        console.error(`[Paid Usage Update - Flux Lora] FAILED DB update for user ${req.paidUser.username}:`, dbUpdateError);
+      }
+    }
+    res.json({ requestId: queueResult.request_id, message: "Image editing request with Lora submitted." });
+  } catch (error) {
+    console.error("[Flux Lora Edit Proxy Error]", error);
+    res.status(500).json({ error: `Flux Lora Edit Error: ${error.message || "Internal server error"}` });
+  }
+});
+
 app.post('/api/fal/image/generate/flux-dev', async (req, res) => {
     if (req.authDbError) return res.status(503).json({ error: "Service temporarily unavailable (DB auth)." });
     if (req.authenticationAttempted && req.authenticationFailed) return res.status(403).json({ error: "Access Denied (auth failed)." });
@@ -1148,6 +1324,65 @@ app.post('/api/fal/video/generate/wan-i2v', async (req, res) => {
     }
 });
 
+app.post('/api/fal/video/generate/wan-i2v-v22', async (req, res) => {
+    if (req.authDbError) return res.status(503).json({ error: "Service temporarily unavailable (DB auth)." });
+    if (req.authenticationAttempted && req.authenticationFailed) return res.status(403).json({ error: "Access Denied (auth failed)." });
+
+    const isActualAdmin = !req.isPaidUser && !req.isDemoUser && !req.authenticationAttempted;
+    const isAuthenticUser = req.isPaidUser || req.isDemoUser;
+
+    if (!isAuthenticUser && !isActualAdmin) return res.status(401).json({ error: "Unauthorized access." });
+
+    try {
+        if (!FAL_KEY) return res.status(500).json({ error: "Fal.ai API Key not configured." });
+        const { modelIdentifier, prompt, settings, image_base_64, image_mime_type } = req.body;
+        if (!modelIdentifier || !prompt || !settings || !image_base_64 || !image_mime_type) {
+            return res.status(400).json({ error: "Missing fields for Wan I2V v2.2 video generation." });
+        }
+
+        if (!isActualAdmin) {
+            if (!req.isPaidUser) {
+                console.log(`[Fal Wan I2V v2.2 Proxy] Access DENIED. Not a paid user. User: ${req.demoUser?.username || 'None'}, IP: ${getClientIp(req)}`);
+                return res.status(403).json({ error: "Wan I2V v2.2 video generation is exclusively for Paid Users." });
+            }
+            if (!pool) return res.status(500).json({ error: "DB not available for PAID user Wan I2V v2.2 limit check." });
+            const currentUsed = req.paidUser.wanI2vV22MonthlyUsed || 0;
+            if (currentUsed >= PAID_USER_MAX_LIMITS_CONFIG.WAN_I2V_V22_MONTHLY_MAX_GENERATIONS) {
+                return res.status(429).json({
+                    error: `Monthly Wan I2V v2.2 video generation limit reached. Used: ${currentUsed}/${PAID_USER_MAX_LIMITS_CONFIG.WAN_I2V_V22_MONTHLY_MAX_GENERATIONS}`,
+                    limitReached: true
+                });
+            }
+        } else {
+            console.log(`[Fal Wan I2V v2.2 Proxy] Admin access granted (IP: ${getClientIp(req)}). Bypassing limits.`);
+        }
+
+        const falInput = {
+            prompt,
+            image_url: `data:${image_mime_type};base64,${image_base_64}`,
+            ...PROXY_DEFAULT_WAN_I2V_V22_SETTINGS,
+            ...settings,
+        };
+
+        const queueResult = await fal.queue.submit(modelIdentifier, { input: falInput });
+        if (!queueResult?.request_id) return res.status(500).json({ error: "Fal.ai Wan I2V v2.2 video submission failed (no request ID)." });
+
+        if (req.isPaidUser && !isActualAdmin && req.paidUser) {
+            try {
+                await pool.execute('UPDATE users SET paid_wani2v_v22_monthly_used = paid_wani2v_v22_monthly_used + 1 WHERE id = ?', [req.paidUser.id]);
+                console.log(`[Paid Usage Update - Wan I2V v2.2] SUCCESS: User ${req.paidUser.username} count incremented.`);
+            } catch (dbUpdateError) {
+                console.error(`[Paid Usage Update - Wan I2V v2.2] FAILED DB update for user ${req.paidUser.username}:`, dbUpdateError);
+            }
+        }
+
+        res.json({ requestId: queueResult.request_id, message: "Wan I2V v2.2 video request submitted." });
+    } catch (error) {
+        console.error("[Wan I2V v2.2 Gen Proxy Error]", error);
+        res.status(500).json({ error: `Wan I2V v2.2 Gen Error: ${error.message || "Internal server error"}` });
+    }
+});
+
 
 
 app.post('/api/fal/queue/status', async (req, res) => {
@@ -1156,7 +1391,7 @@ app.post('/api/fal/queue/status', async (req, res) => {
     const { requestId, modelIdentifier } = req.body;
     if (!requestId || !modelIdentifier) return res.status(400).json({ error: "Missing requestId or modelIdentifier." });
 
-    const statusResult = await fal.queue.status(modelIdentifier, { requestId });
+    const statusResult = await fal.queue.status(modelIdentifier, { requestId, logs: true });
     let responsePayload = { status: statusResult?.status, rawResult: statusResult, imageUrl: undefined, imageUrls: undefined, videoUrl: undefined, message: undefined, error: undefined };
 
 
@@ -1164,7 +1399,7 @@ app.post('/api/fal/queue/status', async (req, res) => {
         const jobResult = await fal.queue.result(modelIdentifier, { requestId });
         responsePayload.rawResult = jobResult;
 
-        const isVideoModel = modelIdentifier.includes('kling-video') || modelIdentifier.includes('wan-i2v');
+        const isVideoModel = modelIdentifier.includes('kling-video') || modelIdentifier.includes('wan-i2v') || modelIdentifier.includes('wan/v2.2-5b');
 
         if (isVideoModel) {
             let videoUrlResult;
@@ -1408,7 +1643,7 @@ The "detailed_analysis" field in the JSON should be a complete summary of your f
                         // The detailed_analysis in JSON is a repeat, the main text is `analysisText`
                     } catch (e) {
                         console.error("[Trading Analysis Proxy] Failed to parse extracted JSON:", e, "Extracted JSON string:", jsonContentString, "Full raw text (first 500 chars):", rawText.substring(0, 500));
-                        // analysisText is already set to text before JSON block, or full rawText if no JSON
+                        // analysisText is already set to text before JSON block, or or full rawText if no JSON
                         trendPredictions = null;
                     }
                 } else {
