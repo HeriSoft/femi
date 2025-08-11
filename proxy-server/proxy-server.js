@@ -9,7 +9,10 @@ import mysql from 'mysql2/promise';
 import bcrypt from 'bcrypt';
 import multer from 'multer';
 import FormData from 'form-data';
-import youtubedl from 'youtube-dl-exec';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import fs from 'node:fs';
+import path from 'node:path';
 
 console.log(`[Proxy Server] Starting up at ${new Date().toISOString()}...`);
 
@@ -123,6 +126,50 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
+
+// --- YT-DLP Binary Setup ---
+const execFileAsync = promisify(execFile);
+const binaryPath = path.join('/tmp', 'yt-dlp');
+const binaryUrl = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux';
+let ytdlpSetupPromise = null;
+
+async function setupYtdlp() {
+  try {
+    // Check if file exists and is executable
+    await fs.promises.access(binaryPath, fs.constants.X_OK);
+    console.log('yt-dlp binary already exists and is executable.');
+    return;
+  } catch (error) {
+    // File doesn't exist or is not executable, proceed with download
+    console.log('Downloading yt-dlp binary...');
+    const response = await fetch(binaryUrl);
+    if (!response.ok || !response.body) {
+      throw new Error(`Failed to download yt-dlp binary: ${response.statusText}`);
+    }
+    // Stream download to file
+    const fileStream = fs.createWriteStream(binaryPath);
+    await new Promise((resolve, reject) => {
+        response.body.pipe(fileStream);
+        response.body.on("error", reject);
+        fileStream.on("finish", resolve);
+    });
+    
+    await fs.promises.chmod(binaryPath, '755');
+    console.log('yt-dlp binary downloaded and set up successfully.');
+  }
+}
+
+function ensureYtdlpIsReady() {
+    if (!ytdlpSetupPromise) {
+        ytdlpSetupPromise = setupYtdlp().catch(err => {
+            console.error("CRITICAL: yt-dlp setup failed.", err);
+            ytdlpSetupPromise = null; // Allow retry on next request
+            throw err; // re-throw to fail the current request
+        });
+    }
+    return ytdlpSetupPromise;
+}
+// --- END YT-DLP ---
 
 // --- Authentication ---
 const LOGIN_CODE_AUTH_ADMIN = process.env.LOGIN_CODE_AUTH_ADMIN;
@@ -556,41 +603,50 @@ app.post('/api/tools/download-video', async (req, res) => {
     }
 
     try {
-        const commonFlags = {
-            noCheckCertificates: true,
-            noWarnings: true,
-            preferFreeFormats: true,
-            addHeader: ['referer:youtube.com', 'user-agent:googlebot']
-        };
+        await ensureYtdlpIsReady();
+
+        const commonFlags = [
+            '--no-check-certificates',
+            '--no-warnings',
+            '--prefer-free-formats',
+            '--add-header', 'referer:youtube.com',
+            '--add-header', 'user-agent:googlebot'
+        ];
         
         console.log('[Video Download] Fetching video info with yt-dlp...');
-        const metadata = await youtubedl(url, {
-            dumpSingleJson: true,
+        const { stdout: metadataJson } = await execFileAsync(binaryPath, [
+            url,
+            '--dump-single-json',
             ...commonFlags
-        });
+        ]);
 
+        const metadata = JSON.parse(metadataJson);
         const title = metadata.title || 'video';
         const safeTitle = title.replace(/[^a-z0-9_.-]/gi, '_').substring(0, 100);
-
-        let flags = {};
+        
+        let processArgs = [];
         let filename;
         let contentType;
         
         const effectiveFormat = format === 'bilibili' ? 'mp4' : format;
 
         if (effectiveFormat === 'mp3') {
-            flags = {
-                extractAudio: true,
-                audioFormat: 'mp3',
-                output: '-', 
-            };
+            processArgs = [
+                url,
+                '--extract-audio',
+                '--audio-format', 'mp3',
+                '-o', '-',
+                ...commonFlags
+            ];
             filename = `${safeTitle}.mp3`;
             contentType = 'audio/mpeg';
         } else { // mp4
-            flags = {
-                format: 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-                output: '-',
-            };
+            processArgs = [
+                url,
+                '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+                '-o', '-',
+                ...commonFlags
+            ];
             filename = `${safeTitle}.mp4`;
             contentType = 'video/mp4';
         }
@@ -600,17 +656,15 @@ app.post('/api/tools/download-video', async (req, res) => {
         
         console.log(`[Video Download] Streaming file: "${filename}"`);
 
-        const subprocess = youtubedl.exec(url, {
-            ...flags,
-            ...commonFlags
-        });
+        const subprocess = execFile(binaryPath, processArgs);
         
         subprocess.stdout.pipe(res);
 
         subprocess.stderr.on('data', (data) => {
-            console.error(`[yt-dlp stderr] ${data}`);
+            // Log stderr but don't treat it as a fatal error unless the process exits non-zero
+            console.error(`[yt-dlp stderr] ${data.toString()}`);
         });
-
+        
         subprocess.on('error', (error) => {
             console.error('[Video Download] Subprocess error:', error);
             if (!res.headersSent) {
@@ -621,9 +675,9 @@ app.post('/api/tools/download-video', async (req, res) => {
         subprocess.on('close', (code) => {
             console.log(`[Video Download] yt-dlp process exited with code ${code}`);
             if (code !== 0 && !res.headersSent && !res.writableEnded) {
-                // Cannot send JSON error if headers are already sent for streaming.
-                // The client will see a truncated file.
-                console.error(`Could not send error to client because headers were already sent.`);
+                 // The stream might have already been aborted by the client if they navigate away
+                 // so we can't send a JSON error. The client will see a truncated file.
+                console.error(`yt-dlp process failed, but headers were already sent.`);
             }
         });
 
