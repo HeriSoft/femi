@@ -1,5 +1,3 @@
-
-
 import React, { useEffect, useRef, useState, useContext } from 'react';
 import hljs from 'https://esm.sh/highlight.js@11.9.0'; 
 import { ChatMessage, ThemeContextType, Model, GroundingSource, TradingPairValue } from '../types.ts';
@@ -302,7 +300,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   let specialBorderClass = '';
   let aasButtonClasses = '';
   
-  const isVideoMessage = (message.model === Model.KLING_VIDEO || message.model === Model.WAN_I2V) && message.videoUrl;
+  const isVideoMessage = (message.model === Model.KLING_VIDEO || message.model === Model.WAN_I2V || message.model === Model.WAN_I2V_V22) && message.videoUrl;
 
   if (currentTheme === 'light') {
     if (isUser) {
@@ -313,7 +311,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       if (message.isTaskGoal) specialBorderClass = 'border-l-4 border-blue-400';
       else if (message.model === Model.PRIVATE) specialBorderClass = 'border-l-4 border-slate-400';
     } else { 
-      bubbleBackgroundColor = message.isTaskPlan ? '#d1fae5' : (isVideoMessage ? '#e0e7ff' : (message.model === Model.TRADING_PRO && message.tradingAnalysis ? '#eef2ff' : (message.model === Model.AI_AGENT_SMART ? '#e0f2f7' : '#ffffff')));
+      bubbleBackgroundColor = message.isTaskPlan ? '#d1fae5' : (isVideoMessage ? '#e0e7ff' : (message.model === Model.TRADING_PRO && message.tradingAnalysis ? '#eef2ff' : (message.model === Model.ADVANCED_TOOLS ? '#e0f2f7' : '#ffffff')));
       bubbleTextColor = '#374151';    
       audioButtonClasses = 'bg-gray-200 hover:bg-gray-300 text-neutral-700'; 
       timestampColor = 'rgba(107, 114, 128, 0.9)'; 
@@ -321,7 +319,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       if (message.isTaskPlan) specialBorderClass = 'border-l-4 border-green-400';
       else if (isVideoMessage) specialBorderClass = 'border-l-4 border-indigo-400';
       else if (message.model === Model.TRADING_PRO && message.tradingAnalysis) specialBorderClass = 'border-l-4 border-purple-400';
-      else if (message.model === Model.AI_AGENT_SMART) specialBorderClass = 'border-l-4 border-cyan-400';
+      else if (message.model === Model.ADVANCED_TOOLS) specialBorderClass = 'border-l-4 border-cyan-400';
     }
   } else { 
     if (isUser) {
@@ -332,7 +330,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       if (message.isTaskGoal) specialBorderClass = 'border-l-4 border-blue-500';
       else if (message.model === Model.PRIVATE) specialBorderClass = 'border-l-4 border-slate-500';
     } else { 
-      bubbleBackgroundColor = message.isTaskPlan ? '#065f46' : (isVideoMessage ? '#312e81' : (message.model === Model.TRADING_PRO && message.tradingAnalysis ? '#3730a3' : (message.model === Model.AI_AGENT_SMART ? '#0e7490' : '#182533')));
+      bubbleBackgroundColor = message.isTaskPlan ? '#065f46' : (isVideoMessage ? '#312e81' : (message.model === Model.TRADING_PRO && message.tradingAnalysis ? '#3730a3' : (message.model === Model.ADVANCED_TOOLS ? '#0e7490' : '#182533')));
       bubbleTextColor = '#FFFFFF';    
       audioButtonClasses = 'bg-white/20 hover:bg-white/30 text-white'; 
       timestampColor = 'rgba(156, 163, 175, 0.8)'; 
@@ -340,7 +338,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       if (message.isTaskPlan) specialBorderClass = 'border-l-4 border-green-500';
       else if (isVideoMessage) specialBorderClass = 'border-l-4 border-indigo-500';
       else if (message.model === Model.TRADING_PRO && message.tradingAnalysis) specialBorderClass = 'border-l-4 border-purple-500';
-      else if (message.model === Model.AI_AGENT_SMART) specialBorderClass = 'border-l-4 border-cyan-500';
+      else if (message.model === Model.ADVANCED_TOOLS) specialBorderClass = 'border-l-4 border-cyan-500';
     }
   }
   tailColor = bubbleBackgroundColor;
@@ -369,12 +367,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const displayText = message.text;
   const taskGoalPrefix = message.isTaskGoal ? "🎯 **Goal:** " : "";
-  const taskPlanPrefix = message.isTaskPlan && message.model !== Model.AI_AGENT_SMART ? "📝 **Agent Response:** " : ""; 
+  const taskPlanPrefix = message.isTaskPlan && message.model !== Model.ADVANCED_TOOLS ? "📝 **Agent Response:** " : ""; 
   const privateNotePrefix = message.isNote && message.model === Model.PRIVATE ? "📝 **Note:** ": "";
   const tradingProPrefix = message.model === Model.TRADING_PRO && message.tradingAnalysis ? `📊 **Trading Analysis (${message.tradingAnalysis.pair}):** ` : "";
   let finalDisplayText = `${taskGoalPrefix}${taskPlanPrefix}${privateNotePrefix}${tradingProPrefix}${displayText}`;
 
-  if (message.model === Model.AI_AGENT_SMART && message.sender === 'ai') {
+  if (message.model === Model.ADVANCED_TOOLS && message.sender === 'ai') {
       finalDisplayText = displayText; 
   }
 
@@ -509,7 +507,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     </button>
   );
   
-  const parsedContent = (message.model === Model.AI_AGENT_SMART && !isUser) 
+  const parsedContent = (message.model === Model.ADVANCED_TOOLS && !isUser) 
     ? parseAASMessageContent(finalDisplayText) 
     : [{ type: 'regular' as const, text: finalDisplayText }];
 
@@ -523,14 +521,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               ? (message.model === Model.PRIVATE ? 'bg-slate-200 dark:bg-slate-700' : 'bg-blue-100 dark:bg-blue-900')
               : (isVideoMessage ? 'bg-indigo-200 dark:bg-indigo-700' 
                   : (message.model === Model.TRADING_PRO ? 'bg-purple-200 dark:bg-purple-700' 
-                  : (message.model === Model.AI_AGENT_SMART ? 'bg-cyan-200 dark:bg-cyan-700' : 'bg-gray-200 dark:bg-gray-700')))
+                  : (message.model === Model.ADVANCED_TOOLS ? 'bg-cyan-200 dark:bg-cyan-700' : 'bg-gray-200 dark:bg-gray-700')))
             } shadow-sm`}
             title={isUser ? 'User' : (message.model || 'AI Assistant')}
           >
             {isUser ? <UserIcon className={`w-5 h-5 ${message.model === Model.PRIVATE ? 'text-slate-600 dark:text-slate-300' : 'text-blue-600 dark:text-blue-300'}`} /> 
                      : (isVideoMessage ? <FilmIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-300" /> 
                      : (message.model === Model.TRADING_PRO ? <PresentationChartLineIcon className="w-5 h-5 text-purple-600 dark:text-purple-300" /> 
-                     : (message.model === Model.AI_AGENT_SMART ? <MapPinIcon className="w-5 h-5 text-cyan-600 dark:text-cyan-300" /> : <RobotIcon className="w-5 h-5 text-gray-600 dark:text-gray-300" />)))}
+                     : (message.model === Model.ADVANCED_TOOLS ? <MapPinIcon className="w-5 h-5 text-cyan-600 dark:text-cyan-300" /> : <RobotIcon className="w-5 h-5 text-gray-600 dark:text-gray-300" />)))}
           </div>
         )}
       </div>
@@ -711,12 +709,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   {isTextCopied ? <CheckIcon className="w-3.5 h-3.5" /> : <ClipboardIcon className="w-3.5 h-3.5" />}
                 </ActionButton>
               )}
-              {!isUser && onRegenerate && message.promptedByMessageId && !message.isImageQuery && !message.audioUrl && !message.isTaskPlan && message.model !== Model.AI_AGENT_SMART && !message.videoUrl && !message.tradingAnalysis && !message.originalText && (
+              {!isUser && onRegenerate && message.promptedByMessageId && !message.isImageQuery && !message.audioUrl && !message.isTaskPlan && message.model !== Model.ADVANCED_TOOLS && !message.videoUrl && !message.tradingAnalysis && !message.originalText && (
                 <ActionButton onClick={() => onRegenerate(message.id, message.promptedByMessageId!)} disabled={isLoading} title="Regenerate Response" ariaLabel="Regenerate AI response">
                   <ArrowPathIcon className="w-3.5 h-3.5" />
                 </ActionButton>
               )}
-              {message.isTaskPlan && message.model !== Model.AI_AGENT_SMART && message.text.trim() && (
+              {message.isTaskPlan && message.model !== Model.ADVANCED_TOOLS && message.text.trim() && (
                  <ActionButton onClick={handleDownloadAgentResponse} title="Download Agent Response" ariaLabel="Download AI Agent response as text file">
                    <ArrowDownTrayIcon className="w-3.5 h-3.5" />
                  </ActionButton>

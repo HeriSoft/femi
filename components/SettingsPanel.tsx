@@ -1,9 +1,7 @@
-
-
 import React, { useState } from 'react';
-import { Model, ModelSettings, SettingsPanelProps, ApiKeyStatus, getActualModelIdentifier, ImagenSettings, Persona, OpenAITtsSettings, OpenAiTtsVoice, RealTimeTranslationSettings, AiAgentSmartSettings, FluxKontexSettings, FluxKontexAspectRatio, FluxDevSettings, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, PrivateModeSettings, AnyModelSettings, TradingProSettings, FluxDevImageSize, WanI2vSettings, WanI2vResolution, WanI2vAspectRatio, LoraWeight } from '../types.ts'; 
+import { Model, ModelSettings, SettingsPanelProps, ApiKeyStatus, getActualModelIdentifier, ImagenSettings, Persona, OpenAITtsSettings, OpenAiTtsVoice, RealTimeTranslationSettings, AdvancedToolsSettings, FluxKontexSettings, FluxKontexAspectRatio, FluxDevSettings, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, PrivateModeSettings, AnyModelSettings, TradingProSettings, FluxDevImageSize, WanI2vSettings, WanI2vResolution, WanI2vAspectRatio, LoraWeight, FluxKontexLoraSettings, FluxKontexLoraResolutionMode, FluxKontexLoraAcceleration, WanI2vV22Settings, WanI2vV22Resolution, WanI2vV22AspectRatio, WanI2vV22InterpolatorModel } from '../types.ts'; 
 import { ArrowUpTrayIcon, PhotoIcon, XMarkIcon, MagnifyingGlassIcon, KeyIcon, InformationCircleIcon, UserCircleIcon, PlusCircleIcon, TrashIcon, PencilSquareIcon, SpeakerWaveIcon, LanguageIcon, PencilIcon as EditIcon, ArrowPathIcon, FilmIcon, PresentationChartLineIcon } from './Icons.tsx'; // Added PresentationChartLineIcon
-import { TRANSLATION_TARGET_LANGUAGES, DEFAULT_FLUX_KONTEX_SETTINGS, DEFAULT_FLUX_DEV_SETTINGS, FLUX_DEV_IMAGE_SIZES, DEFAULT_KLING_AI_SETTINGS, KLING_AI_DURATIONS, KLING_AI_ASPECT_RATIOS, ALL_MODEL_DEFAULT_SETTINGS, TRADING_PRO_PAIRS, DEFAULT_WAN_I2V_SETTINGS, WAN_I2V_RESOLUTIONS, WAN_I2V_ASPECT_RATIOS } from '../constants.ts'; 
+import { TRANSLATION_TARGET_LANGUAGES, DEFAULT_FLUX_KONTEX_SETTINGS, DEFAULT_FLUX_DEV_SETTINGS, FLUX_DEV_IMAGE_SIZES, DEFAULT_KLING_AI_SETTINGS, KLING_AI_DURATIONS, KLING_AI_ASPECT_RATIOS, ALL_MODEL_DEFAULT_SETTINGS, TRADING_PRO_PAIRS, DEFAULT_WAN_I2V_SETTINGS, WAN_I2V_RESOLUTIONS, WAN_I2V_ASPECT_RATIOS, DEFAULT_FLUX_KONTEX_LORA_SETTINGS, DEFAULT_WAN_I2V_V22_SETTINGS, WAN_I2V_V22_RESOLUTIONS, WAN_I2V_V22_ASPECT_RATIOS, WAN_I2V_V22_INTERPOLATORS } from '../constants.ts'; 
 
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({
@@ -31,18 +29,20 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const isImagenModel = selectedModel === Model.IMAGEN3 || currentApiKeyStatus?.isImageGeneration;
   const isTextToSpeechModel = selectedModel === Model.OPENAI_TTS || currentApiKeyStatus?.isTextToSpeech;
   const isRealTimeTranslationModel = selectedModel === Model.REAL_TIME_TRANSLATION || currentApiKeyStatus?.isRealTimeTranslation;
-  const isAiAgentSmartModel = selectedModel === Model.AI_AGENT_SMART || currentApiKeyStatus?.isAiAgentSmart; // Updated
+  const isAdvancedToolsModel = selectedModel === Model.ADVANCED_TOOLS || currentApiKeyStatus?.isAdvancedTools;
   const isPrivateModel = selectedModel === Model.PRIVATE || currentApiKeyStatus?.isPrivateMode;
   const isFluxKontexModel = selectedModel === Model.FLUX_KONTEX || selectedModel === Model.FLUX_KONTEX_MAX_MULTI;
+  const isFluxKontexLoraModel = selectedModel === Model.FLUX_KONTEX_LORA;
   const isFluxDevImageGenModel = selectedModel === Model.FLUX_ULTRA || currentApiKeyStatus?.isFluxDevImageGeneration;
   const isKlingVideoModel = selectedModel === Model.KLING_VIDEO || currentApiKeyStatus?.isKlingVideoGeneration;
   const isWanI2vVideoModel = selectedModel === Model.WAN_I2V || currentApiKeyStatus?.isWanI2vVideoGeneration;
+  const isWanI2vV22VideoModel = selectedModel === Model.WAN_I2V_V22;
   const isTradingProModel = selectedModel === Model.TRADING_PRO || currentApiKeyStatus?.isTradingPro;
 
 
-  const showPersonaSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentSmartModel && !isPrivateModel && !isFluxKontexModel && !isFluxDevImageGenModel && !isKlingVideoModel && !isWanI2vVideoModel && !isTradingProModel && selectedModel !== Model.CLAUDE;
-  const showChatModelSettingsSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentSmartModel && !isFluxKontexModel && !isFluxDevImageGenModel && !isPrivateModel && !isKlingVideoModel && !isWanI2vVideoModel && !isTradingProModel && selectedModel !== Model.CLAUDE;
-  const showWebSearchToggle = currentApiKeyStatus?.isGeminiPlatform && !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAiAgentSmartModel && !isPrivateModel && !isFluxKontexModel && !isFluxDevImageGenModel && !isKlingVideoModel && !isWanI2vVideoModel && !isTradingProModel;
+  const showPersonaSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAdvancedToolsModel && !isPrivateModel && !isFluxKontexModel && !isFluxKontexLoraModel && !isFluxDevImageGenModel && !isKlingVideoModel && !isWanI2vVideoModel && !isWanI2vV22VideoModel && !isTradingProModel && selectedModel !== Model.CLAUDE;
+  const showChatModelSettingsSection = !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAdvancedToolsModel && !isFluxKontexModel && !isFluxKontexLoraModel && !isFluxDevImageGenModel && !isPrivateModel && !isKlingVideoModel && !isWanI2vVideoModel && !isWanI2vV22VideoModel && !isTradingProModel && selectedModel !== Model.CLAUDE;
+  const showWebSearchToggle = currentApiKeyStatus?.isGeminiPlatform && !isImagenModel && !isTextToSpeechModel && !isRealTimeTranslationModel && !isAdvancedToolsModel && !isPrivateModel && !isFluxKontexModel && !isFluxKontexLoraModel && !isFluxDevImageGenModel && !isKlingVideoModel && !isWanI2vVideoModel && !isWanI2vV22VideoModel && !isTradingProModel;
 
 
   const handlePersonaEdit = (persona: Persona) => {
@@ -94,12 +94,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                          !currentApiKeyStatus?.isImageGeneration && 
                                          !currentApiKeyStatus?.isTextToSpeech &&
                                          !currentApiKeyStatus?.isRealTimeTranslation &&
-                                         !currentApiKeyStatus?.isAiAgentSmart && // Updated
+                                         !currentApiKeyStatus?.isAdvancedTools &&
                                          !currentApiKeyStatus?.isImageEditing &&
+                                         !isFluxKontexLoraModel &&
                                          !currentApiKeyStatus?.isMultiImageEditing &&
                                          !currentApiKeyStatus?.isFluxDevImageGeneration &&
                                          !isKlingVideoModel &&
                                          !isWanI2vVideoModel &&
+                                         !isWanI2vV22VideoModel &&
                                          !isTradingProModel;
 
 
@@ -126,6 +128,28 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     { value: '21:9', label: '21:9 (Extra Wide)' },
   ];
 
+   const fluxKontexLoraResolutionModes: { value: FluxKontexLoraResolutionMode; label: string }[] = [
+    { value: 'auto', label: 'Auto (Optimal)' },
+    { value: 'match_input', label: 'Match Input' },
+    { value: '1:1', label: '1:1 (Square)' },
+    { value: '16:9', label: '16:9 (Landscape)' },
+    { value: '9:16', label: '9:16 (Portrait)' },
+    { value: '21:9', label: '21:9 (Widescreen)' },
+    { value: '9:21', label: '9:21 (Tall Screen)' },
+    { value: '3:2', label: '3:2 (Photo)' },
+    { value: '2:3', label: '2:3 (Photo Tall)' },
+    { value: '4:3', label: '4:3 (Standard)' },
+    { value: '3:4', label: '3:4 (Standard Tall)' },
+    { value: '4:5', label: '4:5 (Social)' },
+    { value: '5:4', label: '5:4 (Social Wide)' },
+  ];
+
+  const fluxKontexLoraAccelerations: { value: FluxKontexLoraAcceleration; label: string }[] = [
+    { value: 'none', label: 'None (Highest Quality)' },
+    { value: 'regular', label: 'Regular' },
+    { value: 'high', label: 'High (Fastest)' },
+  ];
+
   const ttsVoices: { value: OpenAiTtsVoice; label: string }[] = [
     { value: 'alloy', label: 'Alloy' },
     { value: 'echo', label: 'Echo' },
@@ -135,19 +159,23 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     { value: 'shimmer', label: 'Shimmer' },
   ];
   
-  const handleRandomizeSeed = (modelType: 'fluxKontext' | 'fluxDev' | 'kling' | 'wanI2v') => {
+  const handleRandomizeSeed = (modelType: 'fluxKontext' | 'fluxDev' | 'kling' | 'wanI2v' | 'fluxKontextLora' | 'wanI2vV22') => {
     const randomSeed = Math.floor(Math.random() * 1000000000);
     if (modelType === 'fluxKontext' && isFluxKontexModel) {
         onModelSettingsChange({ seed: randomSeed } as Partial<FluxKontexSettings>);
+    } else if (modelType === 'fluxKontextLora' && isFluxKontexLoraModel) {
+        onModelSettingsChange({ seed: randomSeed } as Partial<FluxKontexLoraSettings>);
     } else if (modelType === 'fluxDev' && isFluxDevImageGenModel) {
         onModelSettingsChange({ seed: randomSeed } as Partial<FluxDevSettings>);
     } else if (modelType === 'wanI2v' && isWanI2vVideoModel) {
         onModelSettingsChange({ seed: randomSeed } as Partial<WanI2vSettings>);
+    } else if (modelType === 'wanI2vV22' && isWanI2vV22VideoModel) {
+        onModelSettingsChange({ seed: randomSeed } as Partial<WanI2vV22Settings>);
     }
   };
 
-  const handleLoraChange = (index: number, field: keyof LoraWeight, value: string | number) => {
-    const currentSettings = modelSettings as WanI2vSettings;
+  const handleLoraChange = (index: number, field: keyof LoraWeight, value: string | number, modelType: 'wanI2v' | 'fluxKontextLora' | 'wanI2vV22') => {
+    const currentSettings = modelSettings as WanI2vSettings | FluxKontexLoraSettings | WanI2vV22Settings;
     const newLoras = [...(currentSettings.loras || [])];
     const loraToUpdate = { ...newLoras[index] };
 
@@ -159,19 +187,19 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     }
 
     newLoras[index] = loraToUpdate;
-    onModelSettingsChange({ loras: newLoras } as Partial<WanI2vSettings>);
+    onModelSettingsChange({ loras: newLoras } as Partial<WanI2vSettings | FluxKontexLoraSettings | WanI2vV22Settings>);
   };
 
-  const addLora = () => {
-    const currentSettings = modelSettings as WanI2vSettings;
+  const addLora = (modelType: 'wanI2v' | 'fluxKontextLora' | 'wanI2vV22') => {
+    const currentSettings = modelSettings as WanI2vSettings | FluxKontexLoraSettings | WanI2vV22Settings;
     const newLoras = [...(currentSettings.loras || []), { path: '', scale: 1.0 }];
-    onModelSettingsChange({ loras: newLoras } as Partial<WanI2vSettings>);
+    onModelSettingsChange({ loras: newLoras } as Partial<WanI2vSettings | FluxKontexLoraSettings | WanI2vV22Settings>);
   };
 
-  const removeLora = (index: number) => {
-    const currentSettings = modelSettings as WanI2vSettings;
+  const removeLora = (index: number, modelType: 'wanI2v' | 'fluxKontextLora' | 'wanI2vV22') => {
+    const currentSettings = modelSettings as WanI2vSettings | FluxKontexLoraSettings | WanI2vV22Settings;
     const newLoras = (currentSettings.loras || []).filter((_, i) => i !== index);
-    onModelSettingsChange({ loras: newLoras } as Partial<WanI2vSettings>);
+    onModelSettingsChange({ loras: newLoras } as Partial<WanI2vSettings | FluxKontexLoraSettings | WanI2vV22Settings>);
   };
 
   
@@ -182,11 +210,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     if (currentApiKeyStatus.isMock) apiKeyTypeString = "Mock";
     else if (currentApiKeyStatus.isTextToSpeech) apiKeyTypeString = "TTS API";
     else if (currentApiKeyStatus.isRealTimeTranslation) apiKeyTypeString = "Translation API";
-    else if (currentApiKeyStatus.isAiAgentSmart) apiKeyTypeString = "AI Agent Smart API"; // Updated
+    else if (currentApiKeyStatus.isAdvancedTools) apiKeyTypeString = "Advanced Tools API";
     else if (currentApiKeyStatus.isImageEditing || currentApiKeyStatus.isMultiImageEditing) apiKeyTypeString = "Image Editing API";
+    else if (currentApiKeyStatus.isFluxKontexLora) apiKeyTypeString = "Image Editing API (LoRA)";
     else if (currentApiKeyStatus.isFluxDevImageGeneration) apiKeyTypeString = "Image Gen API (Flux Dev)";
     else if (currentApiKeyStatus.isKlingVideoGeneration) apiKeyTypeString = "Video Gen API (Kling)";
     else if (currentApiKeyStatus.isWanI2vVideoGeneration) apiKeyTypeString = "Video Gen API (Wan I2V)";
+    else if (currentApiKeyStatus.isWanI2vV22VideoGeneration) apiKeyTypeString = "Video Gen API (Wan I2V v2.2)";
     else if (currentApiKeyStatus.isPrivateMode) apiKeyTypeString = "Local Mode";
     else if (currentApiKeyStatus.isTradingPro) apiKeyTypeString = "Trading Analysis APIs";
     else apiKeyTypeString = "Live API Key";
@@ -208,10 +238,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
         >
           {models.map((model) => {
             const isFluxMax = model === Model.FLUX_KONTEX_MAX_MULTI;
+            const isFluxLora = model === Model.FLUX_KONTEX_LORA;
             const isFluxDev = model === Model.FLUX_ULTRA;
             const isKling = model === Model.KLING_VIDEO;
             const isWanI2v = model === Model.WAN_I2V;
-            const isRestricted = (isFluxMax || isFluxDev || isKling || isWanI2v) && !userSession.isPaidUser && !isAdminUser; 
+            const isWanI2vV22 = model === Model.WAN_I2V_V22;
+            const isRestricted = (isFluxMax || isFluxDev || isKling || isWanI2v || isFluxLora || isWanI2vV22) && !userSession.isPaidUser && !isAdminUser; 
             return (
               <option key={model} value={model} disabled={isRestricted}
                 className={isRestricted ? "text-gray-400 dark:text-gray-600" : ""}>
@@ -384,7 +416,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
             />
           </div>
-          { (currentApiKeyStatus?.isGeminiPlatform && !currentApiKeyStatus.isImageGeneration && !currentApiKeyStatus.isImageEditing && !currentApiKeyStatus.isPrivateMode && !currentApiKeyStatus.isMultiImageEditing && !currentApiKeyStatus.isFluxDevImageGeneration && !isKlingVideoModel && !isTradingProModel) && ( 
+          { (currentApiKeyStatus?.isGeminiPlatform && !currentApiKeyStatus.isImageGeneration && !currentApiKeyStatus.isImageEditing && !isFluxKontexLoraModel && !currentApiKeyStatus.isPrivateMode && !currentApiKeyStatus.isMultiImageEditing && !currentApiKeyStatus.isFluxDevImageGeneration && !isKlingVideoModel && !isTradingProModel) && ( 
           <div>
             <label htmlFor="top-k" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
               Top K: {(modelSettings as ModelSettings).topK}
@@ -421,85 +453,15 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
         </div>
       )}
 
-      {isAiAgentSmartModel && (
+      {isAdvancedToolsModel && (
         <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
           <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
               <UserCircleIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" />
-              AI Agent Smart Settings
+              Advanced Tools
           </h3>
-          {isAdminUser ? (
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                As an Admin, you can view and edit the core system instruction for AI Agent Smart. Personas are disabled for this model.
-            </p>
-          ) : (
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                The AI Agent Smart uses a specific system instruction for its capabilities. Personas are disabled. Model parameters can be adjusted below.
-            </p>
-          )}
-
-          {isAdminUser && (
-            <div>
-              <label htmlFor="ai-agent-smart-system-instruction" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-                System Instruction (AI Agent Smart)
-              </label>
-              <textarea
-                id="ai-agent-smart-system-instruction"
-                rows={8}
-                value={(modelSettings as AiAgentSmartSettings).systemInstruction}
-                onChange={(e) => onModelSettingsChange({ systemInstruction: e.target.value } as Partial<AiAgentSmartSettings>)}
-                disabled={disabled}
-                className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none text-xs"
-              />
-            </div>
-          )}
-           <div>
-            <label htmlFor="ai-agent-smart-temperature" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              Temperature: {(modelSettings as AiAgentSmartSettings).temperature.toFixed(2)}
-            </label>
-            <input
-              type="range"
-              id="ai-agent-smart-temperature"
-              min="0"
-              max="1" 
-              step="0.01"
-              value={(modelSettings as AiAgentSmartSettings).temperature}
-              onChange={(e) => onModelSettingsChange({ temperature: parseFloat(e.target.value) } as Partial<AiAgentSmartSettings>)}
-              disabled={disabled}
-              className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
-            />
-          </div>
-          <div>
-            <label htmlFor="ai-agent-smart-top-k" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              Top K: {(modelSettings as AiAgentSmartSettings).topK}
-            </label>
-            <input
-              type="range"
-              id="ai-agent-smart-top-k"
-              min="1"
-              max="100" 
-              step="1"
-              value={(modelSettings as AiAgentSmartSettings).topK}
-              onChange={(e) => onModelSettingsChange({ topK: parseInt(e.target.value, 10) } as Partial<AiAgentSmartSettings>)}
-              disabled={disabled}
-              className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
-            />
-          </div>
-          <div> 
-            <label htmlFor="ai-agent-smart-top-p" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
-              Top P: {(modelSettings as AiAgentSmartSettings).topP.toFixed(2)}
-            </label>
-            <input
-              type="range"
-              id="ai-agent-smart-top-p"
-              min="0"
-              max="1"
-              step="0.01"
-              value={(modelSettings as AiAgentSmartSettings).topP}
-              onChange={(e) => onModelSettingsChange({ topP: parseFloat(e.target.value) } as Partial<AiAgentSmartSettings>)}
-              disabled={disabled}
-              className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
-            />
-          </div>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">
+              This mode provides access to various tools and utilities. Configure them in the main view. Standard model settings do not apply.
+          </p>
         </div>
       )}
       
@@ -862,29 +824,193 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
               {((modelSettings as WanI2vSettings).loras || []).map((lora, index) => (
                 <div key={index} className="p-3 border border-secondary dark:border-neutral-darkest rounded-md bg-secondary-light/50 dark:bg-neutral-dark/30 relative">
-                  <button onClick={() => removeLora(index)} className="absolute top-1 right-1 p-1 text-red-500 hover:text-red-700" title="Remove LoRA"><TrashIcon className="w-4 h-4"/></button>
+                  <button onClick={() => removeLora(index, 'wanI2v')} className="absolute top-1 right-1 p-1 text-red-500 hover:text-red-700" title="Remove LoRA"><TrashIcon className="w-4 h-4"/></button>
                   <div className="space-y-2">
                     <div>
                         <label htmlFor={`lora-path-${index}`} className="block text-xs font-medium">Path (URL)</label>
-                        <input id={`lora-path-${index}`} type="text" value={lora.path} onChange={(e) => handleLoraChange(index, 'path', e.target.value)} placeholder="https://..." className="w-full p-1.5 mt-1 border rounded-md text-sm bg-neutral-light dark:bg-neutral-dark"/>
+                        <input id={`lora-path-${index}`} type="text" value={lora.path} onChange={(e) => handleLoraChange(index, 'path', e.target.value, 'wanI2v')} placeholder="https://..." className="w-full p-1.5 mt-1 border rounded-md text-sm bg-neutral-light dark:bg-neutral-dark"/>
                     </div>
                     <div>
                         <label htmlFor={`lora-name-${index}`} className="block text-xs font-medium">Weight Name (optional)</label>
-                        <input id={`lora-name-${index}`} type="text" value={lora.weight_name || ''} onChange={(e) => handleLoraChange(index, 'weight_name', e.target.value)} placeholder="e.g., my_lora" className="w-full p-1.5 mt-1 border rounded-md text-sm bg-neutral-light dark:bg-neutral-dark"/>
+                        <input id={`lora-name-${index}`} type="text" value={lora.weight_name || ''} onChange={(e) => handleLoraChange(index, 'weight_name', e.target.value, 'wanI2v')} placeholder="e.g., my_lora" className="w-full p-1.5 mt-1 border rounded-md text-sm bg-neutral-light dark:bg-neutral-dark"/>
                     </div>
                     <div>
                         <label htmlFor={`lora-scale-${index}`} className="block text-xs font-medium">Scale: {lora.scale?.toFixed(2) ?? '1.00'}</label>
-                        <input id={`lora-scale-${index}`} type="range" min="0" max="2" step="0.05" value={lora.scale ?? 1.0} onChange={(e) => handleLoraChange(index, 'scale', e.target.value)} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"/>
+                        <input id={`lora-scale-${index}`} type="range" min="0" max="2" step="0.05" value={lora.scale ?? 1.0} onChange={(e) => handleLoraChange(index, 'scale', e.target.value, 'wanI2v')} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"/>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
-            <button onClick={addLora} className="mt-2 px-3 py-1.5 text-xs bg-primary hover:bg-primary-dark text-white rounded-md flex items-center"><PlusCircleIcon className="w-4 h-4 mr-1"/> Add LoRA</button>
+            <button onClick={() => addLora('wanI2v')} className="mt-2 px-3 py-1.5 text-xs bg-primary hover:bg-primary-dark text-white rounded-md flex items-center"><PlusCircleIcon className="w-4 h-4 mr-1"/> Add LoRA</button>
           </div>
           <div className="mt-2 p-3 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-sm text-blue-700 dark:text-blue-300">
               <InformationCircleIcon className="w-5 h-5 inline mr-1.5 align-text-bottom" />
               Upload an image and enter a prompt to generate a video.
+          </div>
+        </div>
+      )}
+
+      {isWanI2vV22VideoModel && (
+        <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
+          <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
+            <FilmIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" />
+            Wan I2V v2.2 Video Settings
+          </h3>
+          <div>
+            <label htmlFor="wan22-resolution" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Resolution</label>
+            <select id="wan22-resolution" value={(modelSettings as WanI2vV22Settings).resolution || DEFAULT_WAN_I2V_V22_SETTINGS.resolution}
+              onChange={(e) => onModelSettingsChange({ resolution: e.target.value as WanI2vV22Resolution } as Partial<WanI2vV22Settings>)} disabled={disabled}
+              className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none">
+              {WAN_I2V_V22_RESOLUTIONS.map(opt => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="wan22-aspect-ratio" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Aspect Ratio</label>
+            <select id="wan22-aspect-ratio" value={(modelSettings as WanI2vV22Settings).aspect_ratio || DEFAULT_WAN_I2V_V22_SETTINGS.aspect_ratio}
+              onChange={(e) => onModelSettingsChange({ aspect_ratio: e.target.value as WanI2vV22AspectRatio } as Partial<WanI2vV22Settings>)} disabled={disabled}
+              className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none">
+              {WAN_I2V_V22_ASPECT_RATIOS.map(opt => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="wan22-num-frames" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Number of Frames: {(modelSettings as WanI2vV22Settings).num_frames ?? DEFAULT_WAN_I2V_V22_SETTINGS.num_frames}
+            </label>
+            <input type="range" id="wan22-num-frames" min="81" max="121" step="1"
+              value={(modelSettings as WanI2vV22Settings).num_frames ?? DEFAULT_WAN_I2V_V22_SETTINGS.num_frames}
+              onChange={(e) => onModelSettingsChange({ num_frames: parseInt(e.target.value, 10) } as Partial<WanI2vV22Settings>)}
+              disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light" />
+          </div>
+          <div>
+            <label htmlFor="wan22-fps" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Frames Per Second: {(modelSettings as WanI2vV22Settings).frames_per_second ?? DEFAULT_WAN_I2V_V22_SETTINGS.frames_per_second}
+            </label>
+            <input type="range" id="wan22-fps" min="4" max="60" step="1"
+              value={(modelSettings as WanI2vV22Settings).frames_per_second ?? DEFAULT_WAN_I2V_V22_SETTINGS.frames_per_second}
+              onChange={(e) => onModelSettingsChange({ frames_per_second: parseInt(e.target.value, 10) } as Partial<WanI2vV22Settings>)}
+              disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light" />
+          </div>
+          <div>
+            <label htmlFor="wan22-num-inference-steps" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Inference Steps: {(modelSettings as WanI2vV22Settings).num_inference_steps ?? DEFAULT_WAN_I2V_V22_SETTINGS.num_inference_steps}
+            </label>
+            <input type="range" id="wan22-num-inference-steps" min="10" max="50" step="1"
+              value={(modelSettings as WanI2vV22Settings).num_inference_steps ?? DEFAULT_WAN_I2V_V22_SETTINGS.num_inference_steps}
+              onChange={(e) => onModelSettingsChange({ num_inference_steps: parseInt(e.target.value, 10) } as Partial<WanI2vV22Settings>)}
+              disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light" />
+          </div>
+          <div>
+            <label htmlFor="wan22-guidance-scale" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Guidance Scale: {((modelSettings as WanI2vV22Settings).guidance_scale ?? DEFAULT_WAN_I2V_V22_SETTINGS.guidance_scale!).toFixed(1)}
+            </label>
+            <input type="range" id="wan22-guidance-scale" min="1" max="15" step="0.5"
+              value={(modelSettings as WanI2vV22Settings).guidance_scale ?? DEFAULT_WAN_I2V_V22_SETTINGS.guidance_scale}
+              onChange={(e) => onModelSettingsChange({ guidance_scale: parseFloat(e.target.value) } as Partial<WanI2vV22Settings>)}
+              disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light" />
+          </div>
+          <div>
+            <label htmlFor="wan22-shift" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Shift: {((modelSettings as WanI2vV22Settings).shift ?? DEFAULT_WAN_I2V_V22_SETTINGS.shift!).toFixed(1)}
+            </label>
+            <input type="range" id="wan22-shift" min="1" max="10" step="0.1"
+              value={(modelSettings as WanI2vV22Settings).shift ?? DEFAULT_WAN_I2V_V22_SETTINGS.shift}
+              onChange={(e) => onModelSettingsChange({ shift: parseFloat(e.target.value) } as Partial<WanI2vV22Settings>)}
+              disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light" />
+          </div>
+           <div className="flex items-end space-x-2">
+                <div className="flex-grow">
+                    <label htmlFor="wan22-seed" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Seed (empty for random)</label>
+                    <input type="number" id="wan22-seed"
+                        value={(modelSettings as WanI2vV22Settings).seed === null || (modelSettings as WanI2vV22Settings).seed === undefined ? '' : (modelSettings as WanI2vV22Settings).seed}
+                        onChange={(e) => onModelSettingsChange({ seed: e.target.value === '' ? null : parseInt(e.target.value, 10) } as Partial<WanI2vV22Settings>)}
+                        placeholder="Random" disabled={disabled}
+                        className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none" />
+                </div>
+                <button onClick={() => handleRandomizeSeed('wanI2vV22')} disabled={disabled}
+                    className="p-2 border border-secondary dark:border-neutral-darkest rounded-md text-neutral-darker dark:text-secondary-light hover:bg-secondary/50 dark:hover:bg-neutral-dark/50" title="Randomize Seed">
+                    <ArrowPathIcon className="w-5 h-5"/>
+                </button>
+            </div>
+            <div>
+              <label htmlFor="wan22-interpolator" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Frame Interpolation</label>
+              <select id="wan22-interpolator" value={(modelSettings as WanI2vV22Settings).interpolator_model || DEFAULT_WAN_I2V_V22_SETTINGS.interpolator_model}
+                onChange={(e) => onModelSettingsChange({ interpolator_model: e.target.value as WanI2vV22InterpolatorModel } as Partial<WanI2vV22Settings>)} disabled={disabled}
+                className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none">
+                {WAN_I2V_V22_INTERPOLATORS.map(opt => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="wan22-interp-frames" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+                Interpolated Frames: {(modelSettings as WanI2vV22Settings).num_interpolated_frames ?? DEFAULT_WAN_I2V_V22_SETTINGS.num_interpolated_frames}
+              </label>
+              <input type="range" id="wan22-interp-frames" min="0" max="4" step="1"
+                value={(modelSettings as WanI2vV22Settings).num_interpolated_frames ?? DEFAULT_WAN_I2V_V22_SETTINGS.num_interpolated_frames}
+                onChange={(e) => onModelSettingsChange({ num_interpolated_frames: parseInt(e.target.value, 10) } as Partial<WanI2vV22Settings>)}
+                disabled={disabled || ((modelSettings as WanI2vV22Settings).interpolator_model ?? 'film') === 'none'} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light" />
+            </div>
+          <div>
+            <label htmlFor="wan22-negative-prompt" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Negative Prompt
+            </label>
+            <textarea id="wan22-negative-prompt" rows={3}
+              value={(modelSettings as WanI2vV22Settings).negative_prompt || DEFAULT_WAN_I2V_V22_SETTINGS.negative_prompt}
+              onChange={(e) => onModelSettingsChange({ negative_prompt: e.target.value } as Partial<WanI2vV22Settings>)}
+              disabled={disabled} placeholder={DEFAULT_WAN_I2V_V22_SETTINGS.negative_prompt}
+              className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none text-xs" />
+          </div>
+            <div className="flex items-center justify-between mt-2">
+                <label htmlFor="wan22-safety-checker" className="text-sm font-medium text-neutral-darker dark:text-secondary-light">Enable Safety Checker</label>
+                <button onClick={() => onModelSettingsChange({ enable_safety_checker: !((modelSettings as WanI2vV22Settings).enable_safety_checker ?? DEFAULT_WAN_I2V_V22_SETTINGS.enable_safety_checker) } as Partial<WanI2vV22Settings>)} disabled={disabled}
+                  className={`${((modelSettings as WanI2vV22Settings).enable_safety_checker ?? DEFAULT_WAN_I2V_V22_SETTINGS.enable_safety_checker) ? 'bg-primary dark:bg-primary-light' : 'bg-secondary dark:bg-neutral-darkest'} relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:ring-offset-2 dark:focus:ring-offset-neutral-dark`}
+                  role="switch" aria-checked={(modelSettings as WanI2vV22Settings).enable_safety_checker ?? DEFAULT_WAN_I2V_V22_SETTINGS.enable_safety_checker}>
+                  <span className={`${((modelSettings as WanI2vV22Settings).enable_safety_checker ?? DEFAULT_WAN_I2V_V22_SETTINGS.enable_safety_checker) ? 'translate-x-6' : 'translate-x-1'} inline-block w-4 h-4 transform bg-white rounded-full transition-transform`} />
+                </button>
+            </div>
+            <div className="flex items-center justify-between mt-2">
+                <label htmlFor="wan22-prompt-expansion" className="text-sm font-medium text-neutral-darker dark:text-secondary-light">Enable Prompt Expansion</label>
+                <button onClick={() => onModelSettingsChange({ enable_prompt_expansion: !((modelSettings as WanI2vV22Settings).enable_prompt_expansion ?? DEFAULT_WAN_I2V_V22_SETTINGS.enable_prompt_expansion) } as Partial<WanI2vV22Settings>)} disabled={disabled}
+                  className={`${((modelSettings as WanI2vV22Settings).enable_prompt_expansion ?? DEFAULT_WAN_I2V_V22_SETTINGS.enable_prompt_expansion) ? 'bg-primary dark:bg-primary-light' : 'bg-secondary dark:bg-neutral-darkest'} relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:ring-offset-2 dark:focus:ring-offset-neutral-dark`}
+                  role="switch" aria-checked={(modelSettings as WanI2vV22Settings).enable_prompt_expansion ?? DEFAULT_WAN_I2V_V22_SETTINGS.enable_prompt_expansion}>
+                  <span className={`${((modelSettings as WanI2vV22Settings).enable_prompt_expansion ?? DEFAULT_WAN_I2V_V22_SETTINGS.enable_prompt_expansion) ? 'translate-x-6' : 'translate-x-1'} inline-block w-4 h-4 transform bg-white rounded-full transition-transform`} />
+                </button>
+            </div>
+            <div className="flex items-center justify-between mt-2">
+              <label htmlFor="wan22-adjust-fps" className="text-sm font-medium text-neutral-darker dark:text-secondary-light">Adjust FPS for Interpolation</label>
+              <button onClick={() => onModelSettingsChange({ adjust_fps_for_interpolation: !((modelSettings as WanI2vV22Settings).adjust_fps_for_interpolation ?? DEFAULT_WAN_I2V_V22_SETTINGS.adjust_fps_for_interpolation) } as Partial<WanI2vV22Settings>)} disabled={disabled}
+                className={`${((modelSettings as WanI2vV22Settings).adjust_fps_for_interpolation ?? DEFAULT_WAN_I2V_V22_SETTINGS.adjust_fps_for_interpolation) ? 'bg-primary dark:bg-primary-light' : 'bg-secondary dark:bg-neutral-darkest'} relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:ring-offset-2 dark:focus:ring-offset-neutral-dark`}
+                role="switch" aria-checked={(modelSettings as WanI2vV22Settings).adjust_fps_for_interpolation ?? DEFAULT_WAN_I2V_V22_SETTINGS.adjust_fps_for_interpolation}>
+                <span className={`${((modelSettings as WanI2vV22Settings).adjust_fps_for_interpolation ?? DEFAULT_WAN_I2V_V22_SETTINGS.adjust_fps_for_interpolation) ? 'translate-x-6' : 'translate-x-1'} inline-block w-4 h-4 transform bg-white rounded-full transition-transform`} />
+              </button>
+          </div>
+          <div className="pt-4 border-t border-secondary dark:border-neutral-darkest">
+            <h4 className="text-md font-semibold text-neutral-darker dark:text-secondary-light mb-2">LoRA Weights</h4>
+            <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
+              {((modelSettings as WanI2vV22Settings).loras || []).map((lora, index) => (
+                <div key={index} className="p-3 border border-secondary dark:border-neutral-darkest rounded-md bg-secondary-light/50 dark:bg-neutral-dark/30 relative">
+                  <button onClick={() => removeLora(index, 'wanI2vV22')} className="absolute top-1 right-1 p-1 text-red-500 hover:text-red-700" title="Remove LoRA"><TrashIcon className="w-4 h-4"/></button>
+                  <div className="space-y-2">
+                    <div>
+                        <label htmlFor={`lora-path-${index}-v22`} className="block text-xs font-medium">Path (URL)</label>
+                        <input id={`lora-path-${index}-v22`} type="text" value={lora.path} onChange={(e) => handleLoraChange(index, 'path', e.target.value, 'wanI2vV22')} placeholder="https://..." className="w-full p-1.5 mt-1 border rounded-md text-sm bg-neutral-light dark:bg-neutral-dark"/>
+                    </div>
+                    <div>
+                        <label htmlFor={`lora-name-${index}-v22`} className="block text-xs font-medium">Weight Name (optional)</label>
+                        <input id={`lora-name-${index}-v22`} type="text" value={lora.weight_name || ''} onChange={(e) => handleLoraChange(index, 'weight_name', e.target.value, 'wanI2vV22')} placeholder="e.g., my_lora" className="w-full p-1.5 mt-1 border rounded-md text-sm bg-neutral-light dark:bg-neutral-dark"/>
+                    </div>
+                    <div>
+                        <label htmlFor={`lora-scale-${index}-v22`} className="block text-xs font-medium">Scale: {lora.scale?.toFixed(2) ?? '1.00'}</label>
+                        <input id={`lora-scale-${index}-v22`} type="range" min="0" max="2" step="0.05" value={lora.scale ?? 1.0} onChange={(e) => handleLoraChange(index, 'scale', e.target.value, 'wanI2vV22')} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"/>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => addLora('wanI2vV22')} className="mt-2 px-3 py-1.5 text-xs bg-primary hover:bg-primary-dark text-white rounded-md flex items-center"><PlusCircleIcon className="w-4 h-4 mr-1"/> Add LoRA</button>
+          </div>
+          <div className="mt-2 p-3 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-sm text-blue-700 dark:text-blue-300">
+              <InformationCircleIcon className="w-5 h-5 inline mr-1.5 align-text-bottom" />
+              Upload an image and enter a prompt to generate a video with Wan I2V v2.2.
           </div>
         </div>
       )}
@@ -1104,6 +1230,180 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           <div className="mt-2 p-3 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-sm text-blue-700 dark:text-blue-300">
             <InformationCircleIcon className="w-5 h-5 inline mr-1.5 align-text-bottom" />
             Upload an image (or multiple for Flux Max) and provide a prompt to describe the desired edits.
+          </div>
+        </div>
+      )}
+
+      {isFluxKontexLoraModel && (
+        <div className="space-y-4 border-t border-secondary dark:border-neutral-darkest pt-4">
+          <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light flex items-center">
+            <EditIcon className="w-5 h-5 mr-2 text-primary dark:text-primary-light" />
+            Flux Kontext LoRA Settings
+          </h3>
+          <div>
+            <label htmlFor="lora-negative-prompt" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Negative Prompt
+            </label>
+            <textarea
+              id="lora-negative-prompt"
+              rows={2}
+              value={(modelSettings as FluxKontexLoraSettings).negative_prompt ?? DEFAULT_FLUX_KONTEX_LORA_SETTINGS.negative_prompt}
+              onChange={(e) => onModelSettingsChange({ negative_prompt: e.target.value } as Partial<FluxKontexLoraSettings>)}
+              disabled={disabled}
+              placeholder={DEFAULT_FLUX_KONTEX_LORA_SETTINGS.negative_prompt}
+              className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none text-sm"
+            />
+          </div>
+           <div>
+            <label htmlFor="lora-resolution" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Resolution Mode</label>
+            <select 
+                id="lora-resolution"
+                value={(modelSettings as FluxKontexLoraSettings).resolution_mode || DEFAULT_FLUX_KONTEX_LORA_SETTINGS.resolution_mode}
+                onChange={(e) => onModelSettingsChange({ resolution_mode: e.target.value as FluxKontexLoraResolutionMode } as Partial<FluxKontexLoraSettings>)}
+                disabled={disabled}
+                className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
+            >
+                {fluxKontexLoraResolutionModes.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="lora-acceleration" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Acceleration</label>
+            <select 
+                id="lora-acceleration"
+                value={(modelSettings as FluxKontexLoraSettings).acceleration || DEFAULT_FLUX_KONTEX_LORA_SETTINGS.acceleration}
+                onChange={(e) => onModelSettingsChange({ acceleration: e.target.value as FluxKontexLoraAcceleration } as Partial<FluxKontexLoraSettings>)}
+                disabled={disabled}
+                className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
+            >
+                {fluxKontexLoraAccelerations.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+            </select>
+          </div>
+           <div>
+            <label htmlFor="lora-num-inference-steps" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Inference Steps: {(modelSettings as FluxKontexLoraSettings).num_inference_steps ?? DEFAULT_FLUX_KONTEX_LORA_SETTINGS.num_inference_steps}
+            </label>
+            <input
+              type="range" id="lora-num-inference-steps" min="10" max="100" step="1"
+              value={(modelSettings as FluxKontexLoraSettings).num_inference_steps ?? DEFAULT_FLUX_KONTEX_LORA_SETTINGS.num_inference_steps}
+              onChange={(e) => onModelSettingsChange({ num_inference_steps: parseInt(e.target.value, 10) } as Partial<FluxKontexLoraSettings>)}
+              disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
+            />
+          </div>
+          <div>
+            <label htmlFor="lora-guidance-scale" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Guidance Scale: {((modelSettings as FluxKontexLoraSettings).guidance_scale ?? DEFAULT_FLUX_KONTEX_LORA_SETTINGS.guidance_scale!).toFixed(1)}
+            </label>
+            <input
+              type="range" id="lora-guidance-scale" min="0" max="10" step="0.1"
+              value={(modelSettings as FluxKontexLoraSettings).guidance_scale ?? DEFAULT_FLUX_KONTEX_LORA_SETTINGS.guidance_scale}
+              onChange={(e) => onModelSettingsChange({ guidance_scale: parseFloat(e.target.value) } as Partial<FluxKontexLoraSettings>)}
+              disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
+            />
+          </div>
+           {/* --- NEW ADVANCED SETTINGS START --- */}
+          <div>
+            <label htmlFor="lora-sampler-name" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Sampler</label>
+            <select
+              id="lora-sampler-name"
+              value={(modelSettings as FluxKontexLoraSettings).sampler_name || DEFAULT_FLUX_KONTEX_LORA_SETTINGS.sampler_name}
+              onChange={(e) => onModelSettingsChange({ sampler_name: e.target.value } as Partial<FluxKontexLoraSettings>)}
+              disabled={disabled}
+              className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
+            >
+              {['euler_ancestral', 'euler', 'ddim', 'dpm_plus_plus_2m_karras', 'lcm'].map(opt => (
+                <option key={opt} value={opt}>{opt.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="lora-scheduler" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Scheduler</label>
+            <select
+              id="lora-scheduler"
+              value={(modelSettings as FluxKontexLoraSettings).scheduler || DEFAULT_FLUX_KONTEX_LORA_SETTINGS.scheduler}
+              onChange={(e) => onModelSettingsChange({ scheduler: e.target.value } as Partial<FluxKontexLoraSettings>)}
+              disabled={disabled}
+              className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none"
+            >
+              {['normal', 'karras', 'sgm_uniform'].map(opt => (
+                <option key={opt} value={opt}>{opt.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="lora-denoising-strength" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Denoising Strength: {((modelSettings as FluxKontexLoraSettings).denoising_strength ?? DEFAULT_FLUX_KONTEX_LORA_SETTINGS.denoising_strength!).toFixed(2)}
+            </label>
+            <input
+              type="range" id="lora-denoising-strength" min="0" max="1" step="0.05"
+              value={(modelSettings as FluxKontexLoraSettings).denoising_strength ?? DEFAULT_FLUX_KONTEX_LORA_SETTINGS.denoising_strength}
+              onChange={(e) => onModelSettingsChange({ denoising_strength: parseFloat(e.target.value) } as Partial<FluxKontexLoraSettings>)}
+              disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
+            />
+          </div>
+          <div>
+            <label htmlFor="lora-clip-skip" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">
+              Clip Skip: {(modelSettings as FluxKontexLoraSettings).clip_skip ?? DEFAULT_FLUX_KONTEX_LORA_SETTINGS.clip_skip}
+            </label>
+            <input
+              type="range" id="lora-clip-skip" min="0" max="4" step="1"
+              value={(modelSettings as FluxKontexLoraSettings).clip_skip ?? DEFAULT_FLUX_KONTEX_LORA_SETTINGS.clip_skip}
+              onChange={(e) => onModelSettingsChange({ clip_skip: parseInt(e.target.value, 10) } as Partial<FluxKontexLoraSettings>)}
+              disabled={disabled} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"
+            />
+          </div>
+          {/* --- NEW ADVANCED SETTINGS END --- */}
+          <div className="flex items-end space-x-2">
+            <div className="flex-grow">
+                <label htmlFor="lora-seed" className="block text-sm font-medium text-neutral-darker dark:text-secondary-light mb-1">Seed (empty for random)</label>
+                <input type="number" id="lora-seed"
+                    value={(modelSettings as FluxKontexLoraSettings).seed ?? ''}
+                    onChange={(e) => onModelSettingsChange({ seed: e.target.value === '' ? null : parseInt(e.target.value, 10) } as Partial<FluxKontexLoraSettings>)}
+                    placeholder="Random" disabled={disabled}
+                    className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark focus:ring-primary dark:focus:ring-primary-light focus:border-primary dark:focus:border-primary-light outline-none" />
+            </div>
+            <button onClick={() => handleRandomizeSeed('fluxKontextLora')} disabled={disabled}
+                className="p-2 border border-secondary dark:border-neutral-darkest rounded-md text-neutral-darker dark:text-secondary-light hover:bg-secondary/50 dark:hover:bg-neutral-dark/50" title="Randomize Seed">
+                <ArrowPathIcon className="w-5 h-5"/>
+            </button>
+          </div>
+          <div className="flex items-center justify-between mt-2">
+              <label htmlFor="flux-lora-enable-safety-checker" className="text-sm font-medium text-neutral-darker dark:text-secondary-light">Enable Safety Checker</label>
+              <button
+                onClick={() => onModelSettingsChange({ enable_safety_checker: !((modelSettings as FluxKontexLoraSettings).enable_safety_checker ?? DEFAULT_FLUX_KONTEX_LORA_SETTINGS.enable_safety_checker) } as Partial<FluxKontexLoraSettings>)}
+                disabled={disabled}
+                className={`${((modelSettings as FluxKontexLoraSettings).enable_safety_checker ?? DEFAULT_FLUX_KONTEX_LORA_SETTINGS.enable_safety_checker) ? 'bg-primary dark:bg-primary-light' : 'bg-secondary dark:bg-neutral-darkest'} relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-primary-light focus:ring-offset-2 dark:focus:ring-offset-neutral-dark`}
+                role="switch" aria-checked={(modelSettings as FluxKontexLoraSettings).enable_safety_checker ?? DEFAULT_FLUX_KONTEX_LORA_SETTINGS.enable_safety_checker}>
+                <span className={`${((modelSettings as FluxKontexLoraSettings).enable_safety_checker ?? DEFAULT_FLUX_KONTEX_LORA_SETTINGS.enable_safety_checker) ? 'translate-x-6' : 'translate-x-1'} inline-block w-4 h-4 transform bg-white rounded-full transition-transform`} />
+              </button>
+          </div>
+           <div className="pt-4 border-t border-secondary dark:border-neutral-darkest">
+            <h4 className="text-md font-semibold text-neutral-darker dark:text-secondary-light mb-2">LoRA Weights</h4>
+            <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
+              {((modelSettings as FluxKontexLoraSettings).loras || []).map((lora, index) => (
+                <div key={index} className="p-3 border border-secondary dark:border-neutral-darkest rounded-md bg-secondary-light/50 dark:bg-neutral-dark/30 relative">
+                  <button onClick={() => removeLora(index, 'fluxKontextLora')} className="absolute top-1 right-1 p-1 text-red-500 hover:text-red-700" title="Remove LoRA"><TrashIcon className="w-4 h-4"/></button>
+                  <div className="space-y-2">
+                    <div>
+                        <label htmlFor={`lora-path-${index}`} className="block text-xs font-medium">Path (URL)</label>
+                        <input id={`lora-path-${index}`} type="text" value={lora.path} onChange={(e) => handleLoraChange(index, 'path', e.target.value, 'fluxKontextLora')} placeholder="https://..." className="w-full p-1.5 mt-1 border rounded-md text-sm bg-neutral-light dark:bg-neutral-dark"/>
+                    </div>
+                    <div>
+                        <label htmlFor={`lora-scale-${index}`} className="block text-xs font-medium">Scale: {lora.scale?.toFixed(2) ?? '1.00'}</label>
+                        <input id={`lora-scale-${index}`} type="range" min="0" max="2" step="0.05" value={lora.scale ?? 1.0} onChange={(e) => handleLoraChange(index, 'scale', e.target.value, 'fluxKontextLora')} className="w-full h-2 bg-secondary dark:bg-neutral-darkest rounded-lg appearance-none cursor-pointer accent-primary dark:accent-primary-light"/>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => addLora('fluxKontextLora')} className="mt-2 px-3 py-1.5 text-xs bg-primary hover:bg-primary-dark text-white rounded-md flex items-center"><PlusCircleIcon className="w-4 h-4 mr-1"/> Add LoRA</button>
+          </div>
+          <div className="mt-2 p-3 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-sm text-blue-700 dark:text-blue-300">
+            <InformationCircleIcon className="w-5 h-5 inline mr-1.5 align-text-bottom" />
+            Upload an image and provide a prompt to edit. Add one or more LoRA URLs to apply them.
           </div>
         </div>
       )}

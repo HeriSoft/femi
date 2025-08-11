@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { ChatSession, HistoryPanelProps, Model } from '../types.ts';
 import { ArchiveBoxIcon, DocumentPlusIcon, PencilSquareIcon, TrashIcon, FolderOpenIcon, ClockIcon, StarIcon, ArrowDownTrayIcon, ArrowUpTrayIcon as UploadIcon } from './Icons.tsx'; // Added ArrowDownTrayIcon and UploadIcon
@@ -42,11 +41,13 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
   
   const getModelShortName = (modelEnumString: string): string => {
       if (!modelEnumString) return "AI";
+      if (modelEnumString === Model.ADVANCED_TOOLS) return "Tools";
       if (modelEnumString.startsWith(Model.GEMINI.substring(0,6))) return "Gemini";
       if (modelEnumString.startsWith(Model.GPT4O.substring(0,3))) return "GPT";
       if (modelEnumString.startsWith(Model.DEEPSEEK.substring(0,4))) return "Deepseek";
       if (modelEnumString.startsWith(Model.IMAGEN3.substring(0,6))) return "Imagen3";
       if (modelEnumString.startsWith(Model.CLAUDE.substring(0,5))) return "Claude";
+      if (modelEnumString.startsWith(Model.FLUX_KONTEX_LORA.substring(0,4))) return "Flux Lora";
       const match = modelEnumString.match(/^([^\s(]+)/);
       return match ? match[1] : "AI";
   };

@@ -2,7 +2,7 @@
 // Fix: Add 'useMemo' to React import
 import React, { useState, useRef, useEffect, useCallback, useMemo, useContext } from 'react';
 // Update to .ts/.tsx extensions
-import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType, UserGlobalProfile, AiAgentSmartSettings, PrivateModeSettings, FluxKontexSettings, NotificationType, UserSessionState, DemoUserLimits, PaidUserLimits, SingleImageData, MultiImageData, FluxKontexAspectRatio, EditImageWithFluxKontexParams, FluxDevSettings, GenerateImageWithFluxDevParams, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, GenerateVideoWithKlingParams, AnyModelSettings, ModelSpecificSettingsMap, TradingProSettings, TradingProState, TradingPair, GeminiTradingAnalysisResponse, FluxDevImageSize, WanI2vSettings, GenerateVideoWithWanI2vParams, WanI2vSettings as KlingAiSettingsWithLoras } from '../types.ts'; // Removed AlphaVantageProxyResponse
+import { Model, ChatMessage, ModelSettings, AllModelSettings, Part, GroundingSource, ApiKeyStatus, getActualModelIdentifier, ApiChatMessage, ApiStreamChunk, ImagenSettings, ChatSession, Persona, OpenAITtsSettings, RealTimeTranslationSettings, OpenAiTtsVoice, ThemeContextType, UserGlobalProfile, AdvancedToolsSettings, PrivateModeSettings, FluxKontexSettings, NotificationType, UserSessionState, DemoUserLimits, PaidUserLimits, SingleImageData, MultiImageData, FluxKontexAspectRatio, EditImageWithFluxKontexParams, FluxDevSettings, GenerateImageWithFluxDevParams, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, GenerateVideoWithKlingParams, AnyModelSettings, ModelSpecificSettingsMap, TradingProSettings, TradingProState, TradingPair, GeminiTradingAnalysisResponse, FluxDevImageSize, WanI2vSettings, GenerateVideoWithWanI2vParams, WanI2vSettings as KlingAiSettingsWithLoras, FluxKontexLoraSettings, EditImageWithFluxKontexLoraParams, WanI2vV22Settings } from '../types.ts'; // Removed AlphaVantageProxyResponse
 import type { Content } from '@google/genai'; // For constructing Gemini history
 import { ALL_MODEL_DEFAULT_SETTINGS, API_KEY_STATUSES_DEFINITIONS, LOCAL_STORAGE_SETTINGS_KEY, LOCAL_STORAGE_HISTORY_KEY, LOCAL_STORAGE_PERSONAS_KEY, TRANSLATION_TARGET_LANGUAGES, MAX_SAVED_CHAT_SESSIONS, OPENAI_TTS_MAX_INPUT_LENGTH, PAID_USER_LIMITS_CONFIG, DEFAULT_FLUX_KONTEX_SETTINGS, DEFAULT_FLUX_DEV_SETTINGS, FLUX_DEV_IMAGE_SIZES, DEFAULT_KLING_AI_SETTINGS, KLING_AI_DURATIONS, KLING_AI_ASPECT_RATIOS, TRADING_PRO_PAIRS, DEFAULT_TRADING_PRO_SETTINGS, DEFAULT_MODEL_SETTINGS, MAX_TTS_FILE_UPLOAD_SIZE_BYTES, MAX_TRANSLATION_MP3_UPLOAD_SIZE_BYTES, MAX_TRANSLATION_TXT_UPLOAD_SIZE_BYTES } from '../constants.ts';
 import { MessageBubble } from './MessageBubble.tsx';
@@ -17,9 +17,10 @@ import { sendOpenAIMessageStream } from '../services/openaiService.ts';
 import { sendDeepseekMessageStream } from '../services/deepseekService.ts';
 import { sendMockMessageStream } from '../services/mockApiService.ts';
 import { generateOpenAITTS, ProxiedOpenAITtsParams, transcribeOpenAIAudio } from "../services/openaiTTSService.ts";
-import { editImageWithFluxKontexProxy, generateImageWithFluxDevProxy, checkFalQueueStatusProxy, generateVideoWithKlingProxy, generateVideoWithWanI2vProxy } from '../services/falService.ts';
+import { editImageWithFluxKontexProxy, generateImageWithFluxDevProxy, checkFalQueueStatusProxy, generateVideoWithKlingProxy, generateVideoWithWanI2vProxy, editImageWithFluxKontexLoraProxy, generateVideoWithWanI2vV22Proxy } from '../services/falService.ts';
 import { PaperAirplaneIcon, CogIcon, XMarkIcon, PromptIcon, Bars3Icon, ChatBubbleLeftRightIcon, ClockIcon as HistoryIcon, MicrophoneIcon, StopCircleIcon, SpeakerWaveIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, LanguageIcon, KeyIcon, ChevronDownIcon, ArrowDownTrayIcon, PencilIcon as EditIcon, PhotoIcon, ArrowUpTrayIcon, DocumentTextIcon, FilmIcon, PresentationChartLineIcon } from './Icons.tsx';
 import { ThemeContext } from '../App.tsx';
+import AdvancedToolsView from './AdvancedToolsView.tsx';
 
 // Corrected getSpecificDefaultSettings
 const getSpecificDefaultSettings = <K extends Model>(modelKey: K): ModelSpecificSettingsMap[K] => {
@@ -200,6 +201,10 @@ const getIsFluxKontexModel = (model: Model | null): boolean => {
   if (!model) return false;
   return model === Model.FLUX_KONTEX || model === Model.FLUX_KONTEX_MAX_MULTI;
 };
+const getIsFluxKontexLoraModel = (model: Model | null): boolean => {
+    if (!model) return false;
+    return model === Model.FLUX_KONTEX_LORA;
+};
 const getIsFluxDevModel = (model: Model | null): boolean => {
     if (!model) return false;
     return model === Model.FLUX_ULTRA;
@@ -210,7 +215,7 @@ const getIsKlingVideoModel = (model: Model | null): boolean => {
 };
 const getIsWanI2vVideoModel = (model: Model | null): boolean => {
     if (!model) return false;
-    return model === Model.WAN_I2V;
+    return model === Model.WAN_I2V || model === Model.WAN_I2V_V22;
 };
 const getIsFalVideoModel = (model: Model | null): boolean => {
     return getIsKlingVideoModel(model) || getIsWanI2vVideoModel(model);
@@ -312,12 +317,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     }
   });
 
-  const currentModelSettings: AnyModelSettings = useMemo(() => {
+    const currentModelSettings: AnyModelSettings = useMemo(() => {
     const selectedModelKey: Model = selectedModel;
 
-    // Updated getTypedSettings to reflect allSettings as ModelSpecificSettingsMap
     const getTypedSettings = <K extends Model>(modelKey: K): ModelSpecificSettingsMap[K] => {
-        // allSettings is now ModelSpecificSettingsMap, so allSettings[modelKey] is guaranteed.
         return allSettings[modelKey];
     };
 
@@ -333,44 +336,53 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         case Model.IMAGEN3: baseModelSettings = getTypedSettings(Model.IMAGEN3); break;
         case Model.OPENAI_TTS: baseModelSettings = getTypedSettings(Model.OPENAI_TTS); break;
         case Model.REAL_TIME_TRANSLATION: baseModelSettings = getTypedSettings(Model.REAL_TIME_TRANSLATION); break;
-        case Model.AI_AGENT_SMART: baseModelSettings = getTypedSettings(Model.AI_AGENT_SMART); break;
+        case Model.ADVANCED_TOOLS: baseModelSettings = getTypedSettings(Model.ADVANCED_TOOLS); break;
         case Model.PRIVATE: baseModelSettings = getTypedSettings(Model.PRIVATE); break;
         case Model.FLUX_KONTEX: baseModelSettings = getTypedSettings(Model.FLUX_KONTEX); break;
+        case Model.FLUX_KONTEX_LORA: baseModelSettings = getTypedSettings(Model.FLUX_KONTEX_LORA); break;
         case Model.FLUX_KONTEX_MAX_MULTI: baseModelSettings = getTypedSettings(Model.FLUX_KONTEX_MAX_MULTI); break;
         case Model.FLUX_ULTRA: baseModelSettings = getTypedSettings(Model.FLUX_ULTRA); break;
         case Model.KLING_VIDEO: baseModelSettings = getTypedSettings(Model.KLING_VIDEO); break;
         case Model.WAN_I2V: baseModelSettings = getTypedSettings(Model.WAN_I2V); break;
+        case Model.WAN_I2V_V22: baseModelSettings = getTypedSettings(Model.WAN_I2V_V22); break;
         case Model.TRADING_PRO: baseModelSettings = getTypedSettings(Model.TRADING_PRO); break;
         default:
-            const _exhaustiveCheck: never = selectedModelKey;
+            const _exhaustiveCheck = (model: never): never => { throw new Error(`Unhandled model: ${model}`) };
+            _exhaustiveCheck(selectedModelKey);
             console.error(`[ChatPage] currentModelSettings useMemo: Unhandled model ${selectedModelKey}.`);
             baseModelSettings = getSpecificDefaultSettings(Model.GEMINI); 
     }
 
-    let mutableSettingsCopy = { ...baseModelSettings };
-
     const aboutMeText = userProfile?.aboutMe?.trim();
     const activePersona = activePersonaId ? personas.find(p => p.id === activePersonaId) : null;
 
-    if ('systemInstruction' in mutableSettingsCopy && (
-        selectedModelKey === Model.GEMINI || selectedModelKey === Model.GEMINI_ADVANCED ||
-        selectedModelKey === Model.GPT4O || selectedModelKey === Model.GPT4O_MINI ||
-        selectedModelKey === Model.DEEPSEEK || selectedModelKey === Model.CLAUDE ||
-        selectedModelKey === Model.AI_AGENT_SMART || selectedModelKey === Model.PRIVATE
+    if ('systemInstruction' in baseModelSettings && (
+        selectedModelKey === Model.GEMINI ||
+        selectedModelKey === Model.GEMINI_ADVANCED ||
+        selectedModelKey === Model.GPT4O ||
+        selectedModelKey === Model.GPT4O_MINI ||
+        selectedModelKey === Model.DEEPSEEK ||
+        selectedModelKey === Model.CLAUDE ||
+        selectedModelKey === Model.ADVANCED_TOOLS ||
+        selectedModelKey === Model.PRIVATE
     )) {
-        let finalSystemInstruction = mutableSettingsCopy.systemInstruction;
+        let finalSystemInstruction = baseModelSettings.systemInstruction;
         if (activePersona) {
             finalSystemInstruction = activePersona.instruction;
             if (aboutMeText) {
                 finalSystemInstruction = `Background information about the user you are interacting with: "${aboutMeText}".\n\nYour current persona/task based on user's selection: "${activePersona.instruction}"`;
             }
         } else if (aboutMeText) {
-            finalSystemInstruction = `Background information about the user you are interacting with: "${aboutMeText}".\n\nYour task: "${mutableSettingsCopy.systemInstruction}"`;
+            finalSystemInstruction = `Background information about the user you are interacting with: "${aboutMeText}".\n\nYour task: "${baseModelSettings.systemInstruction}"`;
         }
-        (mutableSettingsCopy as ModelSettings | AiAgentSmartSettings | PrivateModeSettings).systemInstruction = finalSystemInstruction;
+        
+        return {
+            ...baseModelSettings,
+            systemInstruction: finalSystemInstruction
+        };
     }
 
-    return mutableSettingsCopy as AnyModelSettings;
+    return baseModelSettings;
 
   }, [allSettings, selectedModel, activePersonaId, personas, userProfile]);
 
@@ -395,7 +407,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   const isImagenModelSelected = selectedModel === Model.IMAGEN3;
   const isTextToSpeechModelSelected = selectedModel === Model.OPENAI_TTS;
   const isRealTimeTranslationMode = selectedModel === Model.REAL_TIME_TRANSLATION;
-  const isAiAgentSmartMode = selectedModel === Model.AI_AGENT_SMART;
+  const isAdvancedToolsMode = selectedModel === Model.ADVANCED_TOOLS;
   const isPrivateModeSelected = selectedModel === Model.PRIVATE;
   const isClaudeModelSelected = selectedModel === Model.CLAUDE;
   const isAdminUser = !userSession.isDemoUser && !userSession.isPaidUser;
@@ -559,6 +571,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       switch (selectedModel) {
         case Model.FLUX_KONTEX:
           return "Flux Kontext Editor";
+        case Model.FLUX_KONTEX_LORA:
+          return "Flux Kontext Lora Editor";
         case Model.FLUX_KONTEX_MAX_MULTI:
           return "Flux Kontext Max Editor";
         case Model.FLUX_ULTRA:
@@ -567,10 +581,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           return "Kling AI Video Generator";
         case Model.WAN_I2V:
           return "Wan I2V Video Generator";
+        case Model.WAN_I2V_V22:
+            return "Wan I2V v2.2 Video Generator";
         case Model.PRIVATE:
           return "Private Mode";
-        case Model.AI_AGENT_SMART:
-          return "AI Agent Smart";
+        case Model.ADVANCED_TOOLS:
+          return "Advanced Tools";
         case Model.REAL_TIME_TRANSLATION:
           return "Real-Time Translation";
         case Model.TRADING_PRO:
@@ -681,7 +697,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             if (
                 (getIsFalVideoModel(oldModel) && !getIsFalVideoModel(newModel)) ||
                 (getIsTradingProModel(oldModel) && !getIsTradingProModel(newModel)) ||
-                (getIsFluxKontexModel(oldModel) && !getIsFluxKontexModel(newModel))
+                (getIsFluxKontexModel(oldModel) && !getIsFluxKontexModel(newModel)) ||
+                (getIsFluxKontexLoraModel(oldModel) && !getIsFluxKontexLoraModel(newModel))
             ) {
                  shouldClearGeneralAttachments = true;
             }
@@ -695,8 +712,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             shouldClearGeneralAttachments = true;
         }
 
-        // Condition 4: Switching TO AI Agent Smart (only supports images).
-        if (newModel === Model.AI_AGENT_SMART && !shouldClearGeneralAttachments) {
+        // Condition 4: Switching TO Advanced Tools (only supports images).
+        if (newModel === Model.ADVANCED_TOOLS && !shouldClearGeneralAttachments) {
             shouldClearTextFileAttachmentsOnly = true;
         }
 
@@ -725,7 +742,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
 
         // Clear personas if new model doesn't support them
-        if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || getIsFluxKontexModel(newModel) || isClaudeModelSelected || getIsFluxDevModel(newModel) || getIsFalVideoModel(newModel) || getIsTradingProModel(newModel) || isAiAgentSmartMode) {
+        if (isImagenModelSelected || isTextToSpeechModelSelected || isRealTimeTranslationMode || isPrivateModeSelected || getIsFluxKontexModel(newModel) || getIsFluxKontexLoraModel(newModel) || isClaudeModelSelected || getIsFluxDevModel(newModel) || getIsFalVideoModel(newModel) || getIsTradingProModel(newModel) || newModel === Model.ADVANCED_TOOLS) {
           if (activePersonaId) {
             setActivePersonaId(null);
           }
@@ -1230,8 +1247,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   };
 
   const handleSaveCurrentChat = useCallback(() => {
-    if (isRealTimeTranslationMode || isAiAgentSmartMode || isPrivateModeSelected || getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsFalVideoModel(selectedModel) || getIsTradingProModel(selectedModel)) {
-        addNotification(`Cannot save chat in ${getIsTradingProModel(selectedModel) ? 'Trading Pro' : (isRealTimeTranslationMode ? 'Real-Time Translation' : (isAiAgentSmartMode ? 'AI Agent Smart' : (isPrivateModeSelected ? 'Private' : (getIsFluxKontexModel(selectedModel) ? 'Image Editing' : (getIsFluxDevModel(selectedModel) ? 'Flux Dev Image Gen' : 'Video Gen')))))} mode.`, "info");
+    if (isRealTimeTranslationMode || isAdvancedToolsMode || isPrivateModeSelected || getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsFalVideoModel(selectedModel) || getIsTradingProModel(selectedModel) || getIsFluxKontexLoraModel(selectedModel)) {
+        addNotification(`Cannot save chat in ${getIsTradingProModel(selectedModel) ? 'Trading Pro' : (isRealTimeTranslationMode ? 'Real-Time Translation' : (isAdvancedToolsMode ? 'Advanced Tools' : (isPrivateModeSelected ? 'Private' : (getIsFluxKontexModel(selectedModel) ? 'Image Editing' : (getIsFluxDevModel(selectedModel) ? 'Flux Dev Image Gen' : 'Video Gen')))))} mode.`, "info");
         return;
     }
     if (messages.length === 0) {
@@ -1313,7 +1330,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         addNotification(`Chat "${sessionName}" saved to browser.`, "success");
     }
     clearSearch();
-  }, [messages, selectedModel, currentModelSettings, activeSessionId, savedSessions, activePersonaId, addNotification, currentChatName, isRealTimeTranslationMode, isAiAgentSmartMode, isPrivateModeSelected, pruneChatSessions, clearSearch]);
+  }, [messages, selectedModel, currentModelSettings, activeSessionId, savedSessions, activePersonaId, addNotification, currentChatName, isRealTimeTranslationMode, isAdvancedToolsMode, isPrivateModeSelected, pruneChatSessions, clearSearch]);
 
   const handleLoadSession = useCallback((sessionId: string, forceLoadAsTradingPro: boolean = false) => {
     const sessionToLoad = savedSessions.find(s => s.id === sessionId);
@@ -1327,7 +1344,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           return;
       }
 
-      if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT_SMART || sessionToLoad.model === Model.PRIVATE || getIsFluxKontexModel(sessionToLoad.model) || getIsFluxDevModel(sessionToLoad.model) || getIsFalVideoModel(sessionToLoad.model) || (getIsTradingProModel(sessionToLoad.model) && !forceLoadAsTradingPro && !userSession.isPaidUser && !isAdminUser && !(userSession.isDemoUser && demoTradingProAccessGranted))) {
+      if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.ADVANCED_TOOLS || sessionToLoad.model === Model.PRIVATE || getIsFluxKontexModel(sessionToLoad.model) || getIsFluxKontexLoraModel(sessionToLoad.model) || getIsFluxDevModel(sessionToLoad.model) || getIsFalVideoModel(sessionToLoad.model) || (getIsTradingProModel(sessionToLoad.model) && !forceLoadAsTradingPro && !userSession.isPaidUser && !isAdminUser && !(userSession.isDemoUser && demoTradingProAccessGranted))) {
           addNotification(`Cannot load "${sessionToLoad.model}" sessions directly or access restricted. Please start a new one or verify access.`, "info");
           return;
       }
@@ -1377,7 +1394,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     setUploadedTextFileName(null);
     setIsWebSearchEnabled(false);
 
-    if (!isRealTimeTranslationMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsFalVideoModel(selectedModel) && !getIsTradingProModel(selectedModel) && !(selectedModel === Model.GPT4O && !isGpt41Unlocked)) {
+    if (!isRealTimeTranslationMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxKontexLoraModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsFalVideoModel(selectedModel) && !getIsTradingProModel(selectedModel) && !(selectedModel === Model.GPT4O && !isGpt41Unlocked)) {
         setAllSettings(prev => {
             const modelKey = selectedModel;
             const defaultSettingsForModel = getSpecificDefaultSettings(modelKey);
@@ -1397,7 +1414,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         });
     }
 
-    if (!isAiAgentSmartMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsFalVideoModel(selectedModel) && !getIsTradingProModel(selectedModel)) setActivePersonaId(null);
+    if (!isAdvancedToolsMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxKontexLoraModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsFalVideoModel(selectedModel) && !getIsTradingProModel(selectedModel)) setActivePersonaId(null);
     setError(null);
     setIsSidebarOpen(false);
     addNotification("Started new chat.", "info");
@@ -1427,7 +1444,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         }));
     }
 
-  }, [selectedModel, addNotification, isRealTimeTranslationMode, isSpeakingLiveTranslation, isGpt41Unlocked, isAiAgentSmartMode, isPrivateModeSelected, clearSearch, allSettings]);
+  }, [selectedModel, addNotification, isRealTimeTranslationMode, isSpeakingLiveTranslation, isGpt41Unlocked, isAdvancedToolsMode, isPrivateModeSelected, clearSearch, allSettings]);
 
   const handleDeleteSession = useCallback((sessionId: string) => {
     const sessionToDelete = savedSessions.find(s => s.id === sessionId);
@@ -1483,8 +1500,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   }, [addNotification, pruneChatSessions]);
 
   const handleSaveChatToDevice = useCallback(() => {
-    if (isRealTimeTranslationMode || isAiAgentSmartMode || isPrivateModeSelected || getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsFalVideoModel(selectedModel) || getIsTradingProModel(selectedModel)) {
-      addNotification(`Cannot save chat to device in ${getIsTradingProModel(selectedModel) ? 'Trading Pro' : (isRealTimeTranslationMode ? 'Real-Time Translation' : (isAiAgentSmartMode ? 'AI Agent Smart' : (isPrivateModeSelected ? 'Private' : (getIsFluxKontexModel(selectedModel) ? 'Image Editing' : (getIsFluxDevModel(selectedModel) ? 'Flux Dev Image Gen' : 'Video Gen')))))} mode.`, "info");
+    if (isRealTimeTranslationMode || isAdvancedToolsMode || isPrivateModeSelected || getIsFluxKontexModel(selectedModel) || getIsFluxKontexLoraModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsFalVideoModel(selectedModel) || getIsTradingProModel(selectedModel)) {
+      addNotification(`Cannot save chat to device in ${getIsTradingProModel(selectedModel) ? 'Trading Pro' : (isRealTimeTranslationMode ? 'Real-Time Translation' : (isAdvancedToolsMode ? 'Advanced Tools' : (isPrivateModeSelected ? 'Private' : (getIsFluxKontexModel(selectedModel) ? 'Image Editing' : (getIsFluxDevModel(selectedModel) ? 'Flux Dev Image Gen' : 'Video Gen')))))} mode.`, "info");
       return;
     }
     if (messages.length === 0) {
@@ -1547,7 +1564,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       console.error("Error saving chat to device:", e);
       addNotification("Failed to save chat to device.", "error", e.message);
     }
-  }, [messages, selectedModel, currentModelSettings, activeSessionId, currentChatName, activePersonaId, addNotification, isRealTimeTranslationMode, isAiAgentSmartMode, isPrivateModeSelected, savedSessions]);
+  }, [messages, selectedModel, currentModelSettings, activeSessionId, currentChatName, activePersonaId, addNotification, isRealTimeTranslationMode, isAdvancedToolsMode, isPrivateModeSelected, savedSessions]);
 
   const handleLoadChatFromDevice = useCallback(async (file: File) => {
     if (!file) return;
@@ -1568,7 +1585,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             if (!sessionToLoad.messages || !sessionToLoad.model || !sessionToLoad.modelSettingsSnapshot || !sessionToLoad.name || !sessionToLoad.timestamp) {
                 throw new Error("File is not a valid chat session format. Missing required fields.");
             }
-            if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.AI_AGENT_SMART || sessionToLoad.model === Model.PRIVATE || getIsFluxKontexModel(sessionToLoad.model) || getIsFluxDevModel(sessionToLoad.model) || getIsFalVideoModel(sessionToLoad.model) || getIsTradingProModel(sessionToLoad.model)) {
+            if (sessionToLoad.model === Model.REAL_TIME_TRANSLATION || sessionToLoad.model === Model.ADVANCED_TOOLS || sessionToLoad.model === Model.PRIVATE || getIsFluxKontexModel(sessionToLoad.model) || getIsFluxKontexLoraModel(sessionToLoad.model) || getIsFluxDevModel(sessionToLoad.model) || getIsFalVideoModel(sessionToLoad.model) || getIsTradingProModel(sessionToLoad.model)) {
                 addNotification(`Cannot load "${sessionToLoad.model}" sessions from file.`, "info");
                 return;
             }
@@ -1921,8 +1938,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     let userDisplayedText = currentInputText.trim();
     let textForApi = currentInputText.trim();
 
-    if (isAiAgentSmartMode) {
-        // AAS handles image via description from system. Text file content is not sent.
+    if (isAdvancedToolsMode) {
+        // AdvancedTools handles image via description from system. Text file content is not sent.
     } else if (currentUploadedTextFileName && currentUploadedTextContent) { // For other models that might support text files
         textForApi = `The user has uploaded a file named "${currentUploadedTextFileName}".\nThe content of this file is:\n${currentUploadedTextContent}\n\n---\n\n${textForApi}`;
     }
@@ -1933,11 +1950,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         selectedModel === Model.GPT4O ||
         selectedModel === Model.GPT4O_MINI ||
         selectedModel === Model.DEEPSEEK ||
-        selectedModel === Model.AI_AGENT_SMART ||
+        selectedModel === Model.ADVANCED_TOOLS ||
         selectedModel === Model.PRIVATE ||
         selectedModel === Model.FLUX_KONTEX ||
+        selectedModel === Model.FLUX_KONTEX_LORA ||
         getIsFalVideoModel(selectedModel) ||
         selectedModel === Model.TRADING_PRO; // Trading Pro now can have a user-uploaded image preview
+
+    const isFluxLora = getIsFluxKontexLoraModel(selectedModel);
 
     const newUserMessage: ChatMessage = {
         id: userMessageId,
@@ -1947,10 +1967,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         imagePreview: canHaveSingleImagePreview && currentUploadedImagePreviews.length > 0 ? currentUploadedImagePreviews[0] : undefined,
         imagePreviews: (selectedModel === Model.FLUX_KONTEX_MAX_MULTI || getIsFluxDevModel(selectedModel)) ? currentUploadedImagePreviews : undefined,
         imageMimeTypes: (selectedModel === Model.FLUX_KONTEX_MAX_MULTI || getIsFluxDevModel(selectedModel)) ? currentUploadedImageFiles.map(f => f.type) : undefined,
-        fileName: (selectedModel !== Model.AI_AGENT_SMART && currentUploadedTextFileName) ? currentUploadedTextFileName : undefined,
-        isImageQuery: isImagenModelSelected || getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel) || isAiAgentSmartMode || getIsTradingProModel(selectedModel),
+        fileName: (selectedModel !== Model.ADVANCED_TOOLS && currentUploadedTextFileName) ? currentUploadedTextFileName : undefined,
+        isImageQuery: isImagenModelSelected || getIsFluxKontexModel(selectedModel) || isFluxLora || getIsFluxDevModel(selectedModel) || isAdvancedToolsMode || getIsTradingProModel(selectedModel),
         isVideoQuery: getIsFalVideoModel(selectedModel),
-        isTaskGoal: isAiAgentSmartMode,
+        isTaskGoal: isAdvancedToolsMode,
         isNote: isPrivateModeSelected && (currentUploadedImagePreviews.length === 0 && !currentUploadedTextFileName),
         model: isPrivateModeSelected ? Model.PRIVATE : undefined,
     };
@@ -1961,7 +1981,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
     const aiMessageTimestamp = Date.now();
     const aiMessageId = isRegenerationOfAiMsgId || (aiMessageTimestamp + 1).toString();
-    const actualModelIdentifierForFal = (getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsFalVideoModel(selectedModel)) ? getActualModelIdentifier(selectedModel) : undefined;
+    const actualModelIdentifierForFal = (getIsFluxKontexModel(selectedModel) || getIsFluxKontexLoraModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsFalVideoModel(selectedModel)) ? getActualModelIdentifier(selectedModel) : undefined;
     const isAdmin = !userSession.isDemoUser && !userSession.isPaidUser;
     const newModel = selectedModel; // Capture current selectedModel for use in this function scope.
 
@@ -1984,6 +2004,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     if (!isRegenerationOfAiMsgId) {
         if (isImagenModelSelected) aiPlaceholderText = 'Generating image(s)...';
         else if (getIsFluxKontexModel(selectedModel)) aiPlaceholderText = 'Submitting image for editing...';
+        else if (isFluxLora) aiPlaceholderText = 'Submitting image for LoRA editing...';
         else if (getIsFluxDevModel(selectedModel)) aiPlaceholderText = 'Generating image (Flux Dev)...';
         else if (getIsFalVideoModel(selectedModel)) {
             const settings = currentModelSettings as WanI2vSettings | KlingAiSettingsWithLoras;
@@ -1994,7 +2015,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             }
         }
         else if (isTextToSpeechModelSelected) aiPlaceholderText = 'Synthesizing audio...';
-        else if (isAiAgentSmartMode) aiPlaceholderText = 'AI Agent Smart is processing...';
+        else if (isAdvancedToolsMode) aiPlaceholderText = 'Advanced Tools is processing...';
         else if (isPrivateModeSelected) aiPlaceholderText = 'Data logged locally. No AI response.';
         else aiPlaceholderText = 'Thinking...';
     }
@@ -2008,9 +2029,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         model: selectedModel,
         isRegenerating: !!isRegenerationOfAiMsgId,
         promptedByMessageId: userMessageId,
-        isTaskPlan: isAiAgentSmartMode,
+        isTaskPlan: isAdvancedToolsMode,
         originalPrompt: userDisplayedText,
-        fluxModelId: (getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsFalVideoModel(selectedModel)) ? actualModelIdentifierForFal : undefined,
+        fluxModelId: (getIsFluxKontexModel(selectedModel) || getIsFluxKontexLoraModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsFalVideoModel(selectedModel)) ? actualModelIdentifierForFal : undefined,
     };
 
     if (isPrivateModeSelected) {
@@ -2068,7 +2089,66 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           if (userSession.isDemoUser && !isAdmin && userSession.demoLimits) {
               onUpdateDemoLimits({ openaiTtsMonthlyCharsLeft: (userSession.demoLimits?.openaiTtsMonthlyCharsLeft || 0) - userDisplayedText.length });
           }
+      } else if (getIsFluxKontexLoraModel(selectedModel) && !currentModelStatus.isMock) {
+          if (currentUploadedImageFiles.length === 0 || currentUploadedImagePreviews.length === 0) {
+            throw new Error("Flux Kontext Lora requires one image to be uploaded.");
+          }
 
+          if (!isAdmin) {
+              if (userSession.isPaidUser && userSession.paidLimits) {
+                  const used = userSession.paidLimits.fluxKontextLoraMonthlyUsed || 0;
+                  const max = userSession.paidLimits.fluxKontextLoraMonthlyMaxGenerations || 0;
+                  if (used >= max) {
+                      throw new Error(`Monthly Flux Kontext Lora limit for Paid user reached. Used: ${used}/${max}`);
+                  }
+              } else if (userSession.isDemoUser && userSession.demoLimits) {
+                  const used = userSession.demoLimits.fluxKontextLoraMonthlyUsed || 0;
+                  const max = userSession.demoLimits.fluxKontextLoraMonthlyMaxUses || 0;
+                  if (used >= max) {
+                      throw new Error(`Monthly Flux Kontext Lora limit for DEMO user reached. Used: ${used}/${max}`);
+                  }
+              }
+          }
+
+          const [header, base64DataOnly] = currentUploadedImagePreviews[0].split(',');
+          if (!base64DataOnly || !/^[A-Za-z0-9+/=]+$/.test(base64DataOnly)) {
+              throw new Error("Invalid image data provided for Flux Kontext Lora.");
+          }
+          const mimeTypeMatch = header?.match(/data:(image\/[a-zA-Z0-9-.+]+);base64/);
+          const fluxLoraImageData: SingleImageData = {
+              image_base_64: base64DataOnly,
+              image_mime_type: (mimeTypeMatch ? mimeTypeMatch[1] : (currentUploadedImageFiles[0]?.type || 'image/png')) as 'image/jpeg' | 'image/png'
+          };
+          
+          const fluxLoraApiSettings = { ...(currentModelSpecificSettingsForApiCall as FluxKontexLoraSettings) };
+
+          const fluxLoraParams: EditImageWithFluxKontexLoraParams = {
+              modelIdentifier: actualModelIdentifier,
+              prompt: textForApi,
+              settings: fluxLoraApiSettings,
+              imageData: fluxLoraImageData,
+              requestHeaders: requestHeaders,
+              userSession: userSession,
+          };
+
+          const fluxLoraResult = await editImageWithFluxKontexLoraProxy(fluxLoraParams);
+          if (fluxLoraResult.error) throw new Error(fluxLoraResult.error);
+
+          if (fluxLoraResult.requestId) {
+              setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? {
+                  ...msg, text: fluxLoraResult.message || `Lora image editing submitted (ID: ${fluxLoraResult.requestId}). Waiting for results...`, falRequestId: fluxLoraResult.requestId, isRegenerating: false, timestamp: msg.timestamp || Date.now(), fluxModelId: actualModelIdentifier
+              } : msg));
+
+              pollFalStatus(fluxLoraResult.requestId, aiMessageId, userDisplayedText, actualModelIdentifier);
+
+              if (userSession.isDemoUser && !isAdmin && userSession.demoLimits) {
+                  onUpdateDemoLimits({ fluxKontextLoraMonthlyUsed: (userSession.demoLimits.fluxKontextLoraMonthlyUsed || 0) + 1 });
+              } else if (userSession.isPaidUser && !isAdmin && userSession.paidLimits) {
+                  onUpdateDemoLimits({ fluxKontextLoraMonthlyUsed: (userSession.paidLimits.fluxKontextLoraMonthlyUsed || 0) + 1 });
+              }
+          } else {
+              throw new Error(fluxLoraResult.error || "Flux Kontext Lora submission failed (no request ID).");
+          }
       } else if ((currentModelStatus?.isImageEditing || currentModelStatus?.isMultiImageEditing) && !currentModelStatus.isMock) {
           if (currentUploadedImageFiles.length === 0 || currentUploadedImagePreviews.length === 0) {
             throw new Error("Flux Kontext requires at least one image to be uploaded.");
@@ -2180,6 +2260,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                 modelIdentifier: actualModelIdentifier, prompt: textForApi, settings: klingApiSettings, imageData: videoImageData, requestHeaders, userSession,
              };
              falResult = await generateVideoWithKlingProxy(klingParams);
+          } else if(selectedModel === Model.WAN_I2V_V22){
+             const wanI2vV22ApiSettings: WanI2vV22Settings = { ...(currentModelSpecificSettingsForApiCall as WanI2vV22Settings) };
+             const wanI2vV22Params = {
+                modelIdentifier: actualModelIdentifier, prompt: textForApi, settings: wanI2vV22ApiSettings, imageData: videoImageData, requestHeaders, userSession,
+             };
+             falResult = await generateVideoWithWanI2vV22Proxy(wanI2vV22Params);
           } else { // WanI2V
              const wanI2vApiSettings: WanI2vSettings = { ...(currentModelSpecificSettingsForApiCall as WanI2vSettings) };
              const wanI2vParams: GenerateVideoWithWanI2vParams = {
@@ -2200,7 +2286,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                  if(getIsKlingVideoModel(selectedModel)) {
                     onUpdateDemoLimits({ klingVideoMonthlyUsed: (userSession.paidLimits.klingVideoMonthlyUsed || 0) + 1 });
                  } else if (getIsWanI2vVideoModel(selectedModel)) {
-                    onUpdateDemoLimits({ wanI2vMonthlyUsed: (userSession.paidLimits.wanI2vMonthlyUsed || 0) + 1 });
+                    if (selectedModel === Model.WAN_I2V_V22) {
+                        onUpdateDemoLimits({ wanI2vV22MonthlyUsed: (userSession.paidLimits.wanI2vV22MonthlyUsed || 0) + 1 });
+                    } else {
+                        onUpdateDemoLimits({ wanI2vMonthlyUsed: (userSession.paidLimits.wanI2vMonthlyUsed || 0) + 1 });
+                    }
                  }
               }
           } else { throw new Error(`${selectedModel} video submission failed (no request ID).`); }
@@ -2232,17 +2322,17 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           } else { throw new Error(apiResponseData.error || "Image generation failed (no images returned)."); }
 
       } else if (currentModelStatus?.isGeminiPlatform && !currentModelStatus.isMock && !isRealTimeTranslationMode && !isPrivateModeSelected) {
-        let geminiChatSettings: ModelSettings | AiAgentSmartSettings;
-        if (selectedModel === Model.AI_AGENT_SMART) {
-            geminiChatSettings = currentModelSpecificSettingsForApiCall as AiAgentSmartSettings;
+        let geminiChatSettings: ModelSettings | AdvancedToolsSettings;
+        if (selectedModel === Model.ADVANCED_TOOLS) {
+            geminiChatSettings = currentModelSpecificSettingsForApiCall as AdvancedToolsSettings;
         } else if ('systemInstruction' in currentModelSpecificSettingsForApiCall) {
             geminiChatSettings = currentModelSpecificSettingsForApiCall as ModelSettings;
         } else {
-            console.error("Error: Gemini platform model selected but settings are not ModelSettings or AiAgentSmartSettings compatible", currentModelSpecificSettingsForApiCall);
+            console.error("Error: Gemini platform model selected but settings are not ModelSettings or AdvancedToolsSettings compatible", currentModelSpecificSettingsForApiCall);
             throw new Error("Incompatible settings for Gemini chat model.");
         }
 
-        const geminiHistory: Content[] = messagesToGeminiHistory(messages, aiMessageId, newUserMessage.id, isAiAgentSmartMode);
+        const geminiHistory: Content[] = messagesToGeminiHistory(messages, aiMessageId, newUserMessage.id, isAdvancedToolsMode);
 
         const currentUserParts: Part[] = [];
         if (textForApi.trim()) {
@@ -2262,7 +2352,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         }
 
         const stream = sendGeminiMessageStream({
-          historyContents: geminiHistory, modelSettings: geminiChatSettings, enableGoogleSearch: isAiAgentSmartMode || isWebSearchEnabled, modelName: actualModelIdentifier, userSession: userSession,
+          historyContents: geminiHistory, modelSettings: geminiChatSettings as ModelSettings, enableGoogleSearch: isAdvancedToolsMode || isWebSearchEnabled, modelName: actualModelIdentifier, userSession: userSession,
         });
         let currentText = ''; let currentGroundingSources: GroundingSource[] | undefined = undefined;
         for await (const chunk of stream) {
@@ -2275,13 +2365,18 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         const isRegen = !!isRegenerationOfAiMsgId;
         const activeImageFileForOpenAI = currentUploadedImageFiles.length > 0 ? currentUploadedImageFiles[0] : null;
         const activeImagePreviewForOpenAI = currentUploadedImagePreviews.length > 0 ? currentUploadedImagePreviews[0] : null;
+        
+        let currentUploadedTextContentForOpenAI: string | null = null;
+        if(currentUploadedTextFileName && TEXT_READABLE_EXTENSIONS.some(ext => currentUploadedTextFileName?.toLowerCase().endsWith(ext))) {
+            currentUploadedTextContentForOpenAI = currentUploadedTextContent;
+        }
 
         let openAISystemInstruction = DEFAULT_MODEL_SETTINGS.systemInstruction;
         if ('systemInstruction' in currentModelSpecificSettingsForApiCall) {
             openAISystemInstruction = (currentModelSpecificSettingsForApiCall as ModelSettings).systemInstruction;
         }
 
-        const history: ApiChatMessage[] = messagesToOpenAIHistory(messages, aiMessageId, newUserMessage.id, openAISystemInstruction, textForApi, activeImageFileForOpenAI, activeImagePreviewForOpenAI, currentUploadedTextFileName, currentUploadedTextContent, isRegen, isRegenerationOfAiMsgId);
+        const history: ApiChatMessage[] = messagesToOpenAIHistory(messages, aiMessageId, newUserMessage.id, openAISystemInstruction, textForApi, activeImageFileForOpenAI, activeImagePreviewForOpenAI, currentUploadedTextFileName, currentUploadedTextContentForOpenAI, isRegen, isRegenerationOfAiMsgId);
 
         const stream = sendOpenAIMessageStream({ modelIdentifier: actualModelIdentifier, history, modelSettings: currentModelSpecificSettingsForApiCall as ModelSettings, userSession: userSession });
         let currentText = '';
@@ -2319,7 +2414,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           if (chunk.isFinished) break;
         }
 
-      } else if (currentModelStatus?.isMock && !isRealTimeTranslationMode && !isAiAgentSmartMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsFalVideoModel(selectedModel)) {
+      } else if (currentModelStatus?.isMock && !isRealTimeTranslationMode && !isAdvancedToolsMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxKontexLoraModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsFalVideoModel(selectedModel)) {
         const mockParts: Part[] = [];
         if (textForApi.trim()) mockParts.push({ text: textForApi.trim() });
 
@@ -2332,7 +2427,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
           currentText += chunk;
           setMessages((prev) => prev.map((msg) => msg.id === aiMessageId ? { ...msg, text: currentText, isRegenerating: false } : msg));
         }
-      } else if (!isRealTimeTranslationMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsFalVideoModel(selectedModel)) {
+      } else if (!isRealTimeTranslationMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxKontexLoraModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsFalVideoModel(selectedModel)) {
           throw new Error(`API integration for ${selectedModel} is not implemented or API key/Vertex config is missing and it's not a mock model.`);
       }
     } catch (e: any) {
@@ -2347,8 +2442,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       }]);
     }
 
-    if (!(getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsFalVideoModel(selectedModel)) ||
-        ((getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel)) && !messages.find(m => m.id === aiMessageId)?.falRequestId) ||
+    if (!(getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsFalVideoModel(selectedModel) || getIsFluxKontexLoraModel(selectedModel)) ||
+        ((getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsFluxKontexLoraModel(selectedModel)) && !messages.find(m => m.id === aiMessageId)?.falRequestId) ||
         (getIsFalVideoModel(selectedModel) && !messages.find(m => m.id === aiMessageId)?.falRequestId)) {
       setIsLoading(false);
     }
@@ -2356,11 +2451,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
     if (!isRegenerationOfAiMsgId && !isRealTimeTranslationMode && !isPrivateModeSelected) {
         setInput('');
-        if (!getIsFluxKontexModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsFalVideoModel(selectedModel) && !getIsTradingProModel(selectedModel)) { // Don't clear for trading pro image
+        if (!getIsFluxKontexModel(selectedModel) && !getIsFluxKontexLoraModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsFalVideoModel(selectedModel) && !getIsTradingProModel(selectedModel)) { // Don't clear for trading pro image
             setUploadedImages([]);
             setImagePreviews([]);
         }
-        if (selectedModel !== Model.AI_AGENT_SMART && selectedModel !== Model.TRADING_PRO) {
+        if (selectedModel !== Model.ADVANCED_TOOLS && selectedModel !== Model.TRADING_PRO) {
             setUploadedTextFileContent(null);
             setUploadedTextFileName(null);
         }
@@ -2407,7 +2502,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         const stream = sendGeminiMessageStream({ 
             modelName: modelIdentifier, 
             historyContents: history, 
-            modelSettings: { temperature: 0.3, topK: 1, topP: 1, systemInstruction: "You are a direct text translator." }, 
+            modelSettings: { temperature: 0.3, topK: 1, topP: 1, systemInstruction: "You are a direct text translator." } as ModelSettings, 
             enableGoogleSearch: false, 
             userSession 
         });
@@ -2475,7 +2570,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                 const history: Content[] = [{ role: 'user', parts: [{ text: translationPrompt }] }];
                 const stream = sendGeminiMessageStream({ 
                     modelName: modelIdentifier, historyContents: history, 
-                    modelSettings: { temperature: 0.3, topK: 32, topP: 0.95, systemInstruction: "You are a direct text translator." }, 
+                    modelSettings: { temperature: 0.3, topK: 32, topP: 0.95, systemInstruction: "You are a direct text translator." } as ModelSettings, 
                     enableGoogleSearch: false, userSession 
                 });
 
@@ -2538,7 +2633,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         addNotification("Please enter a prompt for image generation.", "info");
         return;
     }
-    if (getIsFluxKontexModel(selectedModel)) {
+    if (getIsFluxKontexModel(selectedModel) || getIsFluxKontexLoraModel(selectedModel)) {
         if (uploadedImages.length === 0) {
             setError("Please upload an image to edit.");
             addNotification("Please upload an image for Flux Kontext model.", "info");
@@ -2572,9 +2667,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         addNotification(`TTS input too long. Max ${determinedTtsMaxLength} chars.`, "error");
         return;
     }
-    if (isAiAgentSmartMode && !input.trim() && uploadedImages.length === 0) {
-        setError("Please enter a goal or upload an image for the AI Agent Smart.");
-        addNotification("Please enter a goal or upload an image for the AI Agent Smart.", "info");
+    if (isAdvancedToolsMode && !input.trim() && uploadedImages.length === 0) {
+        setError("Please enter a goal or upload an image for the Advanced Tools.");
+        addNotification("Please enter a goal or upload an image for the Advanced Tools.", "info");
         return;
     }
      if (isPrivateModeSelected && !input.trim() && uploadedImages.length === 0 && !uploadedTextFileName) {
@@ -2582,7 +2677,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         addNotification("Please enter text, or upload an image/file to log in Private Mode.", "info");
         return;
     }
-    if (!isImagenModelSelected && !isTextToSpeechModelSelected && !isAiAgentSmartMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsFalVideoModel(selectedModel) && !input.trim() && uploadedImages.length === 0 && !uploadedTextFileName) {
+    if (!isImagenModelSelected && !isTextToSpeechModelSelected && !isAdvancedToolsMode && !isPrivateModeSelected && !getIsFluxKontexModel(selectedModel) && !getIsFluxKontexLoraModel(selectedModel) && !getIsFluxDevModel(selectedModel) && !getIsFalVideoModel(selectedModel) && !input.trim() && uploadedImages.length === 0 && !uploadedTextFileName) {
         return;
     }
 
@@ -2593,7 +2688,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   };
 
   const handleRegenerateResponse = async (aiMessageIdToRegenerate: string, promptedByMsgId: string) => {
-      if (getIsTradingProModel(selectedModel) || isRealTimeTranslationMode || isAiAgentSmartMode || isPrivateModeSelected || getIsFluxKontexModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsFalVideoModel(selectedModel)) return;
+      if (getIsTradingProModel(selectedModel) || isRealTimeTranslationMode || isAdvancedToolsMode || isPrivateModeSelected || getIsFluxKontexModel(selectedModel) || getIsFluxKontexLoraModel(selectedModel) || getIsFluxDevModel(selectedModel) || getIsFalVideoModel(selectedModel)) return;
       const userMessageForRegen = messages.find(m => m.id === promptedByMsgId && m.sender === 'user');
       const aiMessageToRegen = messages.find(m => m.id === aiMessageIdToRegenerate && m.sender === 'ai');
 
@@ -2643,12 +2738,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     if (
         getIsFalVideoModel(selectedModel) ||
         selectedModel === Model.FLUX_KONTEX ||
+        selectedModel === Model.FLUX_KONTEX_LORA ||
         selectedModel === Model.GEMINI ||
         selectedModel === Model.GEMINI_ADVANCED ||
         selectedModel === Model.GPT4O ||
         selectedModel === Model.GPT4O_MINI ||
         selectedModel === Model.PRIVATE ||
-        selectedModel === Model.AI_AGENT_SMART ||
+        selectedModel === Model.ADVANCED_TOOLS ||
         selectedModel === Model.TRADING_PRO // Added TRADING_PRO here
     ) return 1;
     // Models that explicitly do not support image uploads or have different handling
@@ -2662,18 +2758,17 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         return;
     }
     
-    if (getIsFalVideoModel(selectedModel) || getIsTradingProModel(selectedModel)) {
+    if (getIsFalVideoModel(selectedModel) || getIsTradingProModel(selectedModel) || getIsFluxKontexLoraModel(selectedModel)) {
         if (newFiles.length > 0) {
             const firstFile = newFiles[0];
             const reader = new FileReader();
             reader.onloadend = () => {
                 const base64Preview = reader.result as string;
-                if (getIsFalVideoModel(selectedModel)) {
-                    setUploadedImages([firstFile]); // Still store the file for Kling
-                    setImagePreviews([base64Preview]); // Generic preview
+                if (getIsFalVideoModel(selectedModel) || getIsFluxKontexLoraModel(selectedModel)) {
+                    setUploadedImages([firstFile]); 
+                    setImagePreviews([base64Preview]); 
                 } else if (getIsTradingProModel(selectedModel)) {
                     setTradingProState(prev => ({...prev, chartImageUrl: base64Preview, uploadedImageValidationError: null}));
-                     // For Trading Pro, we don't use the general `uploadedImages` or `imagePreviews` state
                     setUploadedImages([]);
                     setImagePreviews([]);
                 }
@@ -2681,14 +2776,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             reader.onerror = (error) => {
                 console.error("Error reading image file for preview:", error);
                 addNotification("Error creating image preview.", "error");
-                if (getIsFalVideoModel(selectedModel)) setImagePreviews([]);
+                if (getIsFalVideoModel(selectedModel) || getIsFluxKontexLoraModel(selectedModel)) setImagePreviews([]);
                 else if (getIsTradingProModel(selectedModel)) setTradingProState(prev => ({...prev, chartImageUrl: null}));
             };
             reader.readAsDataURL(firstFile);
             setUploadedTextFileContent(null);
             setUploadedTextFileName(null);
         } else {
-            if (getIsFalVideoModel(selectedModel)) {
+            if (getIsFalVideoModel(selectedModel) || getIsFluxKontexLoraModel(selectedModel)) {
                  setUploadedImages([]);
                  setImagePreviews([]);
             } else if (getIsTradingProModel(selectedModel)) {
@@ -2709,7 +2804,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       if (combinedFiles.length > imageUploadLimit) {
         addNotification(`Cannot upload more than ${imageUploadLimit} images for Flux Kontext Max. Only the first ${imageUploadLimit} were kept.`, "warning");
       }
-    } else { // For models that take a single general image (Gemini, GPT, AAS, Flux Kontext Pro)
+    } else { // For models that take a single general image (Gemini, GPT, AdvancedTools, Flux Kontext Pro)
       currentFiles = newFiles.slice(0, 1);
     }
 
@@ -2732,8 +2827,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
       Promise.all(filePromises)
         .then(newPreviewsArray => {
           setImagePreviews(newPreviewsArray);
-          if (selectedModel === Model.AI_AGENT_SMART && newPreviewsArray.length > 0) { // If AAS and image uploaded, clear validation error
-              setTradingProState(prev => ({...prev, uploadedImageValidationError: null})); // Assuming AAS uses TradingProState for this, need to check types.ts
+          if (selectedModel === Model.ADVANCED_TOOLS && newPreviewsArray.length > 0) { // If AdvancedTools and image uploaded, clear validation error
+              setTradingProState(prev => ({...prev, uploadedImageValidationError: null})); // Assuming AdvancedTools uses TradingProState for this, need to check types.ts
           }
         })
         .catch(error => {
@@ -2808,11 +2903,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         clearSearch();
         return;
     }
-    if (isAiAgentSmartMode || getIsTradingProModel(selectedModel)) { 
+    if (isAdvancedToolsMode || getIsTradingProModel(selectedModel)) { 
         addNotification(`This model only supports direct image uploads.`, "info");
         return;
     }
-    if (isImagenModelSelected || getIsFluxKontexModel(selectedModel) || isClaudeModelSelected || getIsFluxDevModel(selectedModel) || getIsFalVideoModel(selectedModel)) return;
+    if (isImagenModelSelected || getIsFluxKontexModel(selectedModel) || getIsFluxKontexLoraModel(selectedModel) || isClaudeModelSelected || getIsFluxDevModel(selectedModel) || getIsFalVideoModel(selectedModel)) return;
 
     setUploadedImages([]);
     setImagePreviews([]);
@@ -2990,6 +3085,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     // This button shows for any model that primarily consumes an image.
     return (
         getIsFluxKontexModel(selectedModel) ||
+        getIsFluxKontexLoraModel(selectedModel) ||
         getIsFalVideoModel(selectedModel) ||
         getIsTradingProModel(selectedModel) ||
         // General purpose models that support vision
@@ -2997,7 +3093,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         selectedModel === Model.GEMINI_ADVANCED ||
         selectedModel === Model.GPT4O ||
         selectedModel === Model.GPT4O_MINI ||
-        selectedModel === Model.AI_AGENT_SMART ||
+        selectedModel === Model.ADVANCED_TOOLS ||
         selectedModel === Model.PRIVATE
     );
   }, [selectedModel]);
@@ -3021,11 +3117,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     if (isListening && !isRealTimeTranslationMode) return "Đang nghe...";
     if (isImagenModelSelected) return "Enter prompt for image generation...";
     if (getIsFluxKontexModel(selectedModel)) return "Enter prompt to edit uploaded image...";
+    if (getIsFluxKontexLoraModel(selectedModel)) return "Enter prompt to edit uploaded image with LoRA...";
     if (getIsFluxDevModel(selectedModel)) return "Enter prompt for Flux Dev image generation...";
     if (getIsFalVideoModel(selectedModel)) return "Enter prompt for video generation (image required)...";
     if (isTextToSpeechModelSelected) return "Type text to synthesize, or upload a .txt file...";
     if (isRealTimeTranslationMode) return "Real-Time Translation Active. Use Microphone or upload file.";
-    if (isAiAgentSmartMode) return "Enter goal for AI Agent Smart, or upload image...";
+    if (isAdvancedToolsMode) return "Enter goal for Advanced Tools, or upload image...";
     if (isPrivateModeSelected) return "Enter text or upload image/file to log locally...";
     if (isClaudeModelSelected) return "Chat with Claude (Mock)...";
     if (getIsTradingProModel(selectedModel)) return "Upload chart (optional) & click Analyze Market.";
@@ -3033,7 +3130,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
 
     let placeholder = "Type your message";
     
-    const canUploadImage = showImageUploadInChatBar || getIsFalVideoModel(selectedModel) || isAiAgentSmartMode || getIsTradingProModel(selectedModel);
+    const canUploadImage = showImageUploadInChatBar || getIsFalVideoModel(selectedModel) || isAdvancedToolsMode || getIsTradingProModel(selectedModel);
     const canUploadFile = showFileUploadInChatBar; 
 
     if (uploadedImages.length === 0 && imagePreviews.length === 0 && !uploadedTextFileName && !tradingProState.chartImageUrl) {
@@ -3053,8 +3150,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     if (isImagenModelSelected || getIsFluxDevModel(selectedModel)) return "Generate Image";
     if (getIsFalVideoModel(selectedModel)) return "Generate Video";
     if (getIsFluxKontexModel(selectedModel)) return "Edit Image";
+    if (getIsFluxKontexLoraModel(selectedModel)) return "Edit with LoRA";
     if (isTextToSpeechModelSelected) return "Synthesize Speech";
-    if (isAiAgentSmartMode) return "Set Goal";
+    if (isAdvancedToolsMode) return "Set Goal";
     if (isPrivateModeSelected) return "Log Entry";
     if (getIsTradingProModel(selectedModel)) return "Analyze Market";
     return "Send message";
@@ -3063,10 +3161,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   const sendButtonIcon = () => {
     if (isImagenModelSelected || getIsFluxDevModel(selectedModel)) return <PromptIcon className="w-6 h-6" />;
     if (getIsFalVideoModel(selectedModel)) return <FilmIcon className="w-6 h-6" />;
-    if (getIsFluxKontexModel(selectedModel)) return <EditIcon className="w-6 h-6" />;
+    if (getIsFluxKontexModel(selectedModel) || getIsFluxKontexLoraModel(selectedModel)) return <EditIcon className="w-6 h-6" />;
     if (isTextToSpeechModelSelected) return <SpeakerWaveIcon className="w-6 h-6" />;
     if (getIsTradingProModel(selectedModel)) return <PresentationChartLineIcon className="w-6 h-6" />;
-    if (isAiAgentSmartMode || isPrivateModeSelected) return <PaperAirplaneIcon className="w-6 h-6" />;
+    if (isAdvancedToolsMode || isPrivateModeSelected) return <PaperAirplaneIcon className="w-6 h-6" />;
     return <PaperAirplaneIcon className="w-6 h-6" />;
   }
 
@@ -3117,13 +3215,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
     allMessages: ChatMessage[],
     currentAiMessageId: string | null,
     currentUserMessageId: string | null,
-    isAgentSmartMode: boolean
+    isAdvancedToolsMode: boolean
   ): Content[] => {
     const history: Content[] = [];
 
     allMessages.forEach(msg => {
-        if (msg.id === currentAiMessageId || (msg.isNote && !isAgentSmartMode)) return;
-        if (msg.isTaskPlan && !isAgentSmartMode) return;
+        if (msg.id === currentAiMessageId || (msg.isNote && !isAdvancedToolsMode)) return;
+        if (msg.isTaskPlan && !isAdvancedToolsMode) return;
 
 
         let role: 'user' | 'model' = 'user';
@@ -3132,9 +3230,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
         const parts: Part[] = [];
         if (msg.text) {
             let textForHistory = msg.text;
-            if (isAgentSmartMode) {
+            if (isAdvancedToolsMode) {
                 if (msg.isTaskGoal && msg.sender === 'user') textForHistory = `User's goal: ${msg.text}`;
-                else if (msg.isTaskPlan && msg.sender === 'ai') textForHistory = `AI Agent Smart's plan/response: ${msg.text}`;
+                else if (msg.isTaskPlan && msg.sender === 'ai') textForHistory = `Advanced Tools's plan/response: ${msg.text}`;
             }
             parts.push({ text: textForHistory });
         }
@@ -3512,7 +3610,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             </div>
           )}
 
-            {isRealTimeTranslationMode ? (
+            {isAdvancedToolsMode ? (
+                 <AdvancedToolsView userSession={userSession} addNotification={addNotification} />
+            ) : isRealTimeTranslationMode ? (
                 <div className="flex-grow p-3 border-t border-secondary dark:border-neutral-darkest bg-neutral-light dark:bg-neutral-darker max-h-full overflow-y-auto text-sm">
                     <div className="mb-2">
                         <h4 className="font-semibold text-neutral-600 dark:text-neutral-300">Live Transcription ({navigator.language || 'en-US'}):</h4>
@@ -3566,7 +3666,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
             )}
           {error && !getIsTradingProModel(selectedModel) && <p className="p-4 text-red-500 dark:text-red-400 bg-red-100 dark:bg-red-900/30 border-t border-red-200 dark:border-red-700 text-sm">{error}</p>}
 
-          {showGenericAttachmentPreview && !getIsTradingProModel(selectedModel) && (imagePreviews.length > 0 || (uploadedTextFileName && selectedModel !== Model.AI_AGENT_SMART) ) && (
+          {showGenericAttachmentPreview && !getIsTradingProModel(selectedModel) && (imagePreviews.length > 0 || (uploadedTextFileName && selectedModel !== Model.ADVANCED_TOOLS) ) && (
             <div className="p-2 border-t border-b border-secondary dark:border-neutral-darkest bg-neutral-light dark:bg-neutral-darker flex-shrink-0">
                 <div className="flex flex-wrap items-center gap-2 max-h-24 overflow-y-auto">
                     {imagePreviews.map((previewUrl, index) => (
@@ -3587,7 +3687,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
                             </button>
                         </div>
                     ))}
-                    {uploadedTextFileName && selectedModel !== Model.AI_AGENT_SMART && ( 
+                    {uploadedTextFileName && selectedModel !== Model.ADVANCED_TOOLS && ( 
                         <div className="flex items-center p-2 bg-secondary/50 dark:bg-neutral-dark/50 rounded-md text-xs text-neutral-700 dark:text-neutral-300">
                             <DocumentTextIcon className="w-4 h-4 mr-1.5 flex-shrink-0 text-primary dark:text-primary-light" />
                             <span className="truncate max-w-[150px] sm:max-w-[200px]" title={uploadedTextFileName}>

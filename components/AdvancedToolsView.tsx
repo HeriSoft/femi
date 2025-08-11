@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
-import { Model, getActualModelIdentifier, ModelSettings, ApiChatMessage, UserSessionState } from '../types.ts';
+import { Model, getActualModelIdentifier, ApiChatMessage, UserSessionState, ModelSettings } from '../types.ts';
 import { useNotification } from '../contexts/NotificationContext.tsx';
 import { sendGeminiMessageStream } from '../services/geminiService.ts';
 import { sendOpenAIMessageStream } from '../services/openaiService.ts';
@@ -70,26 +69,50 @@ const VideoDownloaderTool: React.FC<{ addNotification: AdvancedToolsViewProps['a
     const [url, setUrl] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
-    const handleDownload = async (format: 'mp3' | 'mp4' | 'bilibili') => {
+    const handleDownload = async (format: 'mp3' | 'mp4') => {
         if (!url.trim() || !/^https?:\/\//.test(url.trim())) {
-            addNotification('Please enter a valid video URL.', 'error');
+            addNotification('Please enter a valid YouTube URL.', 'error');
             return;
         }
         setIsLoading(true);
+        addNotification(`Requesting ${format.toUpperCase()} download... Please wait.`, 'info');
+
         try {
             const response = await fetch('/api/tools/download-video', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url, format }),
             });
-            const data = await response.json();
-            if (data.success) {
-                addNotification(data.message || 'Download started!', 'success');
-            } else {
-                addNotification(data.message || 'Download failed.', 'info');
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'An unknown error occurred on the server.' }));
+                throw new Error(errorData.error || `Server responded with status ${response.status}`);
             }
+
+            const disposition = response.headers.get('content-disposition');
+            let filename = `video.${format}`;
+            if (disposition && disposition.indexOf('attachment') !== -1) {
+                const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+                const matches = filenameRegex.exec(disposition);
+                if (matches != null && matches[1]) {
+                    filename = decodeURIComponent(matches[1].replace(/['"]/g, ''));
+                }
+            }
+
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(downloadUrl);
+            
+            addNotification('Download started successfully!', 'success');
+
         } catch (error: any) {
-            addNotification('Failed to request download.', 'error', error.message);
+            addNotification('Failed to download video.', 'error', error.message);
         } finally {
             setIsLoading(false);
         }
@@ -98,28 +121,24 @@ const VideoDownloaderTool: React.FC<{ addNotification: AdvancedToolsViewProps['a
     return (
         <div className="bg-secondary/30 dark:bg-neutral-dark/30 p-4 rounded-lg shadow-sm">
             <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light mb-3 flex items-center">
-                <FilmIcon className="w-5 h-5 mr-2" /> Video Downloader
+                <FilmIcon className="w-5 h-5 mr-2" /> YouTube Downloader
             </h3>
             <input
                 type="text"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="Enter YouTube or Bilibili URL"
+                placeholder="Enter YouTube URL"
                 className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark text-sm mb-3"
                 disabled={isLoading}
             />
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <button onClick={() => handleDownload('mp3')} disabled={isLoading} className="px-3 py-2 text-xs bg-orange-500 hover:bg-orange-600 text-white rounded-md disabled:opacity-50 flex items-center justify-center">
-                    <ArrowDownTrayIcon className="w-4 h-4 mr-1" /> YouTube MP3
+                    <ArrowDownTrayIcon className="w-4 h-4 mr-1" /> Download MP3
                 </button>
                 <button onClick={() => handleDownload('mp4')} disabled={isLoading} className="px-3 py-2 text-xs bg-red-500 hover:bg-red-600 text-white rounded-md disabled:opacity-50 flex items-center justify-center">
-                    <ArrowDownTrayIcon className="w-4 h-4 mr-1" /> YouTube MP4
-                </button>
-                <button onClick={() => handleDownload('bilibili')} disabled={isLoading} className="px-3 py-2 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded-md disabled:opacity-50 flex items-center justify-center">
-                    <ArrowDownTrayIcon className="w-4 h-4 mr-1" /> Bilibili [VIP]
+                    <ArrowDownTrayIcon className="w-4 h-4 mr-1" /> Download MP4
                 </button>
             </div>
-             <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-2 text-center">Note: This is a placeholder feature.</p>
         </div>
     );
 };
@@ -215,7 +234,7 @@ const DirectionsTool: React.FC<AdvancedToolsViewProps> = ({ userSession, addNoti
             const stream = sendOpenAIMessageStream({
                 modelIdentifier,
                 history,
-                modelSettings: { temperature: 0.2, topK: 1, topP: 0.9, systemInstruction: "Provide driving directions." },
+                modelSettings: { temperature: 0.2, topK: 40, topP: 0.9, systemInstruction: "Provide driving directions." },
                 userSession
             });
             for await (const chunk of stream) {
