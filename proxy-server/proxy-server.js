@@ -17,10 +17,13 @@ dotenv.config();
 
 // --- Play-DL Configuration ---
 if (process.env.YOUTUBE_COOKIE) {
-  console.log('[Play-DL Config] YOUTUBE_COOKIE found. Setting authentication token.');
+  console.log('[Play-DL Config] YOUTUBE_COOKIE found. Setting authentication token with a standard user-agent.');
+  // Add a user agent to make requests look more legitimate
   play.setToken({
     youtube: {
       cookie: process.env.YOUTUBE_COOKIE,
+      // A standard user agent string
+      user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36'
     },
   });
 } else {
@@ -564,13 +567,24 @@ app.post('/api/tools/download-video', async (req, res) => {
     const { url, format } = req.body;
     console.log(`[YT Download] Received request for URL: ${url}, Format: ${format}`);
     
+    // Keep passing auth options per-request as a robust measure.
+    const authOptions = process.env.YOUTUBE_COOKIE ? { youtube: { cookie: process.env.YOUTUBE_COOKIE } } : {};
+
     try {
-        if (!url || (await play.validate(url)) !== 'yt_video') {
+        // Attempt to refresh the client ID to bypass some bot checks.
+        console.log('[YT Download] Attempting to refresh YouTube client ID...');
+        await play.getFreeClientID();
+        console.log('[YT Download] Client ID refreshed successfully.');
+
+        if (!url || (await play.validate(url, authOptions)) !== 'yt_video') {
             return res.status(400).json({ success: false, error: "Invalid or unsupported YouTube URL." });
         }
 
-        const info = await play.video_info(url);
+        console.log('[YT Download] URL validated. Fetching video info...');
+        const info = await play.video_info(url, authOptions);
         const title = info.video_details.title || 'youtube_video';
+        console.log(`[YT Download] Video title: "${title}"`);
+        
         // Sanitize filename
         const safeTitle = title.replace(/[^a-z0-9_.-]/gi, '_').substring(0, 100);
 
@@ -578,24 +592,25 @@ app.post('/api/tools/download-video', async (req, res) => {
         let filename;
         let contentType;
         
+        const streamOptions = {
+            ...authOptions,
+            type: format === 'mp3' ? 'audio' : 'video',
+            quality: 2, // high
+            download: true
+        };
+        
+        console.log(`[YT Download] Requesting stream for format: ${format}...`);
+        stream = await play.stream(url, streamOptions);
+        
         if (format === 'mp3') {
-            stream = await play.stream(url, {
-                type: 'audio',
-                quality: 2, // 0: low, 1: medium, 2: high
-                download: true
-            });
             filename = `${safeTitle}.mp3`;
             contentType = 'audio/mpeg';
         } else { // mp4
-            stream = await play.stream(url, {
-                type: 'video',
-                quality: 2,
-                download: true
-            });
             filename = `${safeTitle}.mp4`;
             contentType = 'video/mp4';
         }
 
+        console.log(`[YT Download] Streaming file: "${filename}"`);
         res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
         res.setHeader('Content-Type', contentType);
         
@@ -603,7 +618,12 @@ app.post('/api/tools/download-video', async (req, res) => {
 
     } catch (error) {
         console.error("[YT Download Proxy Error]", error);
-        res.status(500).json({ success: false, error: `Failed to process video: ${error.message}` });
+        // Provide more specific feedback if it's the bot detection error
+        if (error.message && error.message.includes('confirm you’re not a bot')) {
+             res.status(500).json({ success: false, error: `Failed to process video: YouTube is blocking requests from this server (bot detection). The provided YOUTUBE_COOKIE might be invalid, expired, or the server IP is flagged. Please check the cookie and try again later.` });
+        } else {
+             res.status(500).json({ success: false, error: `Failed to process video: ${error.message}` });
+        }
     }
 });
 // --- END OF NEW ADVANCED TOOLS ENDPOINTS ---
