@@ -69,13 +69,13 @@ const VideoDownloaderTool: React.FC<{ addNotification: AdvancedToolsViewProps['a
     const [url, setUrl] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
-    const handleDownload = async (format: 'mp3' | 'mp4') => {
+    const handleDownload = async (format: 'mp3' | 'mp4' | 'bilibili') => {
         if (!url.trim() || !/^https?:\/\//.test(url.trim())) {
-            addNotification('Please enter a valid YouTube URL.', 'error');
+            addNotification('Please enter a valid video URL.', 'error');
             return;
         }
         setIsLoading(true);
-        addNotification(`Requesting ${format.toUpperCase()} download... Please wait.`, 'info');
+        addNotification(`Requesting ${format === 'mp3' ? 'MP3' : 'Video'} download... This may take a moment.`, 'info');
 
         try {
             const response = await fetch('/api/tools/download-video', {
@@ -90,7 +90,7 @@ const VideoDownloaderTool: React.FC<{ addNotification: AdvancedToolsViewProps['a
             }
 
             const disposition = response.headers.get('content-disposition');
-            let filename = `video.${format}`;
+            let filename = `video.${format === 'mp3' ? 'mp3' : 'mp4'}`;
             if (disposition && disposition.indexOf('attachment') !== -1) {
                 const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
                 const matches = filenameRegex.exec(disposition);
@@ -121,22 +121,25 @@ const VideoDownloaderTool: React.FC<{ addNotification: AdvancedToolsViewProps['a
     return (
         <div className="bg-secondary/30 dark:bg-neutral-dark/30 p-4 rounded-lg shadow-sm">
             <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light mb-3 flex items-center">
-                <FilmIcon className="w-5 h-5 mr-2" /> YouTube Downloader
+                <FilmIcon className="w-5 h-5 mr-2" /> Video Downloader
             </h3>
             <input
                 type="text"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="Enter YouTube URL"
+                placeholder="Enter YouTube or Bilibili URL"
                 className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark text-sm mb-3"
                 disabled={isLoading}
             />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <button onClick={() => handleDownload('mp3')} disabled={isLoading} className="px-3 py-2 text-xs bg-orange-500 hover:bg-orange-600 text-white rounded-md disabled:opacity-50 flex items-center justify-center">
-                    <ArrowDownTrayIcon className="w-4 h-4 mr-1" /> Download MP3
+                    <ArrowDownTrayIcon className="w-4 h-4 mr-1" /> YouTube MP3
                 </button>
                 <button onClick={() => handleDownload('mp4')} disabled={isLoading} className="px-3 py-2 text-xs bg-red-500 hover:bg-red-600 text-white rounded-md disabled:opacity-50 flex items-center justify-center">
-                    <ArrowDownTrayIcon className="w-4 h-4 mr-1" /> Download MP4
+                    <ArrowDownTrayIcon className="w-4 h-4 mr-1" /> YouTube MP4
+                </button>
+                <button onClick={() => handleDownload('bilibili')} disabled={isLoading} className="px-3 py-2 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded-md disabled:opacity-50 flex items-center justify-center">
+                    <ArrowDownTrayIcon className="w-4 h-4 mr-1" /> Bilibili [VIP]
                 </button>
             </div>
         </div>
