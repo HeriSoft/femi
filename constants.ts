@@ -1,5 +1,8 @@
 
-import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank, AiAgentSmartSettings, CreditPackage, PrivateModeSettings, FluxKontexSettings, FluxKontexAspectRatio, DemoUserLimits, PaidUserLimits, FluxDevSettings, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, ModelSpecificSettingsMap, TradingProSettings, TradingPair, FluxDevImageSize, WanI2vSettings, WanI2vResolution, WanI2vAspectRatio } from './types.ts';
+
+
+
+import { Model, AllModelSettings, ModelSettings, ImagenSettings, LanguageOptionConfig, Badge, UserLanguageProfile, LanguageOption, RealTimeTranslationSettings, TranslationLanguageOptionConfig, OpenAITtsSettings, AccountTabType, BackgroundOption, CardSuit, CardRank, AdvancedToolsSettings, CreditPackage, PrivateModeSettings, FluxKontexSettings, FluxKontexAspectRatio, DemoUserLimits, PaidUserLimits, FluxDevSettings, KlingAiSettings, KlingAiDuration, KlingAiAspectRatio, ModelSpecificSettingsMap, TradingProSettings, TradingPair, FluxDevImageSize, WanI2vSettings, WanI2vResolution, WanI2vAspectRatio, FluxKontexLoraSettings, WanI2vV22Settings, WanI2vV22Resolution, WanI2vV22AspectRatio, WanI2vV22InterpolatorModel } from './types.ts';
 
 export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
   temperature: 0.7,
@@ -25,83 +28,7 @@ export const DEFAULT_REAL_TIME_TRANSLATION_SETTINGS: RealTimeTranslationSettings
   targetLanguage: 'en',
 };
 
-export const DEFAULT_AI_AGENT_SMART_SETTINGS: AiAgentSmartSettings = {
-  ...DEFAULT_MODEL_SETTINGS,
-  temperature: 0.5,
-  topK: 32,
-  systemInstruction: `[Tên và Vai trò]
-AI-Agent Smart (AAS), một trợ lý đàm thoại thông minh và thân thiện cho một ứng dụng web/di động chuyên về tìm kiếm và điều hướng địa điểm địa phương.
-
-[Mục tiêu Chính]
-Mục tiêu chính là đóng vai trò giao diện hội thoại, hiểu rõ nhu cầu của người dùng thông qua văn bản và thông tin từ hình ảnh (do hệ thống phân tích và cung cấp mô tả cho bạn), cung cấp thông tin về các địa điểm phù hợp gần vị trí của họ và hỗ trợ họ di chuyển đến đó một cách hiệu quả. AAS KHÔNG xử lý tải lên tệp tin chung (ví dụ: PDF, DOCX).
-
-[Các API Liên Quan (Được Hệ thống Backend Sử dụng)]
-Ứng dụng mà bạn là một phần sử dụng các API sau để thu thập dữ liệu và thực hiện hành động. Quan trọng: Với vai trò là AI Agent, AI Gemini không trực tiếp gọi các API này. Hệ thống backend sẽ thực hiện việc gọi API và cung cấp kết quả cho bạn để bạn xử lý và phản hồi người dùng.
-- Geolocation API (Trình duyệt/Thiết bị): Dùng để lấy vị trí chính xác của người dùng (vĩ độ, kinh độ) từ trình duyệt hoặc thiết bị. Vị trí này được hệ thống cung cấp cho AI.
-- Gemini Vision (hoặc tương đương): Được sử dụng bởi backend để phân tích hình ảnh người dùng tải lên. Kết quả phân tích (mô tả hình ảnh) sẽ được cung cấp cho bạn dưới dạng "Thông báo Hệ thống".
-- Google Places API (Google Maps Platform): Dùng để tìm kiếm các địa điểm.
-- Google Directions API (Google Maps Platform): Dùng để tính toán và cung cấp hướng dẫn di chuyển.
-- Google Geocoding API (Google Maps Platform - Tùy chọn): Dùng để chuyển đổi địa chỉ/tên địa điểm thành tọa độ.
-
-[Vai trò của AI-Agent Smart (AAS) trong Triển khai]
-- Lớp giao tiếp (Conversational Layer) giữa người dùng và các API địa lý/hình ảnh (thông qua hệ thống backend).
-- Input: Tin nhắn văn bản từ người dùng và các "Thông báo Hệ thống" (System Notes) cung cấp thông tin về vị trí người dùng, MÔ TẢ KẾT QUẢ PHÂN TÍCH ẢNH (NẾU NGƯỜI DÙNG TẢI ẢNH), kết quả tìm kiếm địa điểm, v.v. AAS KHÔNG xử lý tải lên tệp tin chung (ví dụ: PDF, DOCX).
-- Output: Phản hồi bằng văn bản cho người dùng và các "Chỉ dẫn Hệ thống" (System Instructions) để hệ thống backend biết cần làm gì tiếp theo (ví dụ: "Người dùng muốn tìm quán phở dựa trên mô tả ảnh", "Sử dụng từ khóa 'iPhone 15' và vị trí người dùng để tìm cửa hàng", "Người dùng đã xác nhận địa điểm X, cần chỉ đường").
-  ĐỊNH DẠNG OUTPUT ĐẶC BIỆT:
-  - Khi bạn đang thực hiện một hành động nền (ví dụ: tìm kiếm vị trí, chờ phân tích ảnh), hãy thông báo cho người dùng bằng cách sử dụng: (( System: [Mô tả hành động của bạn]... ))
-    Ví dụ: (( System: Đang tìm kiếm vị trí của bạn... )) hoặc (( System: Đang chờ hệ thống phân tích hình ảnh bạn cung cấp... ))
-  - Khi hiển thị thông tin chi tiết về một địa điểm, hãy sử dụng các tiền tố sau trên các dòng riêng biệt:
-    TÊN: [Tên địa điểm]
-    ĐỊA CHỈ: [Địa chỉ]
-    GIÁ: [Thông tin giá cả, ví dụ: 20.000đ - 50.000đ, hoặc 'Chưa rõ']
-    KHOẢNG CÁCH: [Khoảng cách, ví dụ: 1.2 km, hoặc 'Chưa rõ']
-    ĐÁNH GIÁ: [Đánh giá, ví dụ: 4.5 sao, hoặc 'Chưa có đánh giá']
-  - Khi bạn muốn hệ thống hiển thị một nút hành động cho người dùng, hãy sử dụng định dạng: [BUTTON:Tên Nút Hiển Thị:MãHànhĐộng]
-    Ví dụ: [BUTTON:Chỉ đường đến đây:NAVIGATE_PLACE_XYZ] hoặc [BUTTON:Xem thêm chi tiết:VIEW_DETAILS_ABC]
-
-[Khả năng và Logic Tương tác Chính]
-Xử lý các tình huống dựa trên input nhận được:
-1. Bắt đầu: Chào hỏi người dùng.
-   - Nếu "Thông báo Hệ thống" đã cung cấp vị trí (ví dụ, "System Note: User location is [tên vị trí hoặc tọa độ]"), hãy xác nhận: "Chào bạn, tôi đã biết vị trí của bạn là [tên vị trí nếu có, hoặc 'vị trí hiện tại của bạn']. Bạn muốn tìm gì hôm nay? Bạn cũng có thể tải lên một hình ảnh để tôi giúp bạn."
-   - Nếu vị trí chưa được cung cấp và yêu cầu của người dùng (ví dụ: "tìm quán bún bò") gợi ý cần tìm kiếm dựa trên vị trí, hãy chủ động hỏi: "Chào bạn, tôi có thể giúp bạn tìm [yêu cầu của người dùng, ví dụ: quán bún bò]. Bạn có thể cho tôi biết vị trí hiện tại của bạn không? Hoặc bạn muốn tìm ở khu vực nào?"
-   - Nếu vị trí chưa được cung cấp và yêu cầu của người dùng không rõ ràng về việc tìm kiếm dựa trên vị trí, hãy hỏi một cách tổng quát: "Chào bạn, bạn muốn tìm địa điểm nào hôm nay? Bạn có thể cho tôi biết vị trí hiện tại của bạn hoặc tải lên một hình ảnh để tôi hỗ trợ?"
-   - Nếu bạn đã hỏi vị trí và đang chờ người dùng cung cấp (chưa nhận được "Thông báo Hệ thống" về vị trí), hãy hiển thị: (( System: Đang chờ vị trí người dùng... ))
-
-2. Xử lý Yêu cầu Văn bản (Không kèm ảnh):
-   - Nhận yêu cầu văn bản (ví dụ: "tìm quán cà phê yên tĩnh").
-   - Xác nhận yêu cầu. Nếu cần, hỏi thêm chi tiết.
-   - (( System: Đang tìm kiếm '[yêu cầu]' dựa trên vị trí của bạn... ))
-   - Gửi "Chỉ dẫn Hệ thống" cho backend. Ví dụ: "Tìm kiếm 'quán cà phê yên tĩnh' gần [vị trí người dùng]."
-   - Chờ "Thông báo Hệ thống về Kết quả Tìm kiếm Địa điểm".
-   - Diễn giải kết quả. Nếu có địa điểm, trình bày dùng các tiền tố định dạng. Hỏi có muốn chỉ đường không.
-     Ví dụ: "Tôi đã tìm được một số quán cà phê gần bạn:\\nTÊN: The Coffee House\\nĐỊA CHỈ: 123 Nguyễn Văn Linh\\nKHOẢNG CÁCH: 0.5 km\\nĐÁNH GIÁ: 4.2 sao\\n[BUTTON:Chỉ đường đến The Coffee House:NAVIGATE_THE_COFFEE_HOUSE]"
-
-3. Xử lý Yêu cầu có Ảnh:
-   - Người dùng tải ảnh lên, có thể kèm theo văn bản (ví dụ: "quán này ở đâu?" kèm ảnh một quán ăn).
-   - Thông báo: "Tôi đã nhận được ảnh của bạn."
-   - (( System: Đang chờ hệ thống phân tích hình ảnh... ))
-   - Chờ "Thông báo Hệ thống về Kết quả Phân tích Ảnh" (đây là MÔ TẢ hình ảnh, ví dụ: "System Note: Image analysis result: 'Ảnh chứa mặt tiền một quán phở có biển hiệu màu đỏ'").
-   - Kết hợp mô tả ảnh với văn bản của người dùng (nếu có) để hiểu ý định.
-   - Nếu nhận diện được đối tượng/địa điểm từ mô tả ảnh và có thể tìm kiếm: "Dựa trên hình ảnh bạn cung cấp (mô tả là '[mô tả ảnh]'), bạn có muốn tôi tìm các địa điểm tương tự hoặc địa điểm này gần bạn không?"
-     (( System: Chờ xác nhận của người dùng để tìm kiếm dựa trên mô tả ảnh... ))
-   - Nếu mô tả ảnh chung chung hoặc cần thêm thông tin: "Hình ảnh bạn cung cấp cho thấy [mô tả ảnh]. Bạn có thể cho tôi biết thêm chi tiết về địa điểm này hoặc nó ở gần khu vực nào không?"
-     (( System: Chờ người dùng cung cấp thêm thông tin về vị trí của đối tượng trong ảnh... ))
-
-4. Hỗ trợ Chỉ đường:
-   - Khi người dùng yêu cầu chỉ đường.
-   - Gửi "Chỉ dẫn Hệ thống": "Tạo chỉ đường đến [Tên địa điểm] tại [Địa chỉ/Tọa độ]".
-   - Thông báo: "Ok, tôi đã chuẩn bị chỉ đường cho bạn. [BUTTON:Xem chỉ đường đến [Tên địa điểm]:NAVIGATE_PLACE_ID_XYZ]"
-
-[Xử lý Lỗi Vị trí]
-- Nếu nhận được "Thông báo Hệ thống" rằng không thể xác định vị trí của người dùng (ví dụ, do lỗi API Google Maps từ phía backend), hãy phản hồi: "Xin lỗi, đã xảy ra sự cố nên tôi không thể nhận diện được địa điểm của bạn. Vui lòng thử lại sau."
-
-[Lưu ý Quan trọng]
-- Luôn thân thiện, lịch sự và chủ động.
-- Sử dụng các định dạng (( System: ... )), tiền tố địa điểm (TÊN, ĐỊA CHỈ, KHOẢNG CÁCH, GIÁ, ĐÁNH GIÁ), và [BUTTON:...] như đã hướng dẫn.
-- Bạn KHÔNG trực tiếp gọi API. Bạn xử lý thông tin và đưa ra chỉ dẫn dựa trên các "Thông báo Hệ thống" từ backend.
-- Bạn KHÔNG xử lý tệp tin chung (PDF, DOCX, v.v.). Chỉ xử lý thông tin MÔ TẢ từ hình ảnh do hệ thống cung cấp.
-`,
-};
+export const DEFAULT_ADVANCED_TOOLS_SETTINGS: AdvancedToolsSettings = { ...DEFAULT_MODEL_SETTINGS, systemInstruction: 'You are an advanced tool-using AI assistant. Your primary function is to understand user requests and route them to the appropriate tool, such as IP info, weather, or directions.' };
 
 
 export const DEFAULT_PRIVATE_MODE_SETTINGS: PrivateModeSettings = {
@@ -116,6 +43,24 @@ export const DEFAULT_FLUX_KONTEX_SETTINGS: FluxKontexSettings = {
   num_images: 1,
   aspect_ratio: 'default',
   output_format: 'jpeg',
+};
+
+export const DEFAULT_FLUX_KONTEX_LORA_SETTINGS: FluxKontexLoraSettings = {
+  negative_prompt: 'EasyNegative',
+  num_inference_steps: 20,
+  seed: null,
+  guidance_scale: 2.5,
+  num_images: 1,
+  output_format: 'png',
+  loras: [],
+  acceleration: 'none',
+  resolution_mode: 'match_input',
+  enable_safety_checker: false,
+  // New advanced defaults
+  sampler_name: 'euler_ancestral',
+  scheduler: 'normal',
+  denoising_strength: 0.5,
+  clip_skip: 2,
 };
 
 export const DEFAULT_FLUX_DEV_SETTINGS: FluxDevSettings = {
@@ -152,6 +97,24 @@ export const DEFAULT_WAN_I2V_SETTINGS: WanI2vSettings = {
   turbo_mode: true,
 };
 
+export const DEFAULT_WAN_I2V_V22_SETTINGS: WanI2vV22Settings = {
+  negative_prompt: "",
+  num_frames: 81,
+  frames_per_second: 24,
+  seed: null,
+  resolution: "720p",
+  num_inference_steps: 40,
+  guidance_scale: 3.5,
+  shift: 5,
+  enable_safety_checker: true,
+  enable_prompt_expansion: false,
+  aspect_ratio: "auto",
+  interpolator_model: "film",
+  num_interpolated_frames: 0,
+  adjust_fps_for_interpolation: true,
+  loras: [],
+};
+
 
 export const DEFAULT_TRADING_PRO_SETTINGS: TradingProSettings = {
   selectedPair: null,
@@ -179,13 +142,15 @@ export const ALL_MODEL_DEFAULT_SETTINGS: ModelSpecificSettingsMap = {
   [Model.IMAGEN3]: { ...DEFAULT_IMAGEN_SETTINGS },
   [Model.OPENAI_TTS]: { ...DEFAULT_OPENAI_TTS_SETTINGS },
   [Model.REAL_TIME_TRANSLATION]: { ...DEFAULT_REAL_TIME_TRANSLATION_SETTINGS },
-  [Model.AI_AGENT_SMART]: { ...DEFAULT_AI_AGENT_SMART_SETTINGS }, // Uses its specific instruction
+  [Model.ADVANCED_TOOLS]: { ...DEFAULT_ADVANCED_TOOLS_SETTINGS },
   [Model.PRIVATE]: { ...DEFAULT_PRIVATE_MODE_SETTINGS },
   [Model.FLUX_KONTEX]: { ...DEFAULT_FLUX_KONTEX_SETTINGS },
+  [Model.FLUX_KONTEX_LORA]: { ...DEFAULT_FLUX_KONTEX_LORA_SETTINGS },
   [Model.FLUX_KONTEX_MAX_MULTI]: { ...DEFAULT_FLUX_KONTEX_SETTINGS, num_images: 2 },
   [Model.FLUX_ULTRA]: { ...DEFAULT_FLUX_DEV_SETTINGS },
   [Model.KLING_VIDEO]: { ...DEFAULT_KLING_AI_SETTINGS },
   [Model.WAN_I2V]: { ...DEFAULT_WAN_I2V_SETTINGS },
+  [Model.WAN_I2V_V22]: { ...DEFAULT_WAN_I2V_V22_SETTINGS },
   [Model.TRADING_PRO]: { ...DEFAULT_TRADING_PRO_SETTINGS },
 };
 
@@ -206,11 +171,13 @@ export const MAX_TRANSLATION_TXT_UPLOAD_SIZE_BYTES = 100 * 1024; // 100 KB
 export const DEMO_USER_DEFAULT_MONTHLY_LIMITS = {
   FLUX_KONTEX_MAX_MONTHLY: 0,
   FLUX_KONTEX_PRO_MONTHLY: 1,
+  FLUX_KONTEX_LORA_MONTHLY: 0,
   IMAGEN3_MONTHLY_IMAGES: 5,
   OPENAI_TTS_MONTHLY_CHARS: 10000,
   FLUX_DEV_MONTHLY_IMAGES: 0,
   KLING_VIDEO_MONTHLY_MAX_USES: 0,
   WAN_I2V_MONTHLY_MAX_USES: 0,
+  WAN_I2V_V22_MONTHLY_MAX_USES: 0,
 };
 
 export const INITIAL_DEMO_USER_LIMITS: DemoUserLimits = {
@@ -218,6 +185,8 @@ export const INITIAL_DEMO_USER_LIMITS: DemoUserLimits = {
   fluxKontextMaxMonthlyMaxUses: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_KONTEX_MAX_MONTHLY,
   fluxKontextProMonthlyUsesLeft: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_KONTEX_PRO_MONTHLY,
   fluxKontextProMonthlyMaxUses: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_KONTEX_PRO_MONTHLY,
+  fluxKontextLoraMonthlyUsed: 0,
+  fluxKontextLoraMonthlyMaxUses: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_KONTEX_LORA_MONTHLY,
   imagen3MonthlyImagesLeft: DEMO_USER_DEFAULT_MONTHLY_LIMITS.IMAGEN3_MONTHLY_IMAGES,
   imagen3MonthlyMaxImages: DEMO_USER_DEFAULT_MONTHLY_LIMITS.IMAGEN3_MONTHLY_IMAGES,
   openaiTtsMonthlyCharsLeft: DEMO_USER_DEFAULT_MONTHLY_LIMITS.OPENAI_TTS_MONTHLY_CHARS,
@@ -228,6 +197,8 @@ export const INITIAL_DEMO_USER_LIMITS: DemoUserLimits = {
   klingVideoMonthlyMaxUses: DEMO_USER_DEFAULT_MONTHLY_LIMITS.KLING_VIDEO_MONTHLY_MAX_USES,
   wanI2vMonthlyUsed: 0,
   wanI2vMonthlyMaxUses: DEMO_USER_DEFAULT_MONTHLY_LIMITS.WAN_I2V_MONTHLY_MAX_USES,
+  wanI2vV22MonthlyUsed: 0,
+  wanI2vV22MonthlyMaxUses: DEMO_USER_DEFAULT_MONTHLY_LIMITS.WAN_I2V_V22_MONTHLY_MAX_USES,
 };
 
 
@@ -240,12 +211,16 @@ export const PAID_USER_LIMITS_CONFIG: PaidUserLimits = {
   fluxKontextMaxMonthlyMaxUses: 25,
   fluxKontextProMonthlyUsesLeft: 0,
   fluxKontextProMonthlyMaxUses: 35,
+  fluxKontextLoraMonthlyUsed: 0,
+  fluxKontextLoraMonthlyMaxGenerations: 20,
   fluxDevMonthlyImagesLeft: 0,
   fluxDevMonthlyMaxImages: 30,
   klingVideoMonthlyUsed: 0,
   klingVideoMonthlyMaxGenerations: 1,
   wanI2vMonthlyUsed: 0,
   wanI2vMonthlyMaxGenerations: 4,
+  wanI2vV22MonthlyUsed: 0,
+  wanI2vV22MonthlyMaxGenerations: 4,
 };
 
 export const OPENAI_TTS_MAX_INPUT_LENGTH = PAID_USER_LIMITS_CONFIG.openaiTtsMaxChars;
@@ -425,6 +400,25 @@ export const WAN_I2V_ASPECT_RATIOS: { value: WanI2vAspectRatio; label: string }[
     { value: "auto", label: "Auto (from image)" },
 ];
 
+// Wan I2V v2.2 Video Constants
+export const WAN_I2V_V22_RESOLUTIONS: { value: WanI2vV22Resolution; label: string }[] = [
+    { value: "720p", label: "720p (HD)" },
+    { value: "580p", label: "580p" },
+];
+
+export const WAN_I2V_V22_ASPECT_RATIOS: { value: WanI2vV22AspectRatio; label: string }[] = [
+    { value: "auto", label: "Auto (from image)" },
+    { value: "16:9", label: "16:9 (Widescreen)" },
+    { value: "9:16", label: "9:16 (Portrait)" },
+    { value: "1:1", label: "1:1 (Square)" },
+];
+
+export const WAN_I2V_V22_INTERPOLATORS: { value: WanI2vV22InterpolatorModel; label: string }[] = [
+    { value: "film", label: "FILM (Default)" },
+    { value: "rife", label: "RIFE (Smoother)" },
+    { value: "none", label: "None" },
+];
+
 
 // Trading Pro Constants
 export const TRADING_PRO_DISCLAIMER = `Mô hình này dựa trên kiến thức, kinh nghiệm, kỹ năng phân tích của AI để mang lại cái nhìn tổng quan chính xác và thực tế của thị trường giao dịch Crypto hoặc Vàng thế giới.\n\nĐây KHÔNG phải lời khuyên đầu tư. Chúng tôi KHÔNG đảm bảo mang lại lợi nhuận cho nhà đầu tư. Bạn phải thực sự cẩn trọng trong mọi quyết định đầu tư và quản lý vốn hiệu quả nếu bạn có ý định tham gia thị trường.\n\nChúng tôi sẽ KHÔNG chịu mọi trách nhiệm về tổn thất nếu bạn thua lỗ hoặc gặp rủi ro.`;
@@ -446,13 +440,13 @@ export const API_KEY_STATUSES_DEFINITIONS = {
   [Model.IMAGEN3]: {isSet: true, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Imagen3 Image Gen', isMock: false, isGeminiPlatform: true, isImageGeneration: true},
   [Model.OPENAI_TTS]: {isSet: true, envVarName: 'OPENAI_API_KEY (on proxy)', modelName: 'OpenAI TTS', isMock: false, isGeminiPlatform: false, isTextToSpeech: true },
   [Model.REAL_TIME_TRANSLATION]: {isSet: true, envVarName: 'GEMINI_API_KEY (on proxy)', modelName: 'Real-Time Translation (Gemini)', isMock: false, isGeminiPlatform: true, isRealTimeTranslation: true },
-  [Model.AI_AGENT_SMART]: {
+  [Model.ADVANCED_TOOLS]: {
     isSet: true,
-    envVarName: 'GEMINI_API_KEY (on proxy)',
-    modelName: 'AI Agent Smart (gemini-2.5-flash)',
-    isMock: false,
-    isGeminiPlatform: true,
-    isAiAgentSmart: true,
+    envVarName: 'N/A (Tool Suite)',
+    modelName: 'Advanced Tools',
+    isMock: true,
+    isGeminiPlatform: false,
+    isAdvancedTools: true,
   },
   [Model.PRIVATE]: {
     isSet: true,
@@ -469,6 +463,15 @@ export const API_KEY_STATUSES_DEFINITIONS = {
     isMock: false,
     isGeminiPlatform: false,
     isImageEditing: true
+  },
+  [Model.FLUX_KONTEX_LORA]: {
+    isSet: true,
+    envVarName: 'FAL_KEY (on proxy)',
+    modelName: 'Flux Kontext Lora',
+    isMock: false,
+    isGeminiPlatform: false,
+    isImageEditing: true,
+    isFluxKontexLora: true,
   },
   [Model.FLUX_KONTEX_MAX_MULTI]: {
     isSet: true,
@@ -502,6 +505,14 @@ export const API_KEY_STATUSES_DEFINITIONS = {
     isMock: false,
     isGeminiPlatform: false,
     isWanI2vVideoGeneration: true,
+  },
+  [Model.WAN_I2V_V22]: {
+    isSet: true,
+    envVarName: 'FAL_KEY (on proxy)',
+    modelName: 'Wan I2V v2.2 Video Gen',
+    isMock: false,
+    isGeminiPlatform: false,
+    isWanI2vV22VideoGeneration: true,
   },
   [Model.TRADING_PRO]: {
     isSet: true, // Assuming proxy has necessary keys (Gemini for analysis)

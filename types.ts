@@ -13,13 +13,15 @@ export enum Model {
   IMAGEN3 = 'Imagen3 (imagen-3.0-generate-002)',
   OPENAI_TTS = 'OpenAI (TTS)', 
   REAL_TIME_TRANSLATION = 'Real-Time Translation (gemini-2.5-flash)', 
-  AI_AGENT_SMART = 'AI Agent Smart (gemini-2.5-flash)',
+  ADVANCED_TOOLS = 'Advanced Tools',
   PRIVATE = 'Private (Local Data Storage)', 
   FLUX_KONTEX = 'Flux Kontext Image Edit (fal-ai/flux-pro/kontext)', 
+  FLUX_KONTEX_LORA = 'Flux Kontext Lora (fal-ai/flux-kontext-lora)',
   FLUX_KONTEX_MAX_MULTI = 'Flux Kontext Max Multi-Image (fal-ai/flux-pro/kontext/max/multi)',
   FLUX_ULTRA = 'Flux Dev (fal-ai/flux-1/dev)', 
   KLING_VIDEO = 'Kling AI Video Gen (fal-ai/kling-video/v2.1/standard/image-to-video)', 
   WAN_I2V = 'Wan I2V Video Gen (fal-ai/wan-i2v-lora)',
+  WAN_I2V_V22 = 'Wan I2V v2.2 Video Gen (fal-ai/wan/v2.2-5b/image-to-video)',
   TRADING_PRO = 'Trading Pro (gemini-2.5-flash Analysis)', 
 }
 
@@ -93,8 +95,8 @@ export interface RealTimeTranslationSettings {
   targetLanguage: string; 
 }
 
-// Settings for AI Agent Smart (renamed from AiAgentSettings)
-export interface AiAgentSmartSettings extends ModelSettings {}
+// Settings for Advanced Tools (replaces AiAgentSettings)
+export interface AdvancedToolsSettings extends ModelSettings {}
 
 export interface PrivateModeSettings extends Pick<ModelSettings, 'systemInstruction'> { 
 }
@@ -111,6 +113,28 @@ export interface FluxKontexSettings {
   aspect_ratio?: FluxKontexAspectRatio; 
   output_format?: 'jpeg' | 'png'; 
 }
+
+export type FluxKontexLoraAcceleration = 'none' | 'regular' | 'high';
+export type FluxKontexLoraResolutionMode = 'auto' | 'match_input' | '1:1' | '16:9' | '21:9' | '3:2' | '2:3' | '4:5' | '5:4' | '3:4' | '4:3' | '9:16' | '9:21';
+
+export interface FluxKontexLoraSettings {
+  num_inference_steps?: number;
+  seed?: number | null;
+  guidance_scale?: number;
+  num_images?: number;
+  output_format?: 'jpeg' | 'png';
+  loras?: LoraWeight[];
+  acceleration?: FluxKontexLoraAcceleration;
+  resolution_mode?: FluxKontexLoraResolutionMode;
+  enable_safety_checker?: boolean;
+  negative_prompt?: string;
+  // New advanced settings
+  sampler_name?: string;
+  scheduler?: string;
+  denoising_strength?: number;
+  clip_skip?: number;
+}
+
 
 export type FluxDevImageSize = 'square_hd' | 'square' | 'portrait_4_3' | 'portrait_16_9' | 'landscape_4_3' | 'landscape_16_9';
 
@@ -160,6 +184,28 @@ export interface WanI2vSettings {
   turbo_mode?: boolean;
 }
 
+export type WanI2vV22Resolution = "580p" | "720p";
+export type WanI2vV22AspectRatio = "auto" | "16:9" | "9:16" | "1:1";
+export type WanI2vV22InterpolatorModel = "none" | "film" | "rife";
+
+export interface WanI2vV22Settings {
+  negative_prompt?: string;
+  num_frames?: number; // 81-121
+  frames_per_second?: number; // 4-60
+  seed?: number | null;
+  resolution?: WanI2vV22Resolution;
+  num_inference_steps?: number;
+  guidance_scale?: number;
+  shift?: number; // 1.0-10.0
+  enable_safety_checker?: boolean;
+  enable_prompt_expansion?: boolean;
+  aspect_ratio?: WanI2vV22AspectRatio;
+  interpolator_model?: WanI2vV22InterpolatorModel;
+  num_interpolated_frames?: number; // 0-4
+  adjust_fps_for_interpolation?: boolean;
+  loras?: LoraWeight[];
+}
+
 
 export type TradingPairValue = 'XAUUSD' | 'BTCUSD'; 
 export interface TradingPair {
@@ -203,13 +249,15 @@ export type ModelSpecificSettingsMap = {
   [Model.IMAGEN3]: ImagenSettings;
   [Model.OPENAI_TTS]: OpenAITtsSettings;
   [Model.REAL_TIME_TRANSLATION]: RealTimeTranslationSettings;
-  [Model.AI_AGENT_SMART]: AiAgentSmartSettings; // Updated
+  [Model.ADVANCED_TOOLS]: AdvancedToolsSettings; // Updated
   [Model.PRIVATE]: PrivateModeSettings;
   [Model.FLUX_KONTEX]: FluxKontexSettings;
+  [Model.FLUX_KONTEX_LORA]: FluxKontexLoraSettings;
   [Model.FLUX_KONTEX_MAX_MULTI]: FluxKontexSettings;
   [Model.FLUX_ULTRA]: FluxDevSettings;
   [Model.KLING_VIDEO]: KlingAiSettings;
   [Model.WAN_I2V]: WanI2vSettings;
+  [Model.WAN_I2V_V22]: WanI2vV22Settings;
   [Model.TRADING_PRO]: TradingProSettings;
 };
 
@@ -218,12 +266,14 @@ export type AnyModelSettings =
   | ImagenSettings
   | OpenAITtsSettings
   | RealTimeTranslationSettings
-  | AiAgentSmartSettings // Updated
+  | AdvancedToolsSettings // Updated
   | PrivateModeSettings
   | FluxKontexSettings
+  | FluxKontexLoraSettings
   | FluxDevSettings
   | KlingAiSettings
   | WanI2vSettings
+  | WanI2vV22Settings
   | TradingProSettings;
 
 
@@ -264,13 +314,15 @@ export interface ApiKeyStatus {
   isImageGeneration?: boolean; 
   isTextToSpeech?: boolean; 
   isRealTimeTranslation?: boolean; 
-  isAiAgentSmart?: boolean; // Renamed from isAiAgent
+  isAdvancedTools?: boolean; // Renamed from isAiAgentSmart
   isPrivateMode?: boolean; 
   isImageEditing?: boolean; 
+  isFluxKontexLora?: boolean;
   isMultiImageEditing?: boolean; 
   isFluxDevImageGeneration?: boolean; 
   isKlingVideoGeneration?: boolean; 
   isWanI2vVideoGeneration?: boolean;
+  isWanI2vV22VideoGeneration?: boolean;
   isTradingPro?: boolean; 
 }
 
@@ -574,6 +626,8 @@ export interface DemoUserLimits {
   fluxKontextMaxMonthlyMaxUses: number;
   fluxKontextProMonthlyUsesLeft: number;
   fluxKontextProMonthlyMaxUses: number;
+  fluxKontextLoraMonthlyUsed?: number;
+  fluxKontextLoraMonthlyMaxUses?: number;
   imagen3MonthlyImagesLeft: number;
   imagen3MonthlyMaxImages: number;
   openaiTtsMonthlyCharsLeft: number;
@@ -584,6 +638,8 @@ export interface DemoUserLimits {
   klingVideoMonthlyMaxUses?: number; 
   wanI2vMonthlyUsed?: number;
   wanI2vMonthlyMaxUses?: number;
+  wanI2vV22MonthlyUsed?: number;
+  wanI2vV22MonthlyMaxUses?: number;
 }
 
 export interface PaidUserLimits {
@@ -595,12 +651,16 @@ export interface PaidUserLimits {
   fluxKontextMaxMonthlyMaxUses: number; 
   fluxKontextProMonthlyUsesLeft: number;
   fluxKontextProMonthlyMaxUses: number; 
+  fluxKontextLoraMonthlyUsed?: number;
+  fluxKontextLoraMonthlyMaxGenerations?: number;
   fluxDevMonthlyImagesLeft: number; 
   fluxDevMonthlyMaxImages: number;  
   klingVideoMonthlyUsed?: number; 
   klingVideoMonthlyMaxGenerations?: number; 
   wanI2vMonthlyUsed?: number;
   wanI2vMonthlyMaxGenerations?: number;
+  wanI2vV22MonthlyUsed?: number;
+  wanI2vV22MonthlyMaxGenerations?: number;
 }
 
 export interface UserSessionState {
@@ -662,6 +722,15 @@ export interface EditImageWithFluxKontexParams {
   requestHeaders?: HeadersInit; 
 }
 
+export interface EditImageWithFluxKontexLoraParams {
+  modelIdentifier: string;
+  prompt: string;
+  settings: FluxKontexLoraSettings;
+  imageData: SingleImageData;
+  userSession: UserSessionState;
+  requestHeaders?: HeadersInit;
+}
+
 export interface GenerateImageWithFluxDevParams {
   modelIdentifier: string; 
   prompt: string;
@@ -683,6 +752,15 @@ export interface GenerateVideoWithWanI2vParams {
   modelIdentifier: string;
   prompt: string;
   settings: WanI2vSettings;
+  imageData: SingleImageData;
+  userSession: UserSessionState;
+  requestHeaders?: HeadersInit;
+}
+
+export interface GenerateVideoWithWanI2vV22Params {
+  modelIdentifier: string;
+  prompt: string;
+  settings: WanI2vV22Settings;
   imageData: SingleImageData;
   userSession: UserSessionState;
   requestHeaders?: HeadersInit;
