@@ -9,19 +9,11 @@ import mysql from 'mysql2/promise';
 import bcrypt from 'bcrypt';
 import multer from 'multer';
 import FormData from 'form-data';
-import ytdl from 'ytdl-core';
+import youtubedl from 'youtube-dl-exec';
 
 console.log(`[Proxy Server] Starting up at ${new Date().toISOString()}...`);
 
 dotenv.config();
-
-// --- ytdl-core Configuration ---
-if (!process.env.YOUTUBE_COOKIE) {
-  console.warn('[ytdl-core Config] WARNING: YOUTUBE_COOKIE environment variable not set. YouTube downloads may fail due to bot detection.');
-} else {
-  console.log('[ytdl-core Config] YOUTUBE_COOKIE found. It will be used for authenticated requests.');
-}
-
 
 // Define DEFAULT_FLUX_KONTEX_SETTINGS directly.
 const PROXY_DEFAULT_FLUX_KONTEX_SETTINGS = {
@@ -557,53 +549,104 @@ app.post('/api/tools/ip-info', async (req, res) => {
 
 app.post('/api/tools/download-video', async (req, res) => {
     const { url, format } = req.body;
-    console.log(`[YT Download] Received request for URL: ${url}, Format: ${format}`);
-    
-    const requestOptions = process.env.YOUTUBE_COOKIE 
-        ? { headers: { cookie: process.env.YOUTUBE_COOKIE } } 
-        : {};
+    console.log(`[Video Download] Received request for URL: ${url}, Format: ${format}`);
+
+    if (!url) {
+        return res.status(400).json({ success: false, error: "URL is required." });
+    }
 
     try {
-        if (!url || !ytdl.validateURL(url)) {
-            return res.status(400).json({ success: false, error: "Invalid or unsupported YouTube URL." });
-        }
-
-        console.log('[YT Download] URL validated. Fetching video info...');
-        const info = await ytdl.getInfo(url, { requestOptions });
-        const title = info.videoDetails.title || 'youtube_video';
-        console.log(`[YT Download] Video title: "${title}"`);
-        
-        // Sanitize filename
-        const safeTitle = title.replace(/[^a-z0-9_.-]/gi, '_').substring(0, 100);
-
-        let filename;
-        let contentType;
-        const downloadOptions = {
-            requestOptions: requestOptions,
-            filter: format === 'mp3' ? 'audioonly' : (format) => format.hasVideo && format.hasAudio,
-            quality: format === 'mp3' ? 'highestaudio' : 'highest'
+        const commonFlags = {
+            noCheckCertificates: true,
+            noWarnings: true,
+            preferFreeFormats: true,
+            addHeader: ['referer:youtube.com', 'user-agent:googlebot']
         };
         
-        if (format === 'mp3') {
+        console.log('[Video Download] Fetching video info with yt-dlp...');
+        const metadata = await youtubedl(url, {
+            dumpSingleJson: true,
+            ...commonFlags
+        });
+
+        const title = metadata.title || 'video';
+        const safeTitle = title.replace(/[^a-z0-9_.-]/gi, '_').substring(0, 100);
+
+        let flags = {};
+        let filename;
+        let contentType;
+        
+        const effectiveFormat = format === 'bilibili' ? 'mp4' : format;
+
+        if (effectiveFormat === 'mp3') {
+            flags = {
+                extractAudio: true,
+                audioFormat: 'mp3',
+                output: '-', 
+            };
             filename = `${safeTitle}.mp3`;
             contentType = 'audio/mpeg';
         } else { // mp4
+            flags = {
+                format: 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+                output: '-',
+            };
             filename = `${safeTitle}.mp4`;
             contentType = 'video/mp4';
         }
-
-        console.log(`[YT Download] Streaming file: "${filename}"`);
+        
         res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
         res.setHeader('Content-Type', contentType);
         
-        ytdl(url, downloadOptions).pipe(res);
+        console.log(`[Video Download] Streaming file: "${filename}"`);
+
+        const subprocess = youtubedl.exec(url, {
+            ...flags,
+            ...commonFlags
+        });
+        
+        subprocess.stdout.pipe(res);
+
+        subprocess.stderr.on('data', (data) => {
+            console.error(`[yt-dlp stderr] ${data}`);
+        });
+
+        subprocess.on('error', (error) => {
+            console.error('[Video Download] Subprocess error:', error);
+            if (!res.headersSent) {
+                res.status(500).json({ success: false, error: 'Subprocess failed to start.' });
+            }
+        });
+
+        subprocess.on('close', (code) => {
+            console.log(`[Video Download] yt-dlp process exited with code ${code}`);
+            if (code !== 0 && !res.headersSent && !res.writableEnded) {
+                // Cannot send JSON error if headers are already sent for streaming.
+                // The client will see a truncated file.
+                console.error(`Could not send error to client because headers were already sent.`);
+            }
+        });
 
     } catch (error) {
-        console.error("[YT Download Proxy Error]", error);
-        if (error.message && (error.message.includes('confirm you’re not a bot') || error.statusCode === 429)) {
-             res.status(429).json({ success: false, error: `Failed to process video: YouTube is blocking requests from this server (bot detection or rate limiting). The provided YOUTUBE_COOKIE might be invalid/expired, or the server IP is flagged.` });
-        } else {
-             res.status(500).json({ success: false, error: `Failed to process video: ${error.message}` });
+        console.error("[Video Download Proxy Error]", error);
+        let errorMessage = `Failed to process video.`;
+        if (error.stderr) {
+            errorMessage = error.stderr.toString();
+        } else if (error.message) {
+            errorMessage = error.message;
+        }
+
+        let statusCode = 500;
+        
+        if (errorMessage.includes("Unsupported URL")) statusCode = 400;
+        else if (errorMessage.includes("video is unavailable") || errorMessage.includes("Private video")) statusCode = 403;
+        else if (errorMessage.includes("HTTP Error 429")) {
+            statusCode = 429;
+            errorMessage = "Too many requests to video service. Please try again later.";
+        }
+        
+        if (!res.headersSent) {
+          res.status(statusCode).json({ success: false, error: errorMessage });
         }
     }
 });
