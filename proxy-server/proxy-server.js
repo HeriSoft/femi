@@ -13,6 +13,21 @@ import play from 'play-dl';
 
 console.log(`[Proxy Server] Starting up at ${new Date().toISOString()}...`);
 
+dotenv.config();
+
+// --- Play-DL Configuration ---
+if (process.env.YOUTUBE_COOKIE) {
+  console.log('[Play-DL Config] YOUTUBE_COOKIE found. Setting authentication token.');
+  play.setToken({
+    youtube: {
+      cookie: process.env.YOUTUBE_COOKIE,
+    },
+  });
+} else {
+  console.warn('[Play-DL Config] WARNING: YOUTUBE_COOKIE environment variable not set. YouTube downloads may fail due to bot detection.');
+}
+
+
 // Define DEFAULT_FLUX_KONTEX_SETTINGS directly.
 const PROXY_DEFAULT_FLUX_KONTEX_SETTINGS = {
   guidance_scale: 7.5,
@@ -75,8 +90,6 @@ const PROXY_DEFAULT_WAN_I2V_V22_SETTINGS = {
 };
 
 
-
-dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3001;
