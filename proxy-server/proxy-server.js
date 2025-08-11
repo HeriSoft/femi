@@ -1,4 +1,3 @@
-
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -10,11 +9,8 @@ import mysql from 'mysql2/promise';
 import bcrypt from 'bcrypt';
 import multer from 'multer';
 import FormData from 'form-data';
-import YTDlpWrap from 'yt-dlp-wrap';
 
 console.log(`[Proxy Server] Starting up at ${new Date().toISOString()}...`);
-
-dotenv.config();
 
 // Define DEFAULT_FLUX_KONTEX_SETTINGS directly.
 const PROXY_DEFAULT_FLUX_KONTEX_SETTINGS = {
@@ -79,6 +75,8 @@ const PROXY_DEFAULT_WAN_I2V_V22_SETTINGS = {
 
 
 
+dotenv.config();
+
 const app = express();
 const port = process.env.PORT || 3001;
 
@@ -94,7 +92,15 @@ try {
         connectionLimit: 10,
         queueLimit: 0
     });
-    console.log("MySQL Connection Pool created successfully (connection on first query).");
+    console.log("MySQL Connection Pool created successfully.");
+    pool.getConnection()
+        .then(conn => {
+            console.log("Successfully connected to MySQL database.");
+            conn.release();
+        })
+        .catch(err => {
+            console.error("Failed to connect to MySQL database:", err);
+        });
 } catch (error) {
     console.error("CRITICAL: Failed to create MySQL connection pool:", error);
 }
@@ -108,18 +114,13 @@ app.use(cors({
       return callback(null, true);
     }
     return callback(new Error('Not allowed by CORS'));
-  },
-  exposedHeaders: ['Content-Disposition'],
+  }
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
-
-// --- YT-DLP Setup ---
-const ytDlpWrap = new YTDlpWrap();
-// --- END YT-DLP ---
 
 // --- Authentication ---
 const LOGIN_CODE_AUTH_ADMIN = process.env.LOGIN_CODE_AUTH_ADMIN;
@@ -445,7 +446,7 @@ app.post('/api/auth/verify-code', async (req, res) => {
                 imagen3MonthlyMaxImages: DEMO_USER_MONTHLY_LIMITS.IMAGEN3_MONTHLY_IMAGES,
                 openaiTtsMonthlyCharsLeft: Math.max(0, DEMO_USER_MONTHLY_LIMITS.OPENAI_TTS_MONTHLY_CHARS - ttsCharsUsed),
                 openaiTtsMonthlyMaxChars: DEMO_USER_MONTHLY_LIMITS.OPENAI_TTS_MONTHLY_CHARS,
-                fluxDevMonthlyImagesLeft: Math.max(0, DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_DEV_MONTHLY_IMAGES - fluxDevUsed),
+                fluxDevMonthlyImagesLeft: Math.max(0, DEMO_USER_MONTHLY_LIMITS.FLUX_DEV_MONTHLY_IMAGES - fluxDevUsed),
                 fluxDevMonthlyMaxImages: DEMO_USER_DEFAULT_MONTHLY_LIMITS.FLUX_DEV_MONTHLY_IMAGES,
                 klingVideoMonthlyUsed: klingVideoUsed, // Send current usage for the month
                 klingVideoMonthlyMaxUses: DEMO_USER_DEFAULT_MONTHLY_LIMITS.KLING_VIDEO_MONTHLY_MAX_USES,
@@ -520,103 +521,10 @@ if (GEMINI_API_KEY_PROXY) {
 } else console.warn("PROXY WARNING: GEMINI_API_KEY missing. Gemini and Imagen models will not function.");
 
 if (GOOGLE_MAPS_API_KEY_PROXY) {
-    console.log("GOOGLE_MAPS_API_KEY found in environment. This is relevant for Advanced Tools backend operations.");
+    console.log("GOOGLE_MAPS_API_KEY found in environment. This is relevant for AI Agent Smart backend operations.");
 } else {
-    console.warn("PROXY WARNING: GOOGLE_MAPS_API_KEY missing. The Advanced Tools' location-based features (e.g., finding places, directions) might be impaired as the backend system it relies on may require this key.");
+    console.warn("PROXY WARNING: GOOGLE_MAPS_API_KEY missing. The AI Agent Smart's location-based features (e.g., finding places, directions) might be impaired as the backend system it relies on may require this key.");
 }
-
-// --- NEW ADVANCED TOOLS ENDPOINTS ---
-app.post('/api/tools/ip-info', async (req, res) => {
-    try {
-        const ip = getClientIp(req);
-        // Using a free, no-key-required API for this example
-        const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,country,countryCode,query`);
-        const data = await response.json();
-
-        if (data.status === 'success') {
-            res.json({ ip: data.query, country: data.country, countryCode: data.countryCode });
-        } else {
-            throw new Error(data.message || 'Failed to fetch IP geolocation data.');
-        }
-    } catch (error) {
-        console.error("[IP Info Tool Proxy Error]", error);
-        res.status(500).json({ error: `Could not get IP info: ${error.message}` });
-    }
-});
-
-app.post('/api/tools/download-video', async (req, res) => {
-    const { url, format } = req.body;
-    console.log(`[Video Download] Received request for URL: ${url}, Format: ${format}`);
-
-    if (!url) {
-        return res.status(400).json({ success: false, error: "URL is required." });
-    }
-
-    try {
-        const metadata = await ytDlpWrap.getVideoInfo(url);
-        const title = metadata.title || 'video';
-        const safeTitle = title.replace(/[^a-z0-9_.-]/gi, '_').substring(0, 100);
-
-        let processArgs = [url];
-        let filename;
-        let contentType;
-
-        const effectiveFormat = format === 'bilibili' ? 'mp4' : format;
-
-        if (effectiveFormat === 'mp3') {
-            processArgs.push('--extract-audio', '--audio-format', 'mp3', '-o', '-');
-            filename = `${safeTitle}.mp3`;
-            contentType = 'audio/mpeg';
-        } else { // mp4
-            processArgs.push('-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', '-o', '-');
-            filename = `${safeTitle}.mp4`;
-            contentType = 'video/mp4';
-        }
-
-        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
-        res.setHeader('Content-Type', contentType);
-
-        console.log(`[Video Download] Streaming file: "${filename}"`);
-
-        const stream = ytDlpWrap.execStream(processArgs);
-
-        stream.pipe(res);
-
-        stream.on('error', (error) => {
-            console.error('[Video Download] Stream error:', error);
-            if (!res.headersSent) {
-                res.status(500).json({ success: false, error: 'Stream failed to start.' });
-            }
-        });
-
-        stream.on('close', () => {
-            console.log(`[Video Download] Stream finished for "${filename}"`);
-        });
-
-    } catch (error) {
-        console.error("[Video Download Proxy Error]", error);
-        let errorMessage = `Failed to process video.`;
-        if (error.stderr) {
-            errorMessage = error.stderr.toString();
-        } else if (error.message) {
-            errorMessage = error.message;
-        }
-
-        let statusCode = 500;
-        
-        if (errorMessage.includes("Unsupported URL")) statusCode = 400;
-        else if (errorMessage.includes("video is unavailable") || errorMessage.includes("Private video")) statusCode = 403;
-        else if (errorMessage.includes("HTTP Error 429")) {
-            statusCode = 429;
-            errorMessage = "Too many requests to video service. Please try again later.";
-        }
-        
-        if (!res.headersSent) {
-          res.status(statusCode).json({ success: false, error: errorMessage });
-        }
-    }
-});
-// --- END OF NEW ADVANCED TOOLS ENDPOINTS ---
 
 
 app.post('/api/gemini/chat/stream', async (req, res) => {
@@ -1666,7 +1574,7 @@ The "detailed_analysis" field in the JSON should be a complete summary of your f
                         // The detailed_analysis in JSON is a repeat, the main text is `analysisText`
                     } catch (e) {
                         console.error("[Trading Analysis Proxy] Failed to parse extracted JSON:", e, "Extracted JSON string:", jsonContentString, "Full raw text (first 500 chars):", rawText.substring(0, 500));
-                        // analysisText is already set to text before JSON block, or or full rawText if no JSON
+                        // analysisText is already set to text before JSON block, or full rawText if no JSON
                         trendPredictions = null;
                     }
                 } else {
