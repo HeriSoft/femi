@@ -1645,7 +1645,8 @@ app.post('/api/tools/ip-info', (req, res) => {
         res.json({
           ip: data.query,
           country: data.country,
-          countryCode: data.countryCode
+          countryCode: data.countryCode,
+          city: data.city,
         });
       } else {
         throw new Error(data.message || 'Failed to get IP details from external service.');
