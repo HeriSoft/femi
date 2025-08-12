@@ -7,10 +7,10 @@ import { GoogleGenAI } from '@google/genai';
 import { fal } from '@fal-ai/client';
 import { randomBytes } from 'crypto';
 import mysql from 'mysql2/promise';
+import bcrypt from 'bcrypt';
 import multer from 'multer';
 import FormData from 'form-data';
 import play from 'play-dl';
-import { fetchYouTubeData } from '../services/youtubeService.js';
 
 console.log(`[Proxy Server] Starting up at ${new Date().toISOString()}...`);
 
@@ -103,8 +103,6 @@ const port = process.env.PORT || 3001;
 
 // --- MySQL Connection Pool ---
 let pool;
-let dbConnectionError = null; // Variable to store initialization error
-
 try {
     pool = mysql.createPool({
         host: process.env.DB_HOST,
@@ -113,26 +111,11 @@ try {
         database: process.env.DB_NAME,
         waitForConnections: true,
         connectionLimit: 10,
-        queueLimit: 0,
-        connectTimeout: 8000 // 8-second timeout to prevent hangs
+        queueLimit: 0
     });
-    console.log("MySQL Connection Pool created configuration.");
-    
-    // Asynchronous health check on startup
-    (async () => {
-        try {
-            const connection = await pool.getConnection();
-            console.log("MySQL connection successful on startup check.");
-            connection.release();
-        } catch (error) {
-            dbConnectionError = error;
-            console.error("CRITICAL: Failed to establish initial MySQL connection:", error.message);
-        }
-    })();
-
+    console.log("MySQL Connection Pool created successfully.");
 } catch (error) {
-    dbConnectionError = error;
-    console.error("CRITICAL: Failed to create MySQL connection pool configuration:", error);
+    console.error("CRITICAL: Failed to create MySQL connection pool:", error);
 }
 
 
@@ -352,21 +335,13 @@ app.post('/api/auth/verify-code', async (req, res) => {
         return res.json({ success: true, isAdmin: true, message: "Admin login successful." });
     }
 
-    if (!pool) {
-        return res.status(503).json({ success: false, message: "Database service is not configured." });
-    }
-    if (dbConnectionError) {
-        // If the startup check failed, return a specific error.
-        return res.status(503).json({ success: false, message: `Database connection error: ${dbConnectionError.code || dbConnectionError.message}` });
-    }
+    if (!pool) return res.status(503).json({ success: false, message: "Database service unavailable." });
 
     try {
-        console.log(`[DB Auth] Attempting to execute query for username: ${code}`);
         const [users] = await pool.execute(
             'SELECT id, username, user_type, status, password_hash, demo_flux_max_monthly_used, demo_flux_pro_monthly_used, demo_flux_lora_monthly_used, demo_imagen_monthly_used, demo_tts_monthly_chars_used, demo_flux_dev_monthly_used, demo_kling_video_monthly_used, demo_wani2v_monthly_used, demo_wani2v_v22_monthly_used, demo_usage_last_reset_month, paid_flux_pro_monthly_used, paid_flux_max_monthly_used, paid_flux_lora_monthly_used, paid_flux_dev_monthly_used, paid_kling_video_monthly_used, paid_wani2v_monthly_used, paid_wani2v_v22_monthly_used, paid_imagen3_monthly_used, paid_usage_last_reset_month FROM users WHERE username = ?',
             [code]
         );
-        console.log(`[DB Auth] Query successful. Found ${users.length} user(s).`);
 
         if (users.length === 0) {
             console.log(`[Login] Username "${code}" not found in DB.`);
@@ -504,11 +479,7 @@ app.post('/api/auth/verify-code', async (req, res) => {
         }
     } catch (dbError) {
         console.error("[DB Auth Error]", dbError);
-        let errorMessage = "Database error during authentication.";
-        if (dbError.code === 'ETIMEDOUT' || dbError.code === 'ENOTFOUND' || dbError.code === 'ECONNREFUSED') {
-            errorMessage = `Database connection failed: ${dbError.code}. Please check DB host and firewall settings.`;
-        }
-        return res.status(500).json({ success: false, message: errorMessage, details: dbError.code });
+        return res.status(500).json({ success: false, message: "Database error during authentication." });
     }
 });
 
@@ -1704,7 +1675,7 @@ app.post('/api/tools/download-video', async (req, res) => {
 
     const videoInfo = await play.video_info(url);
     const title = videoInfo.video_details.title || 'video_download';
-    const safeTitle = title.replace(/[\\/:\*\?"<>\|]/g, '_').substring(0, 100);
+    const safeTitle = title.replace(/[^a-z0-9_.-]/gi, '_').substring(0, 100);
     const extension = format === 'mp3' ? 'mp3' : 'mp4';
     const filename = `${safeTitle}.${extension}`;
     
@@ -1741,21 +1712,6 @@ app.post('/api/tools/download-video', async (req, res) => {
         res.status(500).json({ error: `Failed to process video request. Details: ${error.message.substring(0, 200)}...` });
       }
     }
-  }
-});
-
-// YouTube Downloader Route
-app.get('/api/youtube/download', async (req, res) => {
-  const { url } = req.query;
-  if (!url) {
-    return res.status(400).json({ success: false, error: 'URL is required' });
-  }
-  try {
-    const data = await fetchYouTubeData(url);
-    res.json({ success: true, data });
-  } catch (error) {
-    console.error(`[YouTube Service Error] URL: ${url}, Error: ${error.message}`);
-    res.status(500).json({ success: false, error: `Failed to fetch YouTube data: ${error.message}` });
   }
 });
 
