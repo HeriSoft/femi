@@ -11,7 +11,6 @@ import bcrypt from 'bcrypt';
 import multer from 'multer';
 import FormData from 'form-data';
 import play from 'play-dl';
-import ytdl from '@distube/ytdl-core';
 
 console.log(`[Proxy Server] Starting up at ${new Date().toISOString()}...`);
 
@@ -80,17 +79,22 @@ const PROXY_DEFAULT_WAN_I2V_V22_SETTINGS = {
 
 dotenv.config();
 
-let ytdlAgent = null;
 if (process.env.YOUTUBE_COOKIES) {
   try {
     const cookies = JSON.parse(process.env.YOUTUBE_COOKIES);
-    ytdlAgent = ytdl.createAgent(cookies);
-    console.log("[Video Downloader] YouTube cookies loaded, agent created.");
+    // play-dl requires a string in 'key=value;' format
+    const cookieString = cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ');
+    play.setToken({
+      youtube: {
+        cookie: cookieString
+      }
+    });
+    console.log("[Video Downloader] YouTube cookie string configured for play-dl.");
   } catch (e) {
-    console.error("[Video Downloader] Failed to parse YOUTUBE_COOKIES. Proceeding without cookies.", e.message);
+    console.error("[Video Downloader] Failed to parse YOUTUBE_COOKIES for play-dl. Proceeding without cookies.", e.message);
   }
 } else {
-  console.warn("[Video Downloader] YOUTUBE_COOKIES environment variable not set. YouTube downloads may fail with 429 errors or 'not a bot' checks.");
+  console.warn("[Video Downloader] YOUTUBE_COOKIES environment variable not set. YouTube downloads may be rate-limited or blocked.");
 }
 
 
@@ -1653,7 +1657,7 @@ app.post('/api/tools/ip-info', (req, res) => {
     });
 });
 
-// 2. Video Downloader Tool
+// 2. Video Downloader Tool (Refactored to use only play-dl)
 app.post('/api/tools/download-video', async (req, res) => {
   const { url, format } = req.body;
   if (!url || !format) {
@@ -1661,74 +1665,48 @@ app.post('/api/tools/download-video', async (req, res) => {
   }
 
   try {
-    const isBilibili = url.includes('bilibili.com');
-
-    if (isBilibili) {
-      console.log(`[Video Downloader] Bilibili request for URL: ${url} (format: ${format})`);
-      const validation = await play.validate(url);
-      if (!validation || !validation.includes('bilibili')) {
-        return res.status(400).json({ error: 'Invalid or unsupported Bilibili URL.' });
-      }
-      const videoInfo = await play.video_info(url);
-      const title = videoInfo.video_details.title || 'bilibili_video';
-      const safeTitle = title.replace(/[^a-z0-9_.-]/gi, '_').substring(0, 100);
-      const extension = format === 'mp3' ? 'mp3' : 'mp4';
-      const filename = `${safeTitle}.${extension}`;
-      
-      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
-      const stream = await play.stream(url, { quality: format === 'mp3' ? 0 : 2 });
-      res.setHeader('Content-Type', format === 'mp3' ? 'audio/mpeg' : 'video/mp4');
-      stream.stream.pipe(res);
-
-      stream.stream.on('error', (err) => {
-        console.error('[Video Downloader - Bilibili] Stream error:', err.message);
-        if (!res.headersSent) res.status(500).json({ error: `Bilibili stream error: ${err.message}` });
-      });
-      stream.stream.on('close', () => res.end());
-      
-    } else { // Handle YouTube with ytdl-core
-      console.log(`[Video Downloader] YouTube request for URL: ${url} (format: ${format})`);
-      if (!ytdl.validateURL(url)) {
-        return res.status(400).json({ error: 'Invalid or unsupported YouTube URL.' });
-      }
-      
-      const info = await ytdl.getInfo(url, { agent: ytdlAgent });
-      const title = info.videoDetails.title || 'youtube_video';
-      const safeTitle = title.replace(/[^a-z0-9_.-]/gi, '_').substring(0, 100);
-      const extension = format === 'mp3' ? 'mp3' : 'mp4';
-      const filename = `${safeTitle}.${extension}`;
-
-      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
-
-      let formatInfo;
-      if (format === 'mp3') {
-        res.setHeader('Content-Type', 'audio/mpeg');
-        formatInfo = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' });
-      } else {
-        res.setHeader('Content-Type', 'video/mp4');
-        formatInfo = ytdl.chooseFormat(info.formats, { quality: 'highest', filter: 'videoandaudio' });
-      }
-
-      if (!formatInfo) {
-        throw new Error(`No suitable ${format} format found for this YouTube video.`);
-      }
-
-      const downloadStream = ytdl.downloadFromInfo(info, { format: formatInfo, agent: ytdlAgent });
-      
-      downloadStream.pipe(res);
-      downloadStream.on('error', (err) => {
-        console.error('[Video Downloader - YouTube] Stream error:', err.message);
-        if (!res.headersSent) res.status(500).json({ error: `YouTube stream error: ${err.message}` });
-      });
-      downloadStream.on('end', () => res.end());
+    const validation = await play.validate(url);
+    if (!validation) {
+        return res.status(400).json({ error: 'Invalid or unsupported video URL.' });
     }
+
+    console.log(`[Video Downloader] Request for ${validation} URL: ${url} (format: ${format})`);
+
+    const videoInfo = await play.video_info(url);
+    const title = videoInfo.video_details.title || 'video_download';
+    const safeTitle = title.replace(/[^a-z0-9_.-]/gi, '_').substring(0, 100);
+    const extension = format === 'mp3' ? 'mp3' : 'mp4';
+    const filename = `${safeTitle}.${extension}`;
+    
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+
+    const stream = await play.stream(url, {
+        quality: format === 'mp3' ? 0 : 2 // 0 for best audio, 2 for best video in play-dl
+    });
+
+    res.setHeader('Content-Type', stream.type);
+    stream.stream.pipe(res);
+
+    stream.stream.on('error', (err) => {
+      console.error('[Video Downloader] Stream error:', err.message);
+      if (!res.headersSent) {
+        res.status(500).json({ error: `Stream error: ${err.message}` });
+      }
+    });
+    
+    stream.stream.on('close', () => {
+        if (!res.writableEnded) {
+            res.end();
+        }
+    });
+    
   } catch (error) {
     console.error('[Video Downloader] Main catch block error:', error.message);
     if (!res.headersSent) {
-      if (error.message.includes('private') || error.message.includes('unavailable') || error.message.includes('confirm your age')) {
+      if (error.message.includes('confirm that you are not a bot') || error.message.includes('Sign in')) {
+          res.status(429).json({ error: 'YouTube requires sign-in (bot detection). Cookies might be required, expired, or invalid.' });
+      } else if (error.message.includes('private') || error.message.includes('unavailable') || error.message.includes('age-restricted')) {
         res.status(404).json({ error: 'This video is private, unavailable, or age-restricted.' });
-      } else if (error.message.includes('Sign in')) {
-          res.status(429).json({ error: 'YouTube requires sign-in (bot detection). Cookies might be required or expired.' });
       } else {
         res.status(500).json({ error: `Failed to process video request. Details: ${error.message.substring(0, 200)}...` });
       }
