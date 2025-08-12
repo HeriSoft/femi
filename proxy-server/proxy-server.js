@@ -7,7 +7,6 @@ import { GoogleGenAI } from '@google/genai';
 import { fal } from '@fal-ai/client';
 import { randomBytes } from 'crypto';
 import mysql from 'mysql2/promise';
-import bcrypt from 'bcrypt';
 import multer from 'multer';
 import FormData from 'form-data';
 import play from 'play-dl';
