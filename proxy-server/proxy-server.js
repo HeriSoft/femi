@@ -1675,7 +1675,7 @@ app.post('/api/tools/download-video', async (req, res) => {
 
     const videoInfo = await play.video_info(url);
     const title = videoInfo.video_details.title || 'video_download';
-    const safeTitle = title.replace(/[^a-z0-9_.-]/gi, '_').substring(0, 100);
+    const safeTitle = title.replace(/[\\/:\*\?"<>\|]/g, '_').substring(0, 100);
     const extension = format === 'mp3' ? 'mp3' : 'mp4';
     const filename = `${safeTitle}.${extension}`;
     
