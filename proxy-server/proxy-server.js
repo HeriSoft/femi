@@ -11,6 +11,7 @@ import bcrypt from 'bcrypt';
 import multer from 'multer';
 import FormData from 'form-data';
 import play from 'play-dl';
+import { fetchYouTubeData } from '../services/youtubeService.js';
 
 console.log(`[Proxy Server] Starting up at ${new Date().toISOString()}...`);
 
@@ -1712,6 +1713,21 @@ app.post('/api/tools/download-video', async (req, res) => {
         res.status(500).json({ error: `Failed to process video request. Details: ${error.message.substring(0, 200)}...` });
       }
     }
+  }
+});
+
+// YouTube Downloader Route
+app.get('/api/youtube/download', async (req, res) => {
+  const { url } = req.query;
+  if (!url) {
+    return res.status(400).json({ success: false, error: 'URL is required' });
+  }
+  try {
+    const data = await fetchYouTubeData(url);
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error(`[YouTube Service Error] URL: ${url}, Error: ${error.message}`);
+    res.status(500).json({ success: false, error: `Failed to fetch YouTube data: ${error.message}` });
   }
 });
 
