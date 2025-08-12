@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Model, getActualModelIdentifier, ApiChatMessage, UserSessionState, ModelSettings } from '../types.ts';
 import { useNotification } from '../contexts/NotificationContext.tsx';
@@ -15,7 +14,7 @@ interface AdvancedToolsViewProps {
 
 // IP Info Tool Component
 const IpInfoTool: React.FC<{ addNotification: AdvancedToolsViewProps['addNotification'] }> = ({ addNotification }) => {
-  const [ipInfo, setIpInfo] = useState<{ ip: string; country: string; flag: string } | null>(null);
+  const [ipInfo, setIpInfo] = useState<{ ip: string; country: string; city: string; flag: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchIpInfo = useCallback(async () => {
@@ -52,6 +51,7 @@ const IpInfoTool: React.FC<{ addNotification: AdvancedToolsViewProps['addNotific
         ) : ipInfo ? (
           <>
             <p><strong>Your IP Address:</strong> {ipInfo.ip}</p>
+            <p><strong>City:</strong> {ipInfo.city}</p>
             <p><strong>Country:</strong> {ipInfo.flag} {ipInfo.country}</p>
           </>
         ) : (
