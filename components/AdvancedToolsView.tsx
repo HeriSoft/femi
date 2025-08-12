@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Model, getActualModelIdentifier, ApiChatMessage, UserSessionState, ModelSettings } from '../types.ts';
 import { useNotification } from '../contexts/NotificationContext.tsx';
@@ -67,39 +66,54 @@ const IpInfoTool: React.FC<{ addNotification: AdvancedToolsViewProps['addNotific
 };
 
 // Video Downloader Tool Component
-const MediaDownloaderTool: React.FC<{ addNotification: AdvancedToolsViewProps['addNotification'] }> = ({ addNotification }) => {
+const VideoDownloaderTool: React.FC<{ addNotification: AdvancedToolsViewProps['addNotification'] }> = ({ addNotification }) => {
     const [url, setUrl] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [mediaInfo, setMediaInfo] = useState<{
-        title: string;
-        thumbnail: string;
-        duration: string;
-        formats: { type: string; quality: string; extension: string; url: string }[];
-    } | null>(null);
 
-    const handleFetchMedia = async () => {
+    const handleDownload = async (format: 'mp3' | 'mp4' | 'bilibili') => {
         if (!url.trim() || !/^https?:\/\//.test(url.trim())) {
             addNotification('Please enter a valid video URL.', 'error');
             return;
         }
         setIsLoading(true);
-        setError(null);
-        setMediaInfo(null);
+        addNotification(`Requesting ${format === 'mp3' ? 'MP3' : 'Video'} download... This may take a moment.`, 'info');
 
         try {
-            const response = await fetch(`/api/youtube/download?url=${encodeURIComponent(url)}`);
-            const data = await response.json();
+            const response = await fetch('/api/tools/download-video', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url, format }),
+            });
 
-            if (!response.ok || !data.success) {
-                throw new Error(data.error || 'Failed to fetch media information.');
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'An unknown error occurred on the server.' }));
+                throw new Error(errorData.error || `Server responded with status ${response.status}`);
             }
-            
-            setMediaInfo(data.data);
 
-        } catch (err: any) {
-            setError(err.message);
-            addNotification('Failed to fetch media.', 'error', err.message);
+            const disposition = response.headers.get('content-disposition');
+            let filename = `video.${format === 'mp3' ? 'mp3' : 'mp4'}`;
+            if (disposition && disposition.indexOf('attachment') !== -1) {
+                const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+                const matches = filenameRegex.exec(disposition);
+                if (matches != null && matches[1]) {
+                    filename = decodeURIComponent(matches[1].replace(/['"]/g, ''));
+                }
+            }
+
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(downloadUrl);
+            
+            addNotification('Download started successfully!', 'success');
+
+        } catch (error: any) {
+            addNotification('Failed to download video.', 'error', error.message);
         } finally {
             setIsLoading(false);
         }
@@ -108,53 +122,27 @@ const MediaDownloaderTool: React.FC<{ addNotification: AdvancedToolsViewProps['a
     return (
         <div className="bg-secondary/30 dark:bg-neutral-dark/30 p-4 rounded-lg shadow-sm">
             <h3 className="text-lg font-semibold text-neutral-darker dark:text-secondary-light mb-3 flex items-center">
-                <FilmIcon className="w-5 h-5 mr-2" /> Media Downloader
+                <FilmIcon className="w-5 h-5 mr-2" /> Video Downloader
             </h3>
-            <div className="flex gap-2">
-                <input
-                    type="text"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder="Enter YouTube URL"
-                    className="flex-grow p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark text-sm"
-                    disabled={isLoading}
-                    onKeyPress={(e) => {if(e.key === 'Enter') handleFetchMedia()}}
-                />
-                <button onClick={handleFetchMedia} disabled={isLoading} className="px-4 py-2 text-sm bg-primary hover:bg-primary-dark text-white rounded-md disabled:opacity-50">
-                    {isLoading ? 'Fetching...' : 'Fetch'}
+            <input
+                type="text"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="Enter YouTube or Bilibili URL"
+                className="w-full p-2 border border-secondary dark:border-neutral-darkest rounded-md bg-neutral-light dark:bg-neutral-dark text-sm mb-3"
+                disabled={isLoading}
+            />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <button onClick={() => handleDownload('mp3')} disabled={isLoading} className="px-3 py-2 text-xs bg-orange-500 hover:bg-orange-600 text-white rounded-md disabled:opacity-50 flex items-center justify-center">
+                    <ArrowDownTrayIcon className="w-4 h-4 mr-1" /> YouTube MP3
+                </button>
+                <button onClick={() => handleDownload('mp4')} disabled={isLoading} className="px-3 py-2 text-xs bg-red-500 hover:bg-red-600 text-white rounded-md disabled:opacity-50 flex items-center justify-center">
+                    <ArrowDownTrayIcon className="w-4 h-4 mr-1" /> YouTube MP4
+                </button>
+                <button onClick={() => handleDownload('bilibili')} disabled={isLoading} className="px-3 py-2 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded-md disabled:opacity-50 flex items-center justify-center">
+                    <ArrowDownTrayIcon className="w-4 h-4 mr-1" /> Bilibili [VIP]
                 </button>
             </div>
-            
-            {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
-            
-            {mediaInfo && (
-                <div className="mt-4 p-3 bg-neutral-light dark:bg-neutral-dark rounded-md border border-secondary dark:border-neutral-darkest">
-                    <div className="flex items-start gap-3">
-                        <img src={mediaInfo.thumbnail} alt="Video thumbnail" className="w-24 h-auto rounded-md" />
-                        <div className="flex-grow">
-                            <h4 className="font-semibold text-neutral-darker dark:text-secondary-light">{mediaInfo.title}</h4>
-                            <p className="text-xs text-neutral-500 dark:text-neutral-400">Duration: {mediaInfo.duration}</p>
-                        </div>
-                    </div>
-                    <div className="mt-3">
-                        <h5 className="text-sm font-semibold mb-2">Available Formats:</h5>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-40 overflow-y-auto">
-                            {mediaInfo.formats.map((format, index) => (
-                                <a
-                                    key={index}
-                                    href={format.url}
-                                    download
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="block p-2 text-center text-xs bg-green-500 hover:bg-green-600 text-white rounded-md transition-colors"
-                                >
-                                    {format.quality} ({format.extension.toUpperCase()})
-                                </a>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };
@@ -335,7 +323,7 @@ const AdvancedToolsView: React.FC<AdvancedToolsViewProps> = ({ userSession, addN
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl mx-auto">
         <IpInfoTool addNotification={addNotification} />
-        <MediaDownloaderTool addNotification={addNotification} />
+        <VideoDownloaderTool addNotification={addNotification} />
         <WeatherTool userSession={userSession} addNotification={addNotification} />
         <DirectionsTool userSession={userSession} addNotification={addNotification} />
       </div>
