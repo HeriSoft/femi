@@ -1,6 +1,6 @@
-const axios = require("axios");
+import axios from "axios";
 
-async function fetchYouTubeData(url) {
+export async function fetchYouTubeData(url) {
   try {
     const res = await axios.get(
       "https://api.vidfly.ai/api/media/youtube/download",
@@ -36,5 +36,3 @@ async function fetchYouTubeData(url) {
     throw new Error(`YouTube downloader request failed: ${err.message}`);
   }
 }
-
-module.exports = { fetchYouTubeData };
