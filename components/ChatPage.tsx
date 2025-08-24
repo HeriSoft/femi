@@ -38,7 +38,7 @@ const getSpecificDefaultSettings = <K extends Model>(modelKey: K): ModelSpecific
     // but this is not a proper fix for missing constants.
     return {} as ModelSpecificSettingsMap[K];
   }
-  return settings as ModelSpecificSettingsMap[K];
+  return settings as any;
 };
 
 // Updated mergeSettings to work with ModelSpecificSettingsMap
@@ -3099,18 +3099,25 @@ const ChatPage: React.FC<ChatPageProps> = ({ chatBackgroundUrl, userProfile, use
   }, [selectedModel]);
 
   const showFileUploadInChatBar = useMemo(() => {
-    // This button shows for models that take non-image files, or are text-only.
-    // It should NOT appear if the image button is already shown.
-    if (showImageUploadInChatBar) {
-        return false;
+    // This button shows for models that can process text files,
+    // or have special file handling like TTS/Translation.
+    // It can now appear alongside the image upload button to allow for more flexible inputs.
+    switch (selectedModel) {
+        case Model.GEMINI:
+        case Model.GEMINI_ADVANCED:
+        case Model.GPT4O:
+        case Model.GPT4O_MINI:
+        case Model.DEEPSEEK:
+        case Model.CLAUDE:
+        case Model.PRIVATE:
+        case Model.OPENAI_TTS:
+        case Model.REAL_TIME_TRANSLATION:
+            return true;
+        // By default, hide for image/video-centric models where general file upload is not the primary input.
+        default:
+            return false;
     }
-    return (
-        selectedModel === Model.OPENAI_TTS ||
-        selectedModel === Model.REAL_TIME_TRANSLATION ||
-        selectedModel === Model.DEEPSEEK ||
-        selectedModel === Model.CLAUDE
-    );
-  }, [selectedModel, showImageUploadInChatBar]);
+  }, [selectedModel]);
 
 
   const currentPromptPlaceholder = () => {
